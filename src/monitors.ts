@@ -49,6 +49,8 @@ export interface BatteryData {
   health: string;
   powerSource: string;
   cycles?: number;
+  condition?: string;
+  maxCapacityPercent?: number;
 }
 
 export interface DiskData {
@@ -253,17 +255,45 @@ export async function collectBattery(): Promise<BatteryData | null> {
     const timeRemaining = timeMatch ? timeMatch[1] : (powerPlugged ? '∞' : 'calculating');
 
     let cycles: number | undefined;
-    let health = 'unknown';
+    let condition: string | undefined;
+    let maxCapacityPercent: number | undefined;
+
     try {
-      const battInfo = (await run('system_profiler SPPowerDataType -json 2>/dev/null || system_profiler SPPowerDataType 2>/dev/null || echo "skip"')).trim();
+      // Plain text output (NOT -json) — its field names ("Cycle Count:", "Condition:")
+      // are what the regexes below expect. Using -json here was the original bug:
+      // it silently returned JSON that these text regexes could never match, so
+      // health always fell back to 'unknown'.
+      const battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null')).trim();
+
       const cycleMatch = battInfo.match(/Cycle Count:\s+(\d+)/);
-      if (cycleMatch) {
-        cycles = parseInt(cycleMatch[1]);
-        health = `cycles: ${cycles}`;
+      if (cycleMatch) cycles = parseInt(cycleMatch[1]);
+
+      const conditionMatch = battInfo.match(/Condition:\s+(.+)/);
+      if (conditionMatch) condition = conditionMatch[1].trim();
+
+      const maxCapMatch = battInfo.match(/Maximum Capacity:\s+(\d+)%/);
+      if (maxCapMatch) {
+        maxCapacityPercent = parseInt(maxCapMatch[1]);
+      } else {
+        // Older/alternate output reports Full Charge Capacity vs Design Capacity
+        // instead of a direct percentage — derive it if both are present.
+        const fullMatch = battInfo.match(/Full Charge Capacity[^\d]*(\d+)/i);
+        const designMatch = battInfo.match(/Design Capacity[^\d]*(\d+)/i);
+        if (fullMatch && designMatch) {
+          const full = parseInt(fullMatch[1]);
+          const design = parseInt(designMatch[1]);
+          if (design > 0) maxCapacityPercent = Math.round((full / design) * 100);
+        }
       }
     } catch {
-      // ignore
+      // health stays unknown
     }
+
+    const healthParts: string[] = [];
+    if (condition) healthParts.push(condition);
+    if (maxCapacityPercent !== undefined) healthParts.push(`${maxCapacityPercent}% capacity`);
+    if (cycles !== undefined) healthParts.push(`${cycles} cycles`);
+    const health = healthParts.length ? healthParts.join(', ') : 'unknown';
 
     return {
       level,
@@ -272,6 +302,8 @@ export async function collectBattery(): Promise<BatteryData | null> {
       health,
       powerSource: powerPlugged ? 'AC' : 'Battery',
       cycles,
+      condition,
+      maxCapacityPercent,
     };
   } catch {
     return null;

@@ -36,7 +36,10 @@ export function formatTable(data: StatsData): string {
     lines.push(chalk.bold('Battery'));
     lines.push(makeRow('Level', `${data.battery.level}%  (${data.battery.state})`));
     lines.push(makeRow('Time', data.battery.timeRemaining));
-    // lines.push(makeRow('Health', data.battery.health));
+    lines.push(makeRow('Health', data.battery.health));
+    if (data.battery.maxCapacityPercent !== undefined) {
+      lines.push(makeRow('Capacity', capacityColor(data.battery.maxCapacityPercent)(`${data.battery.maxCapacityPercent}%`)));
+    }
     lines.push(makeRow('Source', data.battery.powerSource));
     lines.push('');
   }
@@ -91,6 +94,9 @@ export function formatCsv(data: StatsData): string {
     ['network', 'txBytes', String(data.network.txBytes)],
     ['battery', 'level', data.battery ? String(data.battery.level) : ''],
     ['battery', 'powerSource', data.battery ? data.battery.powerSource : ''],
+    ['battery', 'condition', data.battery?.condition ?? ''],
+    ['battery', 'maxCapacityPercent', data.battery?.maxCapacityPercent !== undefined ? String(data.battery.maxCapacityPercent) : ''],
+    ['battery', 'cycles', data.battery?.cycles !== undefined ? String(data.battery.cycles) : ''],
     ['system', 'hostname', data.header.hostname],
     ['system', 'uptime', data.header.uptime],
     ['system', 'timestamp', data.timestamp],
@@ -138,6 +144,12 @@ export function thermalColor(pressureLevel: number) {
   if (pressureLevel >= 3) return chalk.red;
   if (pressureLevel === 2) return chalk.yellow;
   if (pressureLevel === 1) return chalk.yellowBright;
+  return chalk.green;
+}
+
+export function capacityColor(percent: number) {
+  if (percent < 80) return chalk.red;
+  if (percent < 90) return chalk.yellow;
   return chalk.green;
 }
 

@@ -1,0 +1,208 @@
+{
+  "header": {
+    "title": "\u001b[38;2;255;85;0m\u001b[1mPYRE\u001b[22m\u001b[39m",
+    "hostname": "Pranavs-MacBook-Neo.local",
+    "os": "macOS 26.5",
+    "uptime": "1 day,  7:25"
+  },
+  "cpu": {
+    "brand": "Apple A18 Pro",
+    "cores": 6,
+    "physicalCores": 6,
+    "frequency": 0,
+    "usage": 0,
+    "loadAvg": [
+      8.02,
+      4.9,
+      4.12
+    ]
+  },
+  "memory": {
+    "total": 8589934592,
+    "used": 8025964544,
+    "free": 71811072,
+    "swapTotal": 0,
+    "swapUsed": 0,
+    "swapFree": 0,
+    "pageSize": 16384,
+    "usagePercent": 93
+  },
+  "disk": [
+    {
+      "filesystem": "/dev/disk3s1s1",
+      "size": "460Gi",
+      "used": "13Gi",
+      "available": "287Gi",
+      "capacity": "5%",
+      "mountpoint": "459k"
+    },
+    {
+      "filesystem": "/dev/disk3s6",
+      "size": "460Gi",
+      "used": "8.0Gi",
+      "available": "287Gi",
+      "capacity": "3%",
+      "mountpoint": "8"
+    },
+    {
+      "filesystem": "/dev/disk3s2",
+      "size": "460Gi",
+      "used": "16Gi",
+      "available": "287Gi",
+      "capacity": "6%",
+      "mountpoint": "1.5k"
+    },
+    {
+      "filesystem": "/dev/disk3s4",
+      "size": "460Gi",
+      "used": "873Mi",
+      "available": "287Gi",
+      "capacity": "1%",
+      "mountpoint": "478"
+    },
+    {
+      "filesystem": "/dev/disk1s2",
+      "size": "550Mi",
+      "used": "6.0Mi",
+      "available": "526Mi",
+      "capacity": "2%",
+      "mountpoint": "1"
+    },
+    {
+      "filesystem": "/dev/disk1s1",
+      "size": "550Mi",
+      "used": "6.1Mi",
+      "available": "526Mi",
+      "capacity": "2%",
+      "mountpoint": "52"
+    },
+    {
+      "filesystem": "/dev/disk1s3",
+      "size": "550Mi",
+      "used": "6.7Mi",
+      "available": "526Mi",
+      "capacity": "2%",
+      "mountpoint": "890"
+    },
+    {
+      "filesystem": "/dev/disk3s5",
+      "size": "460Gi",
+      "used": "133Gi",
+      "available": "287Gi",
+      "capacity": "32%",
+      "mountpoint": "1.4M"
+    },
+    {
+      "filesystem": "/dev/disk2s1",
+      "size": "5.0Gi",
+      "used": "1.4Gi",
+      "available": "3.5Gi",
+      "capacity": "29%",
+      "mountpoint": "42"
+    },
+    {
+      "filesystem": "/dev/disk3s1",
+      "size": "460Gi",
+      "used": "13Gi",
+      "available": "287Gi",
+      "capacity": "5%",
+      "mountpoint": "459k"
+    }
+  ],
+  "battery": {
+    "level": 10,
+    "state": "discharging",
+    "timeRemaining": "52",
+    "health": "Normal, 100% capacity, 22 cycles",
+    "powerSource": "Battery",
+    "cycles": 22,
+    "condition": "Normal",
+    "maxCapacityPercent": 100
+  },
+  "thermal": {
+    "state": "Unknown",
+    "detail": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded",
+    "pressureLevel": 0
+  },
+  "network": {
+    "interface": "en0",
+    "ip": "192.168.1.6",
+    "rxBytes": 0,
+    "txBytes": 34512945,
+    "rxPackets": 58690605,
+    "txPackets": 66919044255
+  },
+  "processes": [
+    {
+      "pid": 11462,
+      "user": "root",
+      "cpu": 16,
+      "mem": 0,
+      "command": "/usr/libexec/sysmond"
+    },
+    {
+      "pid": 36393,
+      "user": "NotSomalip",
+      "cpu": 6.8,
+      "mem": 0.5,
+      "command": "/System/Applications/Utilities/Activity Monitor.app/Contents/MacOS/Activity Monitor"
+    },
+    {
+      "pid": 2884,
+      "user": "NotSomalip",
+      "cpu": 4.9,
+      "mem": 0.6,
+      "command": "/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox"
+    },
+    {
+      "pid": 14568,
+      "user": "NotSomalip",
+      "cpu": 3.2,
+      "mem": 0.2,
+      "command": "/Applications/Battle.net.app/Contents/MacOS/Battle.net"
+    },
+    {
+      "pid": 611,
+      "user": "NotSomalip",
+      "cpu": 1.9,
+      "mem": 0.4,
+      "command": "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder"
+    },
+    {
+      "pid": 406,
+      "user": "_windowserver",
+      "cpu": 1.7,
+      "mem": 0.6,
+      "command": "/System/Library/PrivateFrameworks/SkyLight.framework/Resources/WindowServer"
+    },
+    {
+      "pid": 72794,
+      "user": "NotSomalip",
+      "cpu": 1.4,
+      "mem": 1.1,
+      "command": "/Applications/Docker.app/Contents/MacOS/Docker Desktop.app/Contents/Frameworks/Docker Desktop Helper (Renderer).app/Contents/MacOS/Docker Desktop Helper (Renderer)"
+    },
+    {
+      "pid": 45700,
+      "user": "NotSomalip",
+      "cpu": 0.6,
+      "mem": 1.4,
+      "command": "/Users/NotSomalip/.vscode/extensions/kilocode.kilo-code-7.4.16-darwin-arm64/bin/kilo"
+    },
+    {
+      "pid": 14579,
+      "user": "NotSomalip",
+      "cpu": 0.6,
+      "mem": 0.1,
+      "command": "/Users/Shared/Battle.net/Agent/Agent.9700/Agent.app/Contents/MacOS/Agent"
+    },
+    {
+      "pid": 554,
+      "user": "_driverkit",
+      "cpu": 0.4,
+      "mem": 0.7,
+      "command": "/System/Library/DriverExtensions/com.apple.AppleSunriseWLAN.dext/com.apple.AppleSunriseWLAN"
+    }
+  ],
+  "timestamp": "2026-07-26T10:54:46.217Z"
+}
