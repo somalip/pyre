@@ -36,6 +36,8 @@ export interface MemoryData {
 export interface ThermalData {
   state: string;
   detail?: string;
+  /** Normalized 0-3 scale (nominal/fair/serious/critical) derived from `state`, for graphing/coloring */
+  pressureLevel: number;
   temperatures?: Record<string, number | null>;
   error?: string;
 }
@@ -276,6 +278,14 @@ export async function collectBattery(): Promise<BatteryData | null> {
   }
 }
 
+function pressureFromState(state: string): number {
+  const s = state.toLowerCase();
+  if (s.includes('critical')) return 3;
+  if (s.includes('serious') || s.includes('heavy')) return 2;
+  if (s.includes('fair') || s.includes('moderate')) return 1;
+  return 0; // nominal / normal / unknown
+}
+
 export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
   try {
     const therm = (await run('pmset -g therm')).trim();
@@ -318,9 +328,14 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
       }
     }
 
-    return { state, detail, temperatures: Object.keys(temperatures).length ? temperatures : undefined };
+    return {
+      state,
+      detail,
+      pressureLevel: pressureFromState(state),
+      temperatures: Object.keys(temperatures).length ? temperatures : undefined,
+    };
   } catch {
-    return { state: 'Unknown', error: 'Thermal info unavailable on this system' };
+    return { state: 'Unknown', pressureLevel: 0, error: 'Thermal info unavailable on this system' };
   }
 }
 

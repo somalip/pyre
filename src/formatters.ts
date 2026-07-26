@@ -1,5 +1,7 @@
 import chalk from 'chalk';
 import { StatsData } from './monitors.js';
+import { sparkline } from './sparkline.js';
+import type { History } from './history.js';
 
 export function formatTable(data: StatsData): string {
   const lines: string[] = [];
@@ -34,13 +36,13 @@ export function formatTable(data: StatsData): string {
     lines.push(chalk.bold('Battery'));
     lines.push(makeRow('Level', `${data.battery.level}%  (${data.battery.state})`));
     lines.push(makeRow('Time', data.battery.timeRemaining));
-    lines.push(makeRow('Health', data.battery.health));
+    // lines.push(makeRow('Health', data.battery.health));
     lines.push(makeRow('Source', data.battery.powerSource));
     lines.push('');
   }
 
   lines.push(chalk.bold('Thermal'));
-  lines.push(makeRow('State', data.thermal.state));
+  lines.push(makeRow('State', thermalColor(data.thermal.pressureLevel)(data.thermal.state)));
   if (data.thermal.temperatures) {
     for (const [k, v] of Object.entries(data.thermal.temperatures)) {
       lines.push(makeRow(`  ${k}`, v !== null ? `${v}°C` : 'N/A'));
@@ -130,6 +132,57 @@ function formatProcessTable(processes: { pid: number; user: string; cpu: number;
   const headers = ['PID', 'User', 'CPU %', 'MEM %', 'Command'];
   const rows = processes.map(p => [String(p.pid), p.user, `${p.cpu}%`, `${p.mem}%`, p.command.substring(0, 40)]);
   return gridTable(headers, rows);
+}
+
+export function thermalColor(pressureLevel: number) {
+  if (pressureLevel >= 3) return chalk.red;
+  if (pressureLevel === 2) return chalk.yellow;
+  if (pressureLevel === 1) return chalk.yellowBright;
+  return chalk.green;
+}
+
+/**
+ * Renders a compact multi-row sparkline graph panel from rolling History data.
+ * Used by the live dashboard; CPU/Mem are graphed 0-100%, temp and network
+ * rates are graphed against their own auto-scaled min/max.
+ */
+export function formatGraphs(history: History): string {
+  const lines: string[] = [];
+  const sampleCount = history.cpuUsage.length;
+  lines.push(chalk.bold('Graphs') + chalk.dim(`  (last ${sampleCount} sample${sampleCount === 1 ? '' : 's'})`));
+
+  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`));
+  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`));
+
+  if (history.temp.length) {
+    lines.push(graphRow('Temp', history.temp, {}, v => `${v.toFixed(1)}°C`));
+  }
+
+  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`));
+  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`));
+
+  return lines.join('\n');
+}
+
+function graphRow(
+  label: string,
+  values: number[],
+  bounds: { min?: number; max?: number },
+  fmt: (v: number) => string
+): string {
+  if (!values.length) {
+    return `${chalk.dim(label.padEnd(10))} ${chalk.dim('collecting data...')}`;
+  }
+  const spark = sparkline(values, bounds);
+  const current = values[values.length - 1];
+
+  let color = chalk.cyan;
+  if (bounds.min !== undefined && bounds.max !== undefined) {
+    const pct = ((current - bounds.min) / (bounds.max - bounds.min || 1)) * 100;
+    color = pct > 90 ? chalk.red : pct > 70 ? chalk.yellow : chalk.green;
+  }
+
+  return `${chalk.dim(label.padEnd(10))} ${color(spark)}  ${chalk.bold(fmt(current))}`;
 }
 
 function gridTable(headers: string[], rows: string[][]): string {
