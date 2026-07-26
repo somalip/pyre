@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PYRE — CLI System Monitor</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --fg: #c9d1d9;
+      --accent: #ff5500;
+      --cyan: #22d3ee;
+      --green: #34d399;
+      --purple: #a78bfa;
+      --dim: #4b5563;
+      --font: "JetBrains Mono", "Fira Code", "Courier New", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 2rem 1rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 820px;
+    }
+
+    /* Terminal Box Styling */
+    .terminal {
+      border: 1px solid var(--dim);
+      border-radius: 6px;
+      background: #090d12;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .term-header {
+      background: #161b22;
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-red { background: #ff5f56; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green { background: #27c93f; }
+
+    .term-title {
+      color: var(--dim);
+      font-size: 0.8rem;
+      margin-left: auto;
+    }
+
+    .term-body {
+      padding: 1.5rem;
+    }
+
+    /* CLI Text & Formats */
+    .brand {
+      background: var(--accent);
+      color: #000;
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 2px;
+    }
+
+    .accent { color: var(--accent); }
+    .cyan { color: var(--cyan); }
+    .green { color: var(--green); }
+    .purple { color: var(--purple); }
+    .dim { color: var(--dim); }
+    .bold { font-weight: bold; }
+
+    pre {
+      font-family: inherit;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      margin-bottom: 1rem;
+    }
+
+    /* Quick Action Buttons */
+    .quick-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1.5rem 0;
+    }
+
+    button.cli-btn {
+      background: transparent;
+      border: 1px solid var(--dim);
+      color: var(--cyan);
+      font-family: inherit;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    button.cli-btn:hover {
+      border-color: var(--cyan);
+      background: rgba(34, 211, 238, 0.1);
+    }
+
+    /* Interactive Input Prompt */
+    .input-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 1rem;
+    }
+
+    .prompt {
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    input[type="text"] {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 14px;
+      flex: 1;
+    }
+
+    .output-history {
+      margin-top: 1rem;
+    }
+
+    .history-item {
+      margin-bottom: 0.75rem;
+    }
+
+    footer {
+      margin-top: 1.5rem;
+      text-align: center;
+      color: var(--dim);
+      font-size: 0.8rem;
+    }
+
+    footer a {
+      color: var(--dim);
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="terminal">
+      <div class="term-header">
+        <span class="dot dot-red"></span>
+        <span class="dot dot-yellow"></span>
+        <span class="dot dot-green"></span>
+        <span class="term-title">pyre — node live.js</span>
+      </div>
+
+      <div class="term-body">
+<pre>
+<span class="brand"> PYRE </span> <span class="bold">v1.0.0</span> · Terminal System Monitor
+<span class="dim">─────────────────────────────────────────────────────────────</span>
+A lightweight, themeable CLI dashboard with real-time hardware
+metrics, process controls, and UI customizer.
+</pre>
+
+        <div class="quick-actions">
+          <button class="cli-btn" onclick="runCommand('install')">$ install</button>
+          <button class="cli-btn" onclick="runCommand('features')">$ features</button>
+          <button class="cli-btn" onclick="runCommand('themes')">$ themes</button>
+          <button class="cli-btn" onclick="runCommand('help')">$ help</button>
+        </div>
+
+        <div id="history" class="output-history"></div>
+
+        <div class="input-line">
+          <span class="prompt">pyre&gt;</span>
+          <input type="text" id="cli-input" placeholder="type 'help' or click buttons..." autofocus />
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Built with TypeScript &amp; Chalk · Press Esc or type 'clear' to reset screen
+    </footer>
+  </div>
+
+  <script>
+    const input = document.getElementById('cli-input');
+    const history = document.getElementById('history');
+
+    const COMMANDS = {
+      install: `
+<span class="green"># Install via npm / npx</span>
+$ npm install -g pyre-monitor
+$ pyre live --interval 1
+
+<span class="green"># Or run directly from source</span>
+$ npx ts-node live.ts
+      `,
+
+      features: `
+<span class="bold cyan">Key Features:</span>
+  <span class="purple">• Real-time Metrics</span> : CPU, Memory, Power, Battery, Thermal, Net & Disk
+  <span class="purple">• Customizer Mode</span>  : Press <span class="accent">'c'</span> in terminal to toggle cards & themes
+  <span class="purple">• Color Themes</span>     : Default, Dracula, Cyberpunk, Monochrome
+  <span class="purple">• Process Manager</span>  : Sort (<span class="accent">'s'</span>), Filter (<span class="accent">'/'</span>), or Kill (<span class="accent">'k'</span>) processes
+  <span class="purple">• Export Options</span>   : Export state to JSON, CSV, or TSV formats
+      `,
+
+      themes: `
+<span class="bold cyan">Built-in Themes:</span>
+  <span class="cyan">default</span>    │ Cyan / Purple / Amber / Green accent set
+  <span class="purple">dracula</span>    │ Classic dark vampire palette
+  <span class="accent">cyberpunk</span>  │ High-contrast Neon Pink & Cyan
+  <span class="dim">monochrome</span> │ Minimalist crisp greyscale
+      `,
+
+      help: `
+<span class="dim">Available commands:</span>
+  <span class="cyan">install</span>   - Show installation instructions
+  <span class="cyan">features</span>  - List primary CLI dashboard capabilities
+  <span class="cyan">themes</span>    - Display supported color presets
+  <span class="cyan">clear</span>     - Clear terminal output
+  <span class="cyan">help</span>      - Print this guide
+      `
+    };
+
+    function runCommand(cmd) {
+      const cleanCmd = cmd.trim().toLowerCase();
+      
+      // Print input line
+      const userLine = document.createElement('div');
+      userLine.className = 'history-item';
+      userLine.innerHTML = `<span class="prompt">pyre&gt;</span> <span>${cmd}</span>`;
+      history.appendChild(userLine);
+
+      if (cleanCmd === 'clear') {
+        history.innerHTML = '';
+        input.value = '';
+        return;
+      }
+
+      // Print output
+      const outputLine = document.createElement('div');
+      outputLine.className = 'history-item';
+
+      if (COMMANDS[cleanCmd]) {
+        outputLine.innerHTML = `<pre>${COMMANDS[cleanCmd].trim()}</pre>`;
+      } else if (cleanCmd === '') {
+        outputLine.innerHTML = '';
+      } else {
+        outputLine.innerHTML = `<span class="accent">Command not found: "${cleanCmd}". Type 'help' for options.</span>`;
+      }
+
+      history.appendChild(outputLine);
+      input.value = '';
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        runCommand(input.value);
+      }
+    });
+
+    // Auto-run features on load for initial content
+    window.addEventListener('DOMContentLoaded', () => {
+      runCommand('features');
+    });
+  </script>
+</body>
+</html>
