@@ -4,7 +4,7 @@
  * cumulative counters returned by the monitors module.
  */
 export class History {
-  readonly maxLen: number;
+  maxLen: number;
 
   cpuUsage: number[] = [];
   memUsage: number[] = [];
@@ -57,6 +57,14 @@ export class History {
     this.lastRxBytes = 0;
     this.lastTxBytes = 0;
     this.lastTs = 0;
+  }
+
+  /** Grow or shrink the rolling window (e.g. on terminal resize), trimming from the oldest samples. */
+  setMaxLen(n: number) {
+    this.maxLen = Math.max(1, n);
+    for (const arr of [this.cpuUsage, this.memUsage, this.temp, this.netRxRate, this.netTxRate]) {
+      while (arr.length > this.maxLen) arr.shift();
+    }
   }
 
   private pushBounded(arr: number[], v: number) {

@@ -60,7 +60,7 @@ async function main() {
   if (opts.json) output = formatJson(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data);
+  else output = formatTable(data, { width: process.stdout.columns || 80 });
 
   console.log(output);
 

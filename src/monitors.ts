@@ -9,7 +9,14 @@ export interface StatsData {
   thermal: ThermalData;
   network: NetworkData;
   processes: ProcessData[];
+  power: PowerData | null;
   timestamp: string;
+}
+
+export interface PowerData {
+  cpuWatts?: number;
+  gpuWatts?: number;
+  combinedWatts?: number;
 }
 
 export interface CpuData {
@@ -79,13 +86,73 @@ export interface ProcessData {
   command: string;
 }
 
-async function run(cmd: string, fallback: string = '-1 -1'): Promise<string> {
+async function run(cmd: string, fallback: string = ''): Promise<string> {
   try {
     const { execSync } = await import('node:child_process');
     return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 }).trim();
   } catch {
     return fallback;
   }
+}
+
+// --- shared SMC sensor reader (temperature + power) ---
+// The old code tried to read CPU temperature out of `pmset -g therm`, but that
+// command doesn't report a "CPU ... temp:" field on Apple Silicon (or most
+// recent Intel) Macs — it only reports scheduler/speed limits — so
+// `temperature` was silently always undefined. Real sensor data on modern
+// macOS requires `powermetrics`, which needs root. We call it once per tick
+// (with a short-lived cache) and share the result between the CPU temp field
+// and the detailed thermal panel instead of invoking it twice.
+interface SmcMetrics {
+  temps: Record<string, number>;
+  power: { cpu?: number; gpu?: number; combined?: number };
+}
+
+let smcCache: { data: SmcMetrics; ts: number } | null = null;
+
+async function getSmcMetrics(): Promise<SmcMetrics> {
+  const now = Date.now();
+  if (smcCache && now - smcCache.ts < 1500) return smcCache.data;
+
+  const result: SmcMetrics = { temps: {}, power: {} };
+  try {
+    // `sudo -n` (non-interactive) so we never hang waiting on a password
+    // prompt that can't be answered from a piped child process; if the user
+    // hasn't set up passwordless sudo for powermetrics, this just fails fast
+    // and we fall back to the thermal-state string instead of a temperature.
+    const pm = (
+      await run(
+        'sudo -n powermetrics --samplers smc,cpu_power -n 1 --format text 2>/dev/null',
+        ''
+      )
+    ).trim();
+
+    if (pm) {
+      const cpuTemp = pm.match(/CPU die temperature:\s*([\d.]+)/i);
+      if (cpuTemp) result.temps['cpu_die'] = parseFloat(cpuTemp[1]);
+
+      const gpuTemp = pm.match(/GPU die temperature:\s*([\d.]+)/i);
+      if (gpuTemp) result.temps['gpu_die'] = parseFloat(gpuTemp[1]);
+
+      const smcTemp = pm.match(/SMC die temperature:\s*([\d.]+)/i);
+      if (smcTemp) result.temps['smc_die'] = parseFloat(smcTemp[1]);
+
+      const cpuPower = pm.match(/CPU Power:\s*([\d.]+)\s*mW/i);
+      if (cpuPower) result.power.cpu = parseFloat(cpuPower[1]) / 1000;
+
+      const gpuPower = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
+      if (gpuPower) result.power.gpu = parseFloat(gpuPower[1]) / 1000;
+
+      const combinedPower = pm.match(/Combined Power \(CPU \+ GPU.*?\):\s*([\d.]+)\s*mW/i);
+      if (combinedPower) result.power.combined = parseFloat(combinedPower[1]) / 1000;
+    }
+  } catch {
+    // powermetrics unavailable/unauthorized — leave temps/power empty, the
+    // rest of the app degrades gracefully (thermal state string still shows).
+  }
+
+  smcCache = { data: result, ts: now };
+  return result;
 }
 
 function parseSuffix(s: string): number {
@@ -99,16 +166,17 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-export async function collectAll(opts: { detailed?: boolean } = {}): Promise<StatsData> {
-  const [cpu, memory, disk, battery, thermal, network, processes, system] = await Promise.all([
+export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
+  const [cpu, memory, disk, battery, thermal, network, processes, system, power] = await Promise.all([
     collectCpu(),
     collectMemory(),
     collectDisk(),
     collectBattery(),
     collectThermal(opts.detailed),
     collectNetwork(),
-    collectProcesses(),
+    collectProcesses(opts.processLimit ?? 10),
     collectSystem(),
+    collectPower(),
   ]);
 
   return {
@@ -125,8 +193,19 @@ export async function collectAll(opts: { detailed?: boolean } = {}): Promise<Sta
     thermal,
     network,
     processes,
+    power,
     timestamp: new Date().toISOString(),
   };
+}
+
+export async function collectPower(): Promise<PowerData | null> {
+  try {
+    const { power } = await getSmcMetrics();
+    if (power.cpu === undefined && power.gpu === undefined && power.combined === undefined) return null;
+    return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
+  } catch {
+    return null;
+  }
 }
 
 async function collectSystem(): Promise<{ hostname: string; os: string; uptime: string }> {
@@ -165,9 +244,8 @@ export async function collectCpu(): Promise<CpuData> {
 
   let temperature: number | undefined;
   try {
-    const therm = (await run('pmset -g therm')).trim();
-    const tempMatch = therm.match(/CPU.*?temp:\s+([\d.]+)/i);
-    if (tempMatch) temperature = parseFloat(tempMatch[1]);
+    const { temps } = await getSmcMetrics();
+    if (temps.cpu_die !== undefined) temperature = temps.cpu_die;
   } catch {
     // ignore
   }
@@ -320,44 +398,62 @@ function pressureFromState(state: string): number {
 
 export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
   try {
-    const therm = (await run('pmset -g therm')).trim();
-    let state = 'Unknown';
-    let detail = therm;
+    const therm = (await run('pmset -g therm', '')).trim();
 
-    const stateMatch = therm.match(/Thermal state:\s*(.+)/);
+    let state = 'Unknown';
+    let detail = therm || 'No pmset thermal data';
+
+    const stateMatch = therm.match(/Thermal state:\s*(.+)/i);
+
     if (stateMatch) {
-      state = stateMatch[1].trim();
+      const raw = stateMatch[1].trim();
+      state = /0|no warning|normal/i.test(raw) ? 'Nominal' : raw;
       detail = state;
+    } else {
+      const limitMatch = therm.match(
+        /CPU_(?:Speed|Scheduler)_Limit\s*(?:=|:)\s*([\d.]+)/i
+      );
+
+      if (limitMatch) {
+        const limit = parseFloat(limitMatch[1]);
+
+        if (limit >= 100) state = 'Nominal';
+        else if (limit >= 85) state = 'Fair';
+        else if (limit >= 50) state = 'Serious';
+        else state = 'Critical';
+
+        detail = `${state} (CPU limit ${limit}%)`;
+      }
     }
 
     const temperatures: Record<string, number | null> = {};
+    let cpuDieTemp: number | undefined;
 
-    if (detailed) {
-      try {
-        const pm = (await run('sudo powermetrics --samplers smc -n 1 2>/dev/null || powermetrics --samplers smc -n 1 2>/dev/null', '')).trim();
-        if (pm) {
-          for (const line of pm.split('\n')) {
-            if (line.includes('CPU die temperature')) {
-              const m = line.match(/CPU die temperature:\s*([\d.]+)/);
-              if (m) temperatures['cpu_die'] = parseFloat(m[1]);
-            }
-            if (line.includes('GPU die temperature')) {
-              const m = line.match(/GPU die temperature:\s*([\d.]+)/);
-              if (m) temperatures['gpu_die'] = parseFloat(m[1]);
-            }
-            if (line.includes('SMC die temperature')) {
-              const m = line.match(/SMC die temperature:\s*([\d.]+)/);
-              if (m) temperatures['smc_die'] = parseFloat(m[1]);
-            }
-            if (line.includes('CPU Power')) {
-              const m = line.match(/CPU Power:\s*([\d.]+)/);
-              if (m) temperatures['cpu_power'] = parseFloat(m[1]);
-            }
-          }
+    // Grab the CPU die temp regardless of `detailed` — we need it both for the
+    // detailed sensor breakdown and as a state fallback below.
+    try {
+      const { temps } = await getSmcMetrics();
+      cpuDieTemp = temps.cpu_die;
+      if (detailed) {
+        if (temps.cpu_die !== undefined) temperatures['cpu_die'] = temps.cpu_die;
+        if (temps.gpu_die !== undefined) temperatures['gpu_die'] = temps.gpu_die;
+        if (temps.smc_die !== undefined) temperatures['smc_die'] = temps.smc_die;
+        if (!Object.keys(temps).length) {
+          detail += ' (sensor data needs powermetrics privileges)';
         }
-      } catch {
-        state += ' (powermetrics unavailable)';
       }
+    } catch {
+      if (detailed) detail += ' (powermetrics unavailable)';
+    }
+
+    // Last resort: if we still don't know the state (e.g. pmset gave us nothing
+    // usable) but we do have a die temperature, estimate state from that.
+    if (state === 'Unknown' && cpuDieTemp !== undefined) {
+      if (cpuDieTemp >= 100) state = 'Critical';
+      else if (cpuDieTemp >= 90) state = 'Serious';
+      else if (cpuDieTemp >= 80) state = 'Fair';
+      else state = 'Nominal';
+      detail = `${state} (estimated from ${cpuDieTemp}°C)`;
     }
 
     return {
@@ -410,9 +506,9 @@ export async function collectNetwork(): Promise<NetworkData> {
   }
 }
 
-export async function collectProcesses(): Promise<ProcessData[]> {
+export async function collectProcesses(limit = 10): Promise<ProcessData[]> {
   try {
-    const raw = (await run("ps -Ao pid,user,pcpu,pmem,comm -r | head -n 11")).trim();
+    const raw = (await run(`ps -Ao pid,user,pcpu,pmem,comm -r | head -n ${limit + 1}`)).trim();
     const lines = raw.split('\n').slice(1);
     return lines
       .map(line => {
