@@ -14,26 +14,31 @@ const program = new Command();
 program
   .name('pyre')
   .version('1.0.0')
-  .description('Mac system monitoring CLI: temps, stats, live dashboard, export')
+  .description('Mac system monitoring CLI: live dashboard, stats, export')
   .option('-j, --json', 'Output as JSON')
   .option('-c, --csv', 'Output as CSV')
   .option('-t, --tsv', 'Output as TSV')
   .option('--detailed', 'Include detailed system info and sensor readings')
-  .option('--interval <seconds>', 'Refresh interval for live mode', '2');
+  .option('--interval <seconds>', 'Refresh interval for live mode', '2')
+  .option('--once', 'Show a single static snapshot instead of live feed');
 
 program.parse(process.argv);
 
 const opts = program.opts();
 
+function isExportMode() {
+  return opts.json || opts.csv || opts.tsv;
+}
+
 async function main() {
-  if (opts.live || program.args[0] === 'live') {
+  const requestedLive = program.args[0] === 'live' || (!isExportMode() && !opts.once);
+  if (requestedLive) {
     const interval = parseFloat(opts.interval) || 2;
     await startLive({ interval, detailed: opts.detailed });
     return;
   }
 
   const data = await collectAll({ detailed: opts.detailed });
-
   if (opts.json) {
     console.log(formatJson(data));
     return;

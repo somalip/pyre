@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import Table from 'cli-table3';
 
 export interface StatsData {
   header: { title: string; hostname: string; os: string; uptime: string };
