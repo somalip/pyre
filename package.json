@@ -1,0 +1,44 @@
+{
+  "name": "@somalip/pyre",
+  "version": "1.0.0",
+  "description": "CLI Mac monitoring tool: temps, system stats, live dashboard, and export",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "pyre": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "install.sh",
+    "Formula/pyre.rb",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --clean",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node dist/index.js --help >/dev/null && echo 'OK'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mac",
+    "monitoring",
+    "temperature",
+    "cli",
+    "system-stats"
+  ],
+  "author": "somalip",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsup": "^8.0.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
