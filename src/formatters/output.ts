@@ -47,10 +47,30 @@ export function formatCsv(data: StatsData): string {
     ['power', 'cpuWatts', data.power?.cpuWatts !== undefined ? String(data.power.cpuWatts) : ''],
     ['power', 'gpuWatts', data.power?.gpuWatts !== undefined ? String(data.power.gpuWatts) : ''],
     ['power', 'combinedWatts', data.power?.combinedWatts !== undefined ? String(data.power.combinedWatts) : ''],
-    ['system', 'hostname', data.header.hostname],
-    ['system', 'uptime', data.header.uptime],
-    ['system', 'timestamp', data.timestamp],
-  ];
+['system', 'hostname', data.header.hostname],
+     ['system', 'uptime', data.header.uptime],
+     ['system', 'timestamp', data.timestamp],
+   ];
+
+   if (data.gpu) {
+     rows.push(['gpu', 'model', data.gpu.model]);
+     rows.push(['gpu', 'memory', String(data.gpu.memory)]);
+     rows.push(['gpu', 'utilization', String(data.gpu.utilization)]);
+     if (data.gpu.temperature) rows.push(['gpu', 'tempC', String(data.gpu.temperature)]);
+     rows.push(['gpu', 'processes', String(data.gpu.processes)]);
+   }
+
+   for (const p of data.processes) {
+    rows.push(['process', `pid=${p.pid}`, `${p.pid}`]);
+    rows.push(['process', `ppid=${p.pid}`, String(p.ppid)]);
+    rows.push(['process', `user=${p.pid}`, p.user]);
+    rows.push(['process', `cpu=${p.pid}`, String(p.cpu)]);
+    rows.push(['process', `mem=${p.pid}`, String(p.mem)]);
+    rows.push(['process', `state=${p.pid}`, p.state]);
+    rows.push(['process', `threads=${p.pid}`, String(p.threads)]);
+    rows.push(['process', `runtime=${p.pid}`, String(p.runtime)]);
+    rows.push(['process', `command=${p.pid}`, p.command]);
+  }
   return rows.map(r => r.map(item => `"${String(item).replace(/"/g, '""')}"`).join(',')).join('\n');
 }
 

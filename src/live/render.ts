@@ -8,7 +8,7 @@
  */
 import chalk from 'chalk';
 import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName } from '../formatters/index.js';
-import { state, setStatus } from './state.js';
+import { state, setStatus, SIGNAL_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
 /**
@@ -25,27 +25,30 @@ function processRowBudget(): number {
 }
 
 function renderCustomizerOverlay(): string {
-  const themesList = Object.keys(THEMES) as ThemeName[];
-  const lines = [
-    chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) '),
-  ];
+   const themesList = Object.keys(THEMES) as ThemeName[];
+   const lines = [
+     chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) '),
+   ];
 
-  state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
-    const isSelected = idx === state.customizerIndex;
-    const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+   state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
+     const isSelected = idx === state.customizerIndex;
+     const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
 
-    if (opt === 'Theme') {
-      lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-    } else {
-      const key = opt.replace('Toggle ', '').toLowerCase();
-      const isVisible = state.visiblePanels[key as keyof typeof state.visiblePanels] !== false;
-      const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-      lines.push(`${prefix}${opt}: ${status}`);
-    }
-  });
+     if (opt === 'Theme') {
+       lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
+     } else if (opt === 'Toggle Tree View') {
+       const status = state.treeView ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+       lines.push(`${prefix}${opt}: ${status}`);
+     } else {
+       const key = opt.replace('Toggle ', '').toLowerCase();
+       const isVisible = state.visiblePanels[key as keyof typeof state.visiblePanels] !== false;
+       const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+       lines.push(`${prefix}${opt}: ${status}`);
+     }
+   });
 
-  return lines.map(l => `  ${l}`).join('\n');
-}
+   return lines.map(l => `  ${l}`).join('\n');
+ }
 
 function render() {
   if (!state.lastData) return;
@@ -58,6 +61,7 @@ function render() {
       processLimit: processRowBudget(),
       theme: state.currentTheme,
       visible: state.visiblePanels,
+      treeView: state.treeView,
     })
   );
 
@@ -69,44 +73,52 @@ function render() {
   lines.push('');
   lines.push(footerLine());
 
-  if (state.inputMode === 'customizer') {
-    lines.push(renderCustomizerOverlay());
-  } else if (state.inputMode === 'filter') {
-    lines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
-  } else if (state.inputMode === 'kill') {
-    lines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
-  } else if (state.statusMessage) {
-    lines.push(`  ${state.statusMessage}`);
-  }
+if (state.inputMode === 'customizer') {
+     lines.push(renderCustomizerOverlay());
+   } else if (state.inputMode === 'filter') {
+     lines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
+   } else if (state.inputMode === 'kill') {
+     lines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
+   } else if (state.inputMode === 'signal') {
+     const sigIdx = SIGNAL_OPTIONS.indexOf(state.inputBuffer);
+     const sigList = SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
+     lines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
+     lines.push(chalk.dim(`  ${sigList}`));
+     lines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+   } else if (state.statusMessage) {
+     lines.push(`  ${state.statusMessage}`);
+   }
 
   process.stdout.write('\x1b[2J\x1b[H');
   process.stdout.write(lines.join('\n'));
 }
 
 function footerLine(): string {
-  const keys: [string, string][] = [
-    ['q', 'quit'],
-    ['c', 'customize UI'],
-    ['p', state.paused ? 'resume' : 'pause'],
-    ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-    ['d', state.detailed ? 'basic' : 'detailed'],
-    ['s', `sort:${state.sortMode}`],
-    ['/', 'filter'],
-    ['k', 'kill'],
-    ['e', 'export'],
-    ['l', state.logging ? 'stop log' : 'log'],
-    ['f', state.exportFormat],
-    ['+/-', `${state.interval}s`],
-  ];
-  const keyStr = keys.map(([k, label]) => `${chalk.cyan.bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  ·  '));
+   const keys: [string, string][] = [
+     ['q', 'quit'],
+     ['c', 'customize UI'],
+     ['p', state.paused ? 'resume' : 'pause'],
+     ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
+     ['d', state.detailed ? 'basic' : 'detailed'],
+     ['s', `sort:${state.sortMode}`],
+     ['/', 'filter'],
+     ['k', 'kill'],
+     ['S', 'signal'],
+     ['t', state.treeView ? 'flat' : 'tree'],
+     ['e', 'export'],
+     ['l', state.logging ? 'stop log' : 'log'],
+     ['f', state.exportFormat],
+     ['+/-', `${state.interval}s`],
+   ];
+   const keyStr = keys.map(([k, label]) => `${chalk.cyan.bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  ·  '));
 
-  const badges: string[] = [];
-  if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
-  if (state.logging) badges.push(chalk.red.bold('● REC'));
-  const badgeStr = badges.join('  ');
+   const badges: string[] = [];
+   if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
+   if (state.logging) badges.push(chalk.red.bold('● REC'));
+   const badgeStr = badges.join('  ');
 
-  return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;
-}
+   return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;
+ }
 
 function checkAlerts(data: StatsData) {
   const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;

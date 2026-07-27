@@ -8,23 +8,32 @@
  */
 
 export interface StatsData {
-  header: { title: string; hostname: string; os: string; uptime: string };
-  cpu: CpuData;
-  memory: MemoryData;
-  disk: DiskData[];
-  battery: BatteryData | null;
-  thermal: ThermalData;
-  network: NetworkData;
-  processes: ProcessData[];
-  power: PowerData | null;
-  timestamp: string;
-}
+   header: { title: string; hostname: string; os: string; uptime: string };
+   cpu: CpuData;
+   gpu: GpuData | null;
+   memory: MemoryData;
+   disk: DiskData[];
+   battery: BatteryData | null;
+   thermal: ThermalData;
+   network: NetworkData;
+   processes: ProcessData[];
+   power: PowerData | null;
+   timestamp: string;
+ }
 
-export interface PowerData {
-  cpuWatts?: number;
-  gpuWatts?: number;
-  combinedWatts?: number;
-}
+export interface GpuData {
+   model: string;
+   memory: number;
+   utilization: number;
+   temperature?: number;
+   processes: number;
+ }
+
+ export interface PowerData {
+   cpuWatts?: number;
+   gpuWatts?: number;
+   combinedWatts?: number;
+ }
 
 export interface CpuData {
   brand: string;
@@ -86,9 +95,13 @@ export interface NetworkData {
 }
 
 export interface ProcessData {
-  pid: number;
-  user: string;
-  cpu: number;
-  mem: number;
-  command: string;
+   pid: number;
+   ppid: number;
+   user: string;
+   cpu: number;
+   mem: number;
+   command: string;
+   state: string;
+   threads: number;
+   runtime: number;
 }

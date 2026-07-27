@@ -31,9 +31,12 @@ export class History {
   /** Rolling window of network transmit rates in bytes/sec. */
   netTxRate: number[] = [];
 
-  private lastRxBytes = 0;
-  private lastTxBytes = 0;
-  private lastTs = 0;
+   /** Rolling window of GPU utilization percentages (0–100). */
+   gpuUtil: number[] = [];
+
+   private lastRxBytes = 0;
+   private lastTxBytes = 0;
+   private lastTs = 0;
 
   /**
    * Create a new History instance.
@@ -50,57 +53,60 @@ export class History {
    * counters.  The first sample always reports 0 for rates
    * because there is no prior sample to compute a delta from.
    */
-  push(sample: {
-    cpuUsage: number;
-    memUsage: number;
-    temp: number | null;
-    rxBytes: number;
-    txBytes: number;
-  }) {
-    const now = Date.now();
-    let rxRate = 0;
-    let txRate = 0;
+   push(sample: {
+     cpuUsage: number;
+     memUsage: number;
+     temp: number | null;
+     rxBytes: number;
+     txBytes: number;
+     gpuUtil?: number;
+   }) {
+     const now = Date.now();
+     let rxRate = 0;
+     let txRate = 0;
 
-    if (this.lastTs > 0) {
-      const dtSeconds = Math.max((now - this.lastTs) / 1000, 0.001);
-      rxRate = Math.max(0, (sample.rxBytes - this.lastRxBytes) / dtSeconds);
-      txRate = Math.max(0, (sample.txBytes - this.lastTxBytes) / dtSeconds);
-    }
+     if (this.lastTs > 0) {
+       const dtSeconds = Math.max((now - this.lastTs) / 1000, 0.001);
+       rxRate = Math.max(0, (sample.rxBytes - this.lastRxBytes) / dtSeconds);
+       txRate = Math.max(0, (sample.txBytes - this.lastTxBytes) / dtSeconds);
+     }
 
-    this.lastRxBytes = sample.rxBytes;
-    this.lastTxBytes = sample.txBytes;
-    this.lastTs = now;
+     this.lastRxBytes = sample.rxBytes;
+     this.lastTxBytes = sample.txBytes;
+     this.lastTs = now;
 
-    this.pushBounded(this.cpuUsage, sample.cpuUsage);
-    this.pushBounded(this.memUsage, sample.memUsage);
-    if (sample.temp !== null) this.pushBounded(this.temp, sample.temp);
-    this.pushBounded(this.netRxRate, rxRate);
-    this.pushBounded(this.netTxRate, txRate);
-  }
+     this.pushBounded(this.cpuUsage, sample.cpuUsage);
+     this.pushBounded(this.memUsage, sample.memUsage);
+     if (sample.temp !== null) this.pushBounded(this.temp, sample.temp);
+     this.pushBounded(this.netRxRate, rxRate);
+     this.pushBounded(this.netTxRate, txRate);
+     if (sample.gpuUtil !== undefined) this.pushBounded(this.gpuUtil, sample.gpuUtil);
+   }
 
-  /** Clear all rolling windows and reset cumulative byte counters. */
-  reset() {
-    this.cpuUsage = [];
-    this.memUsage = [];
-    this.temp = [];
-    this.netRxRate = [];
-    this.netTxRate = [];
-    this.lastRxBytes = 0;
-    this.lastTxBytes = 0;
-    this.lastTs = 0;
-  }
+   /** Clear all rolling windows and reset cumulative byte counters. */
+   reset() {
+     this.cpuUsage = [];
+     this.memUsage = [];
+     this.temp = [];
+     this.netRxRate = [];
+     this.netTxRate = [];
+     this.gpuUtil = [];
+     this.lastRxBytes = 0;
+     this.lastTxBytes = 0;
+     this.lastTs = 0;
+   }
 
-  /**
-   * Grow or shrink the rolling window (e.g. on terminal resize),
-   * trimming from the oldest samples.
-   * @param n - New maximum length; clamped to at least 1.
-   */
-  setMaxLen(n: number) {
-    this.maxLen = Math.max(1, n);
-    for (const arr of [this.cpuUsage, this.memUsage, this.temp, this.netRxRate, this.netTxRate]) {
-      while (arr.length > this.maxLen) arr.shift();
-    }
-  }
+   /**
+    * Grow or shrink the rolling window (e.g. on terminal resize),
+    * trimming from the oldest samples.
+    * @param n - New maximum length; clamped to at least 1.
+    */
+   setMaxLen(n: number) {
+     this.maxLen = Math.max(1, n);
+     for (const arr of [this.cpuUsage, this.memUsage, this.temp, this.netRxRate, this.netTxRate, this.gpuUtil]) {
+       while (arr.length > this.maxLen) arr.shift();
+     }
+   }
 
   private pushBounded(arr: number[], v: number) {
     arr.push(v);

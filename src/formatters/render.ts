@@ -131,7 +131,7 @@ function cpuCard(data: StatsData, contentWidth: number): string[] {
     statRow('Cores', `${data.cpu.physicalCores}/${data.cpu.cores} phys/log`),
     statRow('Freq', `${data.cpu.frequency} MHz`),
     gaugeRow('Usage', data.cpu.usage, contentWidth),
-    statRow('Load', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' · ')),
+    statRow('Load', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')),
   ];
   if (data.cpu.temperature) lines.push(statRow('Temp', formatTemp(data.cpu.temperature)));
   return lines;
@@ -141,13 +141,25 @@ function memCard(data: StatsData, contentWidth: number): string[] {
   return [
     statRow('Total', formatBytes(data.memory.total)),
     statRow('Used', formatBytes(data.memory.used)),
+    statRow('Cached', formatBytes(data.memory.total - data.memory.free - data.memory.used)),
     statRow('Free', formatBytes(data.memory.free)),
     gaugeRow('Usage', data.memory.usagePercent, contentWidth),
     statRow('Swap', `${formatBytes(data.memory.swapUsed)} / ${formatBytes(data.memory.swapTotal)}`),
   ];
 }
 
-function powerCard(data: StatsData): string[] | null {
+function gpuCard(data: StatsData, contentWidth: number): string[] | null {
+   if (!data.gpu) return null;
+   const lines: string[] = [];
+   lines.push(statRow('Model', truncatePlain(data.gpu.model, Math.max(4, contentWidth - 8))));
+   lines.push(statRow('Memory', formatBytes(data.gpu.memory)));
+   lines.push(statRow('Util', `${data.gpu.utilization}%`));
+   if (data.gpu.temperature) lines.push(statRow('Temp', formatTemp(data.gpu.temperature)));
+   lines.push(statRow('Procs', String(data.gpu.processes)));
+   return lines;
+ }
+
+ function powerCard(data: StatsData): string[] | null {
   if (!data.power) return null;
   const lines: string[] = [];
   if (data.power.cpuWatts !== undefined) lines.push(statRow('CPU', `${data.power.cpuWatts.toFixed(2)} W`));
@@ -162,7 +174,8 @@ function batteryCard(data: StatsData, contentWidth: number): string[] | null {
   const lines = [
     statRow('Level', `${data.battery.level}%  (${data.battery.state})`),
     statRow('Time', data.battery.timeRemaining),
-    statRow('Health', truncatePlain(data.battery.health, valW)),
+    statRow('Cycles', String(data.battery.cycles ?? 'N/A')),
+    statRow('Condition', data.battery.condition ?? 'N/A'),
   ];
   if (data.battery.maxCapacityPercent !== undefined) {
     lines.push(statRow('Capacity', capacityColor(data.battery.maxCapacityPercent)(`${data.battery.maxCapacityPercent}%`)));
@@ -187,8 +200,8 @@ function networkCard(data: StatsData, contentWidth: number): string[] {
   const valW = Math.max(6, contentWidth - 8);
   return [
     statRow('Iface', truncatePlain(`${data.network.interface} (${data.network.ip})`, valW)),
-    statRow('RX', `${formatBytes(data.network.rxBytes)} · ${data.network.rxPackets} pkts`),
-    statRow('TX', `${formatBytes(data.network.txBytes)} · ${data.network.txPackets} pkts`),
+    statRow('RX', `${formatBytes(data.network.rxBytes)} / ${data.network.rxPackets} pkt`),
+    statRow('TX', `${formatBytes(data.network.txBytes)} / ${data.network.txPackets} pkt`),
   ];
 }
 
@@ -205,52 +218,116 @@ function header(data: StatsData, width: number, badges: string[] = [], borderAcc
 // --- process / disk tables ---------------------------------------------------
 
 function sortProcesses(
-  processes: { pid: number; user: string; cpu: number; mem: number; command: string }[],
-  sortBy: 'cpu' | 'mem' | 'pid'
-) {
-  const copy = [...processes];
-  if (sortBy === 'pid') return copy.sort((a, b) => a.pid - b.pid);
-  if (sortBy === 'mem') return copy.sort((a, b) => b.mem - a.mem);
-  return copy.sort((a, b) => b.cpu - a.cpu);
-}
+   processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[],
+   sortBy: 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime'
+ ) {
+   const copy = [...processes];
+   switch (sortBy) {
+     case 'pid': return copy.sort((a, b) => a.pid - b.pid);
+     case 'mem': return copy.sort((a, b) => b.mem - a.mem);
+     case 'user': return copy.sort((a, b) => a.user.localeCompare(b.user));
+     case 'command': return copy.sort((a, b) => a.command.localeCompare(b.command));
+     case 'state': return copy.sort((a, b) => a.state.localeCompare(b.state));
+     case 'threads': return copy.sort((a, b) => b.threads - a.threads);
+     case 'runtime': return copy.sort((a, b) => b.runtime - a.runtime);
+     default: return copy.sort((a, b) => b.cpu - a.cpu);
+   }
+ }
 
 function pctColor(v: number): (s: string) => string {
   return v > 80 ? chalk.red : v > 50 ? chalk.yellow : chalk.dim;
 }
 
 function processTableLines(
-  processes: { pid: number; user: string; cpu: number; mem: number; command: string }[],
-  contentWidth: number,
-  borderAccent = THEMES.default.border
-): string[] {
-  const pidW = 7, userW = 10, cpuW = 7, memW = 7;
-  const cmdW = Math.max(10, contentWidth - pidW - userW - cpuW - memW - 4);
-  const head =
-    chalk.bold.dim('PID'.padEnd(pidW)) +
-    chalk.bold.dim('USER'.padEnd(userW)) +
-    chalk.bold.dim('CPU%'.padEnd(cpuW)) +
-    chalk.bold.dim('MEM%'.padEnd(memW)) +
-    chalk.bold.dim('COMMAND');
-  const rows = processes.map(p => {
-    const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}`.padEnd(cpuW));
-    const memStr = pctColor(p.mem)(`${p.mem.toFixed(1)}`.padEnd(memW));
-    return (
-      String(p.pid).padEnd(pidW) +
-      truncatePlain(p.user, userW - 1).padEnd(userW) +
-      cpuStr +
-      memStr +
-      truncatePlain(p.command, cmdW)
-    );
-  });
-  return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
-}
+   processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[],
+   contentWidth: number,
+   borderAccent = THEMES.default.border
+ ): string[] {
+    const pidW = 8, ppidW = 8, userW = 12, cpuW = 8, memW = 8, stateW = 8, thrW = 6, rtW = 10;
+
+   const cmdW = Math.max(10, contentWidth - pidW - ppidW - userW - cpuW - memW - stateW - thrW - rtW - 8);
+    const head =
+      chalk.bold.dim('PID'.padEnd(pidW)) +
+      chalk.bold.dim('PPID'.padEnd(ppidW)) +
+      chalk.bold.dim('USER'.padEnd(userW)) +
+      chalk.bold.dim('CPU%'.padEnd(cpuW)) +
+      chalk.bold.dim('MEM%'.padEnd(memW)) +
+      chalk.bold.dim('STATE'.padEnd(stateW)) +
+      chalk.bold.dim('THREADS'.padEnd(thrW)) +
+      chalk.bold.dim('RUNTIME'.padEnd(rtW)) +
+      chalk.bold.dim('COMMAND');
+
+   const rows = processes.map(p => {
+     const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}`.padEnd(cpuW));
+     const memStr = pctColor(p.mem)(`${p.mem.toFixed(1)}`.padEnd(memW));
+     const stateStr = chalk.dim(p.state.padEnd(stateW));
+     const thrStr = String(p.threads).padEnd(thrW);
+     const rtStr = formatRuntime(p.runtime).padEnd(rtW);
+     return (
+       String(p.pid).padEnd(pidW) +
+       String(p.ppid).padEnd(ppidW) +
+       truncatePlain(p.user, userW - 1).padEnd(userW) +
+       cpuStr +
+       memStr +
+       stateStr +
+       thrStr +
+       rtStr +
+       truncatePlain(p.command, cmdW)
+     );
+   });
+   return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
+ }
+
+ function formatRuntime(seconds: number): string {
+   if (seconds < 60) return `${seconds}s`;
+   const mins = Math.floor(seconds / 60);
+   if (mins < 60) return `${mins}m ${seconds % 60}s`;
+   const hrs = Math.floor(mins / 60);
+   return `${hrs}h ${mins % 60}m`;
+ }
+
+ function buildProcessTree(
+   processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[]
+ ): string[] {
+   const map = new Map<number, typeof processes[0]>();
+   const roots: typeof processes[0][] = [];
+   for (const p of processes) map.set(p.pid, p);
+   for (const p of processes) {
+     if (p.ppid === 0 || !map.has(p.ppid)) roots.push(p);
+   }
+   const lines: string[] = [];
+   const visited = new Set<number>();
+   function renderNode(proc: typeof processes[0], prefix: string, isLast: boolean) {
+     if (visited.has(proc.pid)) return;
+     visited.add(proc.pid);
+     const connector = isLast ? '└── ' : '├── ';
+    const pidStr = String(proc.pid).padEnd(8);
+      const cpuStr = pctColor(proc.cpu)(`${proc.cpu.toFixed(1)}%`.padEnd(8));
+      const memStr = pctColor(proc.mem)(`${proc.mem.toFixed(1)}%`.padEnd(8));
+      const stateStr = chalk.dim(proc.state.padEnd(8));
+      const thrStr = String(proc.threads).padEnd(6);
+
+     const cmd = truncatePlain(proc.command, Math.max(10, 100 - pidStr.length - cpuStr.length - memStr.length - stateStr.length - thrStr.length - 10));
+     lines.push(`${prefix}${connector}${pidStr}${cpuStr}${memStr}${stateStr}${thrStr} ${cmd}`);
+     const children = processes.filter(p => p.ppid === proc.pid && !visited.has(p.pid));
+     children.sort((a, b) => b.cpu - a.cpu);
+     children.forEach((child, i) => {
+       const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+       renderNode(child, nextPrefix, i === children.length - 1);
+     });
+   }
+   roots.sort((a, b) => b.cpu - a.cpu);
+   roots.forEach((root, i) => renderNode(root, '', i === roots.length - 1));
+   return lines;
+ }
 
 function diskTableLines(
   disks: { filesystem: string; size: string; used: string; available: string; capacity: string; mountpoint: string }[],
   contentWidth: number,
   borderAccent = THEMES.default.border
 ): string[] {
-  const fsW = 16, sizeW = 8, usedW = 8, availW = 8, capW = 7;
+    const fsW = 20, sizeW = 10, usedW = 10, availW = 10, capW = 8;
+
   const mountW = Math.max(8, contentWidth - fsW - sizeW - usedW - availW - capW - 5);
   const head =
     chalk.bold.dim('FILESYSTEM'.padEnd(fsW)) +
@@ -259,7 +336,8 @@ function diskTableLines(
     chalk.bold.dim('AVAIL'.padEnd(availW)) +
     chalk.bold.dim('CAP'.padEnd(capW)) +
     chalk.bold.dim('MOUNT');
-  const rows = disks.slice(0, 8).map(d => {
+    const rows = disks.map(d => {
+
     const capNum = parseInt(d.capacity, 10) || 0;
     const capStr = pctColor(capNum)(d.capacity.padEnd(capW));
     return (
@@ -301,16 +379,20 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   type Card = { title: string; accent: (s: string) => string; lines: string[] };
   const cards: Card[] = [];
 
-  if (vis.cpu !== false) {
-    cards.push({ title: 'CPU', accent: theme.cpu, lines: cpuCard(data, contentWidth) });
-  }
-  if (vis.mem !== false) {
-    cards.push({ title: 'Memory', accent: theme.mem, lines: memCard(data, contentWidth) });
-  }
-  if (vis.power !== false) {
-    const power = powerCard(data);
-    if (power) cards.push({ title: 'Power', accent: theme.power, lines: power });
-  }
+   if (vis.cpu !== false) {
+     cards.push({ title: 'CPU', accent: theme.cpu, lines: cpuCard(data, contentWidth) });
+   }
+   if (vis.mem !== false) {
+     cards.push({ title: 'Memory', accent: theme.mem, lines: memCard(data, contentWidth) });
+   }
+   if (vis.gpu !== false) {
+     const gpu = gpuCard(data, contentWidth);
+     if (gpu) cards.push({ title: 'GPU', accent: theme.gpu, lines: gpu });
+   }
+   if (vis.power !== false) {
+     const power = powerCard(data);
+     if (power) cards.push({ title: 'Power', accent: theme.power, lines: power });
+   }
   if (vis.battery !== false) {
     const battery = batteryCard(data, contentWidth);
     if (battery) cards.push({ title: 'Battery', accent: theme.battery, lines: battery });
@@ -336,23 +418,30 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     out.push('');
   }
 
-  if (vis.process !== false) {
-    const filteredProcesses = opts.filter
-      ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
-      : data.processes;
-    const sortedProcesses = sortProcesses(filteredProcesses, opts.sortBy ?? 'cpu');
-    const limited = opts.processLimit ? sortedProcesses.slice(0, opts.processLimit) : sortedProcesses;
+if (vis.process !== false) {
+     const filteredProcesses = opts.filter
+       ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
+       : data.processes;
+     const sortedProcesses = sortProcesses(filteredProcesses, opts.sortBy ?? 'cpu');
+     const limited = opts.processLimit ? sortedProcesses.slice(0, opts.processLimit) : sortedProcesses;
 
-    const procTitle = opts.filter
-      ? `Processes · filter "${opts.filter}" · sort ${opts.sortBy ?? 'cpu'}`
-      : `Processes · sort ${opts.sortBy ?? 'cpu'}`;
+     const procTitle = opts.filter
+       ? `Processes · filter "${opts.filter}" · sort ${opts.sortBy ?? 'cpu'}`
+       : `Processes · sort ${opts.sortBy ?? 'cpu'}`;
 
-    if (limited.length) {
-      out.push(...panel(procTitle, processTableLines(limited, width - 4, theme.border), width, theme.process, theme.border));
-    } else if (opts.filter) {
-      out.push(...panel(procTitle, [chalk.dim(`No processes match "${opts.filter}"`)], width, theme.process, theme.border));
-    }
-  }
+     if (opts.treeView) {
+       const treeLines = buildProcessTree(limited);
+       if (treeLines.length) {
+         out.push(...panel(procTitle + ' · tree', treeLines, width, theme.process, theme.border));
+       } else if (opts.filter) {
+         out.push(...panel(procTitle, [chalk.dim(`No processes match "${opts.filter}"`)], width, theme.process, theme.border));
+       }
+     } else if (limited.length) {
+       out.push(...panel(procTitle, processTableLines(limited, width - 4, theme.border), width, theme.process, theme.border));
+     } else if (opts.filter) {
+       out.push(...panel(procTitle, [chalk.dim(`No processes match "${opts.filter}"`)], width, theme.process, theme.border));
+     }
+   }
 
   return out.join('\n');
 }

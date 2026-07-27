@@ -11,22 +11,25 @@ import chalk from 'chalk';
 import { collectAll } from './monitors/index.js';
 import { formatTable, formatJson, formatCsv, formatTsv } from './formatters/index.js';
 import { startLive, stopLive } from './live/index.js';
+import { showSplash } from './splash.js';
 
 const program = new Command();
 
 program
-  .name('pyre')
-  .version('1.1.0')
-  .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export')
-  .option('-j, --json', 'Output as JSON')
-  .option('-c, --csv', 'Output as CSV')
-  .option('-t, --tsv', 'Output as TSV')
-  .option('--detailed', 'Include detailed system info and sensor readings')
-  .option('--interval <seconds>', 'Refresh interval for live mode', '2')
-  .option('--once', 'Show a single static snapshot instead of live feed')
-  .option('--out <file>', 'Also write the snapshot output to a file (--once/--json/--csv/--tsv modes)')
-  .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', './pyre-exports')
-  .option('--log', 'Start continuous CSV logging immediately when live mode starts');
+   .name('pyre')
+   .version('2.0.0')
+   .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export')
+   .option('-j, --json', 'Output as JSON')
+   .option('-c, --csv', 'Output as CSV')
+   .option('-t, --tsv', 'Output as TSV')
+   .option('--detailed', 'Include detailed system info and sensor readings')
+   .option('--interval <seconds>', 'Refresh interval for live mode', '2')
+   .option('--once', 'Show a single static snapshot instead of live feed')
+   .option('--out <file>', 'Also write the snapshot output to a file (--once/--json/--csv/--tsv modes)')
+   .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', './pyre-exports')
+   .option('--log', 'Start continuous CSV logging immediately when live mode starts')
+   .option('--tree', 'Show process tree view instead of flat list')
+   .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu');
 
 program.parse(process.argv);
 
@@ -44,6 +47,7 @@ function stripAnsi(s: string): string {
 async function main() {
   const requestedLive = program.args[0] === 'live' || (!isExportMode() && !opts.once);
   if (requestedLive) {
+    await showSplash();
     const interval = parseFloat(opts.interval) || 2;
     await startLive({
       interval,
@@ -60,7 +64,7 @@ async function main() {
   if (opts.json) output = formatJson(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80 });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree });
 
   console.log(output);
 

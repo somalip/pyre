@@ -14,43 +14,45 @@
 import chalk from 'chalk';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData } from './types.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData } from './types.js';
 
 /**
  * Gather every metric category in parallel and return a
  * complete {@link StatsData} snapshot.
  */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
-  const [cpu, memory, disk, battery, thermal, network, processes, system, power] = await Promise.all([
-    collectCpu(),
-    collectMemory(),
-    collectDisk(),
-    collectBattery(),
-    collectThermal(opts.detailed),
-    collectNetwork(),
-    collectProcesses(opts.processLimit ?? 10),
-    collectSystem(),
-    collectPower(),
-  ]);
+   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power] = await Promise.all([
+     collectCpu(),
+     collectGpu(opts.detailed),
+     collectMemory(),
+     collectDisk(),
+     collectBattery(),
+     collectThermal(opts.detailed),
+     collectNetwork(),
+     collectProcesses(opts.processLimit ?? 10),
+     collectSystem(),
+     collectPower(),
+   ]);
 
-  return {
-    header: {
-      title: chalk.hex('#ff5500').bold('PYRE'),
-      hostname: system.hostname,
-      os: system.os,
-      uptime: system.uptime,
-    },
-    cpu,
-    memory,
-    disk,
-    battery,
-    thermal,
-    network,
-    processes,
-    power,
-    timestamp: new Date().toISOString(),
-  };
-}
+   return {
+     header: {
+       title: chalk.hex('#ff5500').bold('PYRE'),
+       hostname: system.hostname,
+       os: system.os,
+       uptime: system.uptime,
+     },
+     cpu,
+     gpu,
+     memory,
+     disk,
+     battery,
+     thermal,
+     network,
+     processes,
+     power,
+     timestamp: new Date().toISOString(),
+   };
+ }
 
 /**
  * Read power-draw metrics (CPU watts, GPU watts, combined)
@@ -58,14 +60,72 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
  * power data is available.
  */
 export async function collectPower(): Promise<PowerData | null> {
-  try {
-    const { power } = await getSmcMetrics();
-    if (power.cpu === undefined && power.gpu === undefined && power.combined === undefined) return null;
-    return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
-  } catch {
-    return null;
-  }
-}
+   try {
+     const { power } = await getSmcMetrics();
+     if (power.cpu === undefined && power.gpu === undefined && power.combined === undefined) return null;
+     return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
+   } catch {
+     return null;
+   }
+ }
+
+ /**
+  * Gather GPU information from system_profiler and powermetrics.
+  * Returns null when GPU data is unavailable (e.g. on machines
+  * without a discrete GPU or when powermetrics is inaccessible).
+  */
+ export async function collectGpu(detailed?: boolean): Promise<GpuData | null> {
+   try {
+     const spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null')).trim();
+     if (!spRaw) return null;
+
+     const modelMatch = spRaw.match(/Chipset Model:\s*(.+)/i);
+     const model = modelMatch ? modelMatch[1].trim() : 'Unknown';
+
+     const memMatch = spRaw.match(/VRAM \(Total\):\s*(.+)/i);
+     let memory = 0;
+     if (memMatch) {
+       const memStr = memMatch[1].trim();
+       const memNum = parseFloat(memStr);
+       if (memStr.includes('GB')) memory = memNum * 1024 * 1024 * 1024;
+       else if (memStr.includes('MB')) memory = memNum * 1024 * 1024;
+     }
+
+     let utilization = 0;
+     let temperature: number | undefined;
+     let gpuProcesses = 0;
+
+     if (detailed) {
+       try {
+         const pm = (await run('sudo -n powermetrics --samplers gpu_power -n 1 --format text 2>/dev/null', '')).trim();
+         const gpuPowerMatch = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
+         if (gpuPowerMatch) {
+           utilization = Math.min(100, Math.round(parseFloat(gpuPowerMatch[1]) / 10));
+         }
+       } catch {
+         // ignore
+       }
+
+       try {
+         const { temps } = await getSmcMetrics();
+         if (temps.gpu_die !== undefined) temperature = temps.gpu_die;
+       } catch {
+         // ignore
+       }
+
+       try {
+         const psRaw = (await run('ps aux | grep -i "[g]pu" | wc -l')).trim();
+         gpuProcesses = parseInt(psRaw) || 0;
+       } catch {
+         // ignore
+       }
+     }
+
+     return { model, memory, utilization, temperature, processes: gpuProcesses };
+   } catch {
+     return null;
+   }
+ }
 
 async function collectSystem(): Promise<{ hostname: string; os: string; uptime: string }> {
   const hostname = (await run('hostname', 'Mac')).trim();
@@ -403,17 +463,18 @@ export async function collectNetwork(): Promise<NetworkData> {
 }
 
 export async function collectProcesses(limit = 10): Promise<ProcessData[]> {
-  try {
-    const raw = (await run(`ps -Ao pid,user,pcpu,pmem,comm -r | head -n ${limit + 1}`)).trim();
-    const lines = raw.split('\n').slice(1);
-    return lines
-      .map(line => {
-        const parts = line.match(/\s*(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(.+)/);
-        if (!parts) return null;
-        return { pid: parseInt(parts[1]), user: parts[2], cpu: parseFloat(parts[3]), mem: parseFloat(parts[4]), command: parts[5] };
-      })
-      .filter((p): p is ProcessData => p !== null && p.pid > 0);
-  } catch {
-    return [];
-  }
-}
+   try {
+     const raw = (await run(`ps -Ao pid,ppid,user,pcpu,pmem,state,threads,time,comm -r | head -n ${limit + 1}`)).trim();
+     const lines = raw.split('\n').slice(1);
+     return lines
+       .map(line => {
+         const parts = line.match(/\s*(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+([\d:]+)\s+(.+)/);
+         if (!parts) return null;
+         const runtimeSec = parts[8].split(':').reduce((acc, val, idx) => acc + parseInt(val) * Math.pow(60, 2 - idx), 0);
+         return { pid: parseInt(parts[1]), ppid: parseInt(parts[2]), user: parts[3], cpu: parseFloat(parts[4]), mem: parseFloat(parts[5]), state: parts[6], threads: parseInt(parts[7]), runtime: runtimeSec, command: parts[9] };
+       })
+       .filter((p): p is ProcessData => p !== null && p.pid > 0);
+   } catch {
+     return [];
+   }
+ }
