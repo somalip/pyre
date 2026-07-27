@@ -2,7 +2,21 @@ const BLOCKS = '▁▂▃▄▅▆▇█';
 
 /**
  * Render a series of numbers as a compact unicode sparkline.
- * Values are normalized against min/max (auto-computed if not provided).
+ *
+ * Values are normalised against `min`/`max` (auto-computed
+ * from the data if not supplied).  The output uses eight
+ * Unicode block characters to represent the range, making
+ * it suitable for inline terminal graphs.
+ *
+ * @param values - Numeric series to render.
+ * @param opts.min - Minimum value for normalisation.
+ * @param opts.max - Maximum value for normalisation.
+ * @returns A string of block characters whose length equals `values.length`.
+ *
+ * @example
+ * ```ts
+ * sparkline([10, 20, 15, 30, 25]); // "▁▂▃▅▄"
+ * ```
  */
 export function sparkline(values: number[], opts: { min?: number; max?: number } = {}): string {
   if (!values.length) return '';

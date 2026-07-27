@@ -1,185 +1,25 @@
+/**
+ * System-metric collectors.
+ *
+ * Each `collect*` function queries a single category of
+ * macOS system data via shell commands and returns a
+ * strongly-typed result.  `collectAll` orchestrates them
+ * in parallel and assembles the final {@link StatsData}
+ * object.
+ *
+ * All commands are wrapped in {@link run} so that a
+ * failure in one category never prevents the others from
+ * returning their best-effort values.
+ */
 import chalk from 'chalk';
+import { run } from './run.js';
+import { getSmcMetrics, parseSuffix } from './smc.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData } from './types.js';
 
-export interface StatsData {
-  header: { title: string; hostname: string; os: string; uptime: string };
-  cpu: CpuData;
-  memory: MemoryData;
-  disk: DiskData[];
-  battery: BatteryData | null;
-  thermal: ThermalData;
-  network: NetworkData;
-  processes: ProcessData[];
-  power: PowerData | null;
-  timestamp: string;
-}
-
-export interface PowerData {
-  cpuWatts?: number;
-  gpuWatts?: number;
-  combinedWatts?: number;
-}
-
-export interface CpuData {
-  brand: string;
-  cores: number;
-  physicalCores: number;
-  frequency: number;
-  usage: number;
-  loadAvg: number[];
-  temperature?: number;
-}
-
-export interface MemoryData {
-  total: number;
-  used: number;
-  free: number;
-  swapTotal: number;
-  swapUsed: number;
-  swapFree: number;
-  pageSize: number;
-  usagePercent: number;
-}
-
-export interface ThermalData {
-  state: string;
-  detail?: string;
-  /** Normalized 0-3 scale (nominal/fair/serious/critical) derived from `state`, for graphing/coloring */
-  pressureLevel: number;
-  temperatures?: Record<string, number | null>;
-  error?: string;
-}
-
-export interface BatteryData {
-  level: number;
-  state: string;
-  timeRemaining: string;
-  health: string;
-  powerSource: string;
-  cycles?: number;
-  condition?: string;
-  maxCapacityPercent?: number;
-}
-
-export interface DiskData {
-  filesystem: string;
-  size: string;
-  used: string;
-  available: string;
-  capacity: string;
-  mountpoint: string;
-}
-
-export interface NetworkData {
-  interface: string;
-  ip: string;
-  rxBytes: number;
-  txBytes: number;
-  rxPackets: number;
-  txPackets: number;
-}
-
-export interface ProcessData {
-  pid: number;
-  user: string;
-  cpu: number;
-  mem: number;
-  command: string;
-}
-
-async function run(cmd: string, fallback: string = ''): Promise<string> {
-  try {
-    const { execSync } = await import('node:child_process');
-    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 }).trim();
-  } catch {
-    return fallback;
-  }
-}
-
-// --- shared SMC sensor reader (temperature + power) ---
-// The old code tried to read CPU temperature out of `pmset -g therm`, but that
-// command doesn't report a "CPU ... temp:" field on Apple Silicon (or most
-// recent Intel) Macs — it only reports scheduler/speed limits — so
-// `temperature` was silently always undefined. Real sensor data on modern
-// macOS requires `powermetrics`, which needs root. We call it once per tick
-// (with a short-lived cache) and share the result between the CPU temp field
-// and the detailed thermal panel instead of invoking it twice.
-interface SmcMetrics {
-  temps: Record<string, number>;
-  power: { cpu?: number; gpu?: number; combined?: number };
-  freq: Record<string, number>;
-}
-
-let smcCache: { data: SmcMetrics; ts: number } | null = null;
-
-async function getSmcMetrics(): Promise<SmcMetrics> {
-  const now = Date.now();
-  if (smcCache && now - smcCache.ts < 1500) return smcCache.data;
-
-  const result: SmcMetrics = { temps: {}, power: {}, freq: {} };
-  try {
-    // `sudo -n` (non-interactive) so we never hang waiting on a password
-    // prompt that can't be answered from a piped child process; if the user
-    // hasn't set up passwordless sudo for powermetrics, this just fails fast
-    // and we fall back to the thermal-state string instead of a temperature.
-    const pm = (
-      await run(
-        'sudo -n powermetrics --samplers smc,cpu_power -n 1 --format text 2>/dev/null',
-        ''
-      )
-    ).trim();
-
-    if (pm) {
-      const cpuTemp = pm.match(/CPU die temperature:\s*([\d.]+)/i);
-      if (cpuTemp) result.temps['cpu_die'] = parseFloat(cpuTemp[1]);
-
-      const gpuTemp = pm.match(/GPU die temperature:\s*([\d.]+)/i);
-      if (gpuTemp) result.temps['gpu_die'] = parseFloat(gpuTemp[1]);
-
-      const smcTemp = pm.match(/SMC die temperature:\s*([\d.]+)/i);
-      if (smcTemp) result.temps['smc_die'] = parseFloat(smcTemp[1]);
-
-      const cpuPower = pm.match(/CPU Power:\s*([\d.]+)\s*mW/i);
-      if (cpuPower) result.power.cpu = parseFloat(cpuPower[1]) / 1000;
-
-      const gpuPower = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
-      if (gpuPower) result.power.gpu = parseFloat(gpuPower[1]) / 1000;
-
-      const combinedPower = pm.match(/Combined Power \(CPU \+ GPU.*?\):\s*([\d.]+)\s*mW/i);
-      if (combinedPower) result.power.combined = parseFloat(combinedPower[1]) / 1000;
-
-      // Apple Silicon reports active clock speed per core cluster rather
-      // than a single number — grab whichever cluster(s) this chip has.
-      const eFreq = pm.match(/E-Cluster HW active frequency:\s*([\d.]+)/i);
-      if (eFreq) result.freq['e_cluster'] = parseFloat(eFreq[1]);
-
-      const pFreq = pm.match(/P-Cluster HW active frequency:\s*([\d.]+)/i);
-      if (pFreq) result.freq['p_cluster'] = parseFloat(pFreq[1]);
-
-      // Some single-cluster/older chips report just "CPU HW active frequency".
-      const cpuFreq = pm.match(/CPU HW active frequency:\s*([\d.]+)/i);
-      if (cpuFreq) result.freq['cpu'] = parseFloat(cpuFreq[1]);
-    }
-  } catch {
-    // powermetrics unavailable/unauthorized — leave temps/power/freq empty,
-    // the rest of the app degrades gracefully (thermal state string still
-    // shows, and CPU frequency falls back to 0/"unavailable").
-  }
-
-  smcCache = { data: result, ts: now };
-  return result;
-}
-
-function parseSuffix(s: string): number {
-  return s.toUpperCase() === 'K' ? 1024 : s.toUpperCase() === 'M' ? 1024 * 1024 : s.toUpperCase() === 'G' ? 1024 * 1024 * 1024 : 1;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
-
+/**
+ * Gather every metric category in parallel and return a
+ * complete {@link StatsData} snapshot.
+ */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
   const [cpu, memory, disk, battery, thermal, network, processes, system, power] = await Promise.all([
     collectCpu(),
@@ -212,6 +52,11 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
   };
 }
 
+/**
+ * Read power-draw metrics (CPU watts, GPU watts, combined)
+ * from the SMC via powermetrics.  Returns `null` when no
+ * power data is available.
+ */
 export async function collectPower(): Promise<PowerData | null> {
   try {
     const { power } = await getSmcMetrics();

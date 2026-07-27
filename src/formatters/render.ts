@@ -1,114 +1,19 @@
+/**
+ * Dashboard rendering helpers.
+ *
+ * This module contains every function that turns a {@link StatsData}
+ * snapshot into styled terminal output: panel drawing, card layout,
+ * process/disk tables, and the main `formatTable` orchestrator.
+ *
+ * Low-level utilities (ANSI stripping, padding, truncation) live
+ * here alongside the higher-level card and table renderers so that
+ * all layout-related code is co-located.
+ */
 import chalk from 'chalk';
-import { StatsData } from './monitors.js';
-import { sparkline } from './sparkline.js';
-import type { History } from './history.js';
-
-// --- theme definitions ----------------------------------------------------
-
-export type ThemeName = 'default' | 'dracula' | 'cyberpunk' | 'monochrome';
-
-export interface ThemeColors {
-  border: (s: string) => string;
-  cpu: (s: string) => string;
-  mem: (s: string) => string;
-  power: (s: string) => string;
-  battery: (s: string) => string;
-  thermal: (s: string) => string;
-  network: (s: string) => string;
-  disk: (s: string) => string;
-  graphs: (s: string) => string;
-  process: (s: string) => string;
-}
-
-export const THEMES: Record<ThemeName, ThemeColors> = {
-  default: {
-    border: chalk.hex('#4b5563'),
-    cpu: chalk.hex('#22d3ee'),
-    mem: chalk.hex('#a78bfa'),
-    power: chalk.hex('#fbbf24'),
-    battery: chalk.hex('#34d399'),
-    thermal: chalk.hex('#fb923c'),
-    network: chalk.hex('#60a5fa'),
-    disk: chalk.hex('#f472b6'),
-    graphs: chalk.hex('#22d3ee'),
-    process: chalk.hex('#e5e7eb'),
-  },
-  dracula: {
-    border: chalk.hex('#6272a4'),
-    cpu: chalk.hex('#8be9fd'),
-    mem: chalk.hex('#bd93f9'),
-    power: chalk.hex('#f1fa8c'),
-    battery: chalk.hex('#50fa7b'),
-    thermal: chalk.hex('#ffb86c'),
-    network: chalk.hex('#ff79c6'),
-    disk: chalk.hex('#ff5555'),
-    graphs: chalk.hex('#8be9fd'),
-    process: chalk.hex('#f8f8f2'),
-  },
-  cyberpunk: {
-    border: chalk.hex('#ff0055'),
-    cpu: chalk.hex('#00ffcc'),
-    mem: chalk.hex('#ff00ff'),
-    power: chalk.hex('#ffff00'),
-    battery: chalk.hex('#00ff00'),
-    thermal: chalk.hex('#ff6600'),
-    network: chalk.hex('#00ffff'),
-    disk: chalk.hex('#ff007f'),
-    graphs: chalk.hex('#00ffcc'),
-    process: chalk.hex('#ffffff'),
-  },
-  monochrome: {
-    border: chalk.gray,
-    cpu: chalk.white.bold,
-    mem: chalk.white.bold,
-    power: chalk.white.bold,
-    battery: chalk.white.bold,
-    thermal: chalk.white.bold,
-    network: chalk.white.bold,
-    disk: chalk.white.bold,
-    graphs: chalk.white.bold,
-    process: chalk.white.bold,
-  },
-};
-
-export interface VisibleItems {
-  cpu?: boolean;
-  mem?: boolean;
-  power?: boolean;
-  battery?: boolean;
-  thermal?: boolean;
-  network?: boolean;
-  disk?: boolean;
-  process?: boolean;
-}
-
-export interface TableOptions {
-  /** Terminal width in columns; controls layout, bar sizing, and column count. Defaults to 80. */
-  width?: number;
-  /** Process sort key. Defaults to 'cpu'. */
-  sortBy?: 'cpu' | 'mem' | 'pid';
-  /** Case-insensitive substring filter applied to the process command. */
-  filter?: string;
-  /** Max process rows to show (the live dashboard sizes this to available terminal height). */
-  processLimit?: number;
-  /** Selected visual theme. */
-  theme?: ThemeName;
-  /** Visibility toggle settings for individual cards. */
-  visible?: VisibleItems;
-}
-
-/** Clamp/normalize a terminal width to a sane range, defaulting to 80 cols. */
-export function clampWidth(width?: number): number {
-  if (!width || Number.isNaN(width)) return 80;
-  return Math.max(60, Math.min(width, 240));
-}
-
-/** How many stat cards fit per row at a given terminal width. Shared with live.ts for layout budgeting. */
-export function gridColumns(width: number): number {
-  if (width >= 150) return 3;
-  if (width >= 96) return 2;
-  return 1;
-}
+import { sparkline } from '../sparkline.js';
+import type { History } from '../history.js';
+import type { StatsData, VisibleItems } from './types.js';
+import { THEMES, type ThemeName } from './themes.js';
 
 // --- low-level box drawing ---------------------------------------------------
 
@@ -129,7 +34,7 @@ function truncatePlain(s: string, width: number): string {
 }
 
 /** Draw a rounded panel of exactly `width` columns wide and `height` content rows tall. */
-function panel(
+export function panel(
   title: string,
   lines: string[],
   width: number,
@@ -202,19 +107,19 @@ export function capacityColor(percent: number) {
   return chalk.green;
 }
 
-function formatBytes(bytes: number): string {
+export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
-function celsiusToFahrenheit(c: number): number {
+export function celsiusToFahrenheit(c: number): number {
   return c * (9 / 5) + 32;
 }
 
 /** Render a Celsius reading with its Fahrenheit equivalent alongside it, e.g. "62.0°C / 143.6°F". */
-function formatTemp(c: number): string {
+export function formatTemp(c: number): string {
   return `${c.toFixed(1)}°C / ${celsiusToFahrenheit(c).toFixed(1)}°F`;
 }
 
@@ -371,6 +276,13 @@ function diskTableLines(
 
 // --- main dashboard ------------------------------------------------------------
 
+/**
+ * Render the full static dashboard as a single string.
+ *
+ * Cards are arranged in rows of {@link gridColumns} columns,
+ * and the process table is appended below.  Visibility of
+ * individual panels is controlled via {@link TableOptions.visible}.
+ */
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   const width = clampWidth(opts.width);
   const columns = gridColumns(width);
@@ -445,90 +357,18 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   return out.join('\n');
 }
 
-export function formatJson(data: StatsData): string {
-  return JSON.stringify(data, null, 2);
+/** Clamp/normalize a terminal width to a sane range, defaulting to 80 cols. */
+export function clampWidth(width?: number): number {
+  if (!width || Number.isNaN(width)) return 80;
+  return Math.max(60, Math.min(width, 240));
 }
 
-export function formatCsv(data: StatsData): string {
-  const rows: string[][] = [
-    ['property', 'key', 'value'],
-    ['cpu', 'brand', data.cpu.brand],
-    ['cpu', 'usage', String(data.cpu.usage)],
-    ['cpu', 'loadAvg_1m', String(data.cpu.loadAvg[0])],
-    ['cpu', 'loadAvg_5m', String(data.cpu.loadAvg[1])],
-    ['cpu', 'loadAvg_15m', String(data.cpu.loadAvg[2])],
-    ['memory', 'total', String(data.memory.total)],
-    ['memory', 'used', String(data.memory.used)],
-    ['memory', 'usagePercent', String(data.memory.usagePercent)],
-    ['memory', 'swapUsed', String(data.memory.swapUsed)],
-    ['memory', 'swapTotal', String(data.memory.swapTotal)],
-    ['thermal', 'state', data.thermal.state],
-    ['thermal', 'cpuTempC', data.thermal.temperatures?.cpu_die ? String(data.thermal.temperatures.cpu_die) : ''],
-    [
-      'thermal',
-      'cpuTempF',
-      data.thermal.temperatures?.cpu_die !== undefined ? String(celsiusToFahrenheit(data.thermal.temperatures.cpu_die)) : '',
-    ],
-    ['network', 'rxBytes', String(data.network.rxBytes)],
-    ['network', 'txBytes', String(data.network.txBytes)],
-    ['battery', 'level', data.battery ? String(data.battery.level) : ''],
-    ['battery', 'powerSource', data.battery ? data.battery.powerSource : ''],
-    ['battery', 'condition', data.battery?.condition ?? ''],
-    ['battery', 'maxCapacityPercent', data.battery?.maxCapacityPercent !== undefined ? String(data.battery.maxCapacityPercent) : ''],
-    ['battery', 'cycles', data.battery?.cycles !== undefined ? String(data.battery.cycles) : ''],
-    ['power', 'cpuWatts', data.power?.cpuWatts !== undefined ? String(data.power.cpuWatts) : ''],
-    ['power', 'gpuWatts', data.power?.gpuWatts !== undefined ? String(data.power.gpuWatts) : ''],
-    ['power', 'combinedWatts', data.power?.combinedWatts !== undefined ? String(data.power.combinedWatts) : ''],
-    ['system', 'hostname', data.header.hostname],
-    ['system', 'uptime', data.header.uptime],
-    ['system', 'timestamp', data.timestamp],
-  ];
-  return rows.map(r => r.map(item => `"${String(item).replace(/"/g, '""')}"`).join(',')).join('\n');
-}
-
-export function formatTsv(data: StatsData): string {
-  return formatCsv(data).split('\n').map(r => r.split(',').join('\t')).join('\n');
-}
-
-export function formatGraphs(history: History, width = 80, themeName: ThemeName = 'default'): string {
-  const theme = THEMES[themeName] || THEMES.default;
-  const contentWidth = width - 4;
-  const sampleCount = history.cpuUsage.length;
-  const sparkWidth = Math.max(10, contentWidth - 28);
-
-  const lines: string[] = [];
-  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth));
-  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth));
-  lines.push(
-    graphRow('Temp', history.temp, {}, formatTemp, sparkWidth, 'no sensor access (needs sudo powermetrics)')
-  );
-  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth));
-  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth));
-
-  const title = `Graphs · last ${sampleCount} sample${sampleCount === 1 ? '' : 's'}`;
-  return panel(title, lines, width, theme.graphs, theme.border).join('\n');
-}
-
-function graphRow(
-  label: string,
-  values: number[],
-  bounds: { min?: number; max?: number },
-  fmt: (v: number) => string,
-  sparkWidth = 40,
-  emptyMessage = 'collecting data...'
-): string {
-  if (!values.length) {
-    return `${chalk.dim(label.padEnd(10))} ${chalk.dim(emptyMessage)}`;
-  }
-  const visible = values.slice(-sparkWidth);
-  const spark = sparkline(visible, bounds);
-  const current = values[values.length - 1];
-
-  let color = chalk.cyan;
-  if (bounds.min !== undefined && bounds.max !== undefined) {
-    const pct = ((current - bounds.min) / (bounds.max - bounds.min || 1)) * 100;
-    color = pct > 90 ? chalk.red : pct > 70 ? chalk.yellow : chalk.green;
-  }
-
-  return `${chalk.dim(label.padEnd(10))}${color(spark)}  ${chalk.bold(fmt(current))}`;
+/**
+ * How many stat cards fit per row at a given terminal width.
+ * Shared with the live dashboard for layout budgeting.
+ */
+export function gridColumns(width: number): number {
+  if (width >= 150) return 3;
+  if (width >= 96) return 2;
+  return 1;
 }

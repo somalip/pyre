@@ -8,9 +8,9 @@
 import fs from 'node:fs';
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { collectAll } from './monitors.js';
-import { formatTable, formatJson, formatCsv, formatTsv } from './formatters.js';
-import { startLive, stopLive } from './live.js';
+import { collectAll } from './monitors/index.js';
+import { formatTable, formatJson, formatCsv, formatTsv } from './formatters/index.js';
+import { startLive, stopLive } from './live/index.js';
 
 const program = new Command();
 
