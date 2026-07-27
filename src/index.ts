@@ -254,7 +254,26 @@ async function runP2PConnect(): Promise<void> {
   try {
     await client.connect();
   } catch (err: any) {
-    console.log(chalk.red(`Connection failed: ${err.message}`));
+    const code = (err as any).code;
+    const msg = err.message || String(err);
+    console.log(chalk.red(`Connection failed: ${msg}`));
+    if (code === 'ECONNREFUSED') {
+      console.log(chalk.yellow('  Hints:'));
+      console.log(chalk.dim('  1. Start the server: pyre p2p server --p2p-host 0.0.0.0 --p2p-port ' + port + ' --p2p-password <password>'));
+      console.log(chalk.dim('  2. Check the server IP with: hostname -I'));
+      console.log(chalk.dim('  3. Open the port on the server firewall: sudo ufw allow ' + port + '/tcp'));
+    } else if (code === 'ETIMEDOUT') {
+      console.log(chalk.yellow('  Hints:'));
+      console.log(chalk.dim('  1. Verify the server IP is correct'));
+      console.log(chalk.dim('  2. Check that both machines are on the same network/subnet'));
+      console.log(chalk.dim('  3. Open the port on the server firewall'));
+    } else if (code === 'EHOSTDOWN' || code === 'EHOSTUNREACH') {
+      console.log(chalk.yellow('  Hints:'));
+      console.log(chalk.dim('  1. The server at ' + host + ' is not responding'));
+      console.log(chalk.dim('  2. Start the server first: pyre p2p server --p2p-host 0.0.0.0 --p2p-port ' + port + ' --p2p-password <password>'));
+      console.log(chalk.dim('  3. Check connectivity: ping ' + host));
+      console.log(chalk.dim('  4. Ensure both machines are on the same LAN (ping each other first)'));
+    }
     process.exit(1);
   }
 

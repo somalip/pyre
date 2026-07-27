@@ -350,13 +350,16 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
 
         <div class="card">
           <h3>CLIENT CONNECT</h3>
-          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server. Replace <b>&lt;server-ip&gt;</b> with your server's IP address or hostname.</p>
+          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server. The server IP below was auto-detected from your network.</p>
           <div class="code-box">
             <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
             <pre id="p2p-client-cmd">pyre p2p connect \
   --p2p-host &lt;server-ip&gt; \
   --p2p-port 9876 \
   --p2p-password mysecret</pre>
+          </div>
+          <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok); margin-top:8px">
+            ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP shown above.
           </div>
         </div>
 
@@ -674,7 +677,10 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
     const splash = document.getElementById('splash');
     const wizard = document.getElementById('wizard');
-    function enter(){ splash.classList.add('hide'); wizard.classList.add('show'); }
+    function enter(){
+      splash.classList.add('hide'); wizard.classList.add('show');
+      if (window.__pyreLocalIP && window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
+    }
     document.getElementById('enterBtn').addEventListener('click', enter);
     document.getElementById('skipLink').addEventListener('click', (e)=>{ e.preventDefault(); enter(); });
     setTimeout(enter, 4200);
@@ -682,6 +688,29 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
   })();
 
   (function(){
+    // Detect local IP address for P2P quick-start (host candidates only — local LAN IPs)
+    function detectLocalIP() {
+      return new Promise((resolve) => {
+        try {
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          pc.createDataChannel('');
+          pc.createOffer().then(offer => pc.setLocalDescription(offer));
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) { pc.close(); resolve(window.__pyreLocalIP || null); }
+            // Only use host candidates — local interface IPs (not public srflx)
+            const cand = e.candidate.candidate;
+            if (!/typ host/.test(cand)) return;
+            const m = cand.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+            if (m) { pc.close(); window.__pyreLocalIP = m[1]; resolve(m[1]); }
+          };
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') { pc.close(); resolve('127.0.0.1'); }
+          };
+          setTimeout(() => { pc.close(); resolve('127.0.0.1'); }, 3000);
+        } catch { resolve('127.0.0.1'); }
+      });
+    }
+
     const state = {
       step: 0,
       sudoDone: false,
@@ -728,7 +757,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
     function buildP2PCmd(){
       const p = state.p2p;
-      const parts = ['pyre p2p server', `--p2p-host ${p.host}`, `--p2p-port ${p.port}`, `--p2p-password ${p.password}`, `--p2p-rate-limit ${p.rateLimit}`];
+      const parts = ['pyre p2p server', `--p2p-host ${p.host || '0.0.0.0'}`, `--p2p-port ${p.port}`, `--p2p-password ${p.password}`, `--p2p-rate-limit ${p.rateLimit}`];
       if(p.interval !== 2) parts.push(`--interval ${p.interval}`);
       if(p.tls){
         parts.push('--p2p-tls');
@@ -770,6 +799,11 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       document.getElementById('p2pConnectCmd').textContent =
         `pyre p2p connect --p2p-host <server-ip> --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
     }
+
+    // Update P2P commands on wizard entry with detected IP
+    detectLocalIP().then(ip => {
+      if (ip) { window.__pyreLocalIP = ip; if (window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(ip); }
+    });
 
     prevBtn.addEventListener('click', () => { if(state.step>0){ state.step--; render(); } });
     nextBtn.addEventListener('click', () => {
@@ -821,6 +855,31 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       state.p2p.host = e.target.value || '0.0.0.0';
       document.getElementById('p2pHostOut').textContent = state.p2p.host;
     });
+
+    window.__pyreUpdateP2PCommands = function(ip) {
+      if (!ip) return;
+      // Server always binds to 0.0.0.0 (all interfaces)
+      state.p2p.host = '0.0.0.0';
+      p2pHost.value = '0.0.0.0';
+      document.getElementById('p2pHostOut').textContent = '0.0.0.0';
+      document.getElementById('p2p-client-cmd').textContent =
+        'pyre p2p connect \
+  --p2p-host ' + ip + ' \
+  --p2p-port ' + state.p2p.port + ' \
+  --p2p-password ' + state.p2p.password;
+      const reviewConnectCmd = document.getElementById('p2pConnectCmd');
+      if (reviewConnectCmd) {
+        reviewConnectCmd.textContent = 'pyre p2p connect --p2p-host ' + ip + ' --p2p-port ' + state.p2p.port + ' --p2p-password ' + state.p2p.password;
+      }
+      // Show auto-detect note
+      const note = document.getElementById('p2pAutoDetectNote');
+      if (note) note.style.display = 'block';
+      // Update review page server command
+      const serverCmd = document.getElementById('p2p-cmd');
+      if (serverCmd) {
+        serverCmd.textContent = buildP2PCmd();
+      }
+    };
     const p2pPort = document.getElementById('p2pPort');
     p2pPort.addEventListener('input', (e) => {
       state.p2p.port = e.target.value || '9876';

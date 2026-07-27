@@ -234,6 +234,8 @@ export class P2PClient {
       this.status('Connection refused — is the server running?');
     } else if (code === 'ETIMEDOUT') {
       this.status('Connection timed out');
+    } else if (code === 'EHOSTDOWN' || code === 'EHOSTUNREACH') {
+      this.status(`Host unreachable — ${err.message}`);
     } else if (code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE') {
       this.status('TLS certificate verification failed — use --p2p-insecure to skip');
     } else {
