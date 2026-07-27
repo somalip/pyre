@@ -1,6 +1,6 @@
 {
   "name": "pyre-cli",
-  "version": "3.5.0",
+  "version": "3.7.0",
   "description": "CLI Mac monitoring tool: temps, system stats, live dashboard, packet monitor, battery predictor, export",
   "main": "dist/index.js",
   "type": "module",

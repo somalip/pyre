@@ -63,23 +63,23 @@ export class P2PClient {
           tlsOptions.ca = fs.readFileSync(this.options.tlsCA);
         }
         this.socket = tls.connect(tlsOptions, () => {
-          this.status('Connecting...');
+          this.running = true;
+          this.status('Connected');
+          resolve();
         });
       } else {
         this.socket = new net.Socket();
-        this.socket.on('data', (data) => this.onData(data));
-        this.socket.on('close', () => this.onClose());
-        this.socket.on('error', (err) => this.onError(err));
-        this.socket.on('timeout', () => this.onTimeout());
         this.socket.setTimeout(10000);
         this.socket.connect(this.options.port, this.options.host, () => {
-          this.status('Connecting...');
-        });
-        this.socket.once('error', (err) => {
-          reject(err);
+          this.running = true;
+          this.status('Connected');
+          resolve();
         });
       }
 
+      this.socket.once('error', (err) => {
+        reject(err);
+      });
       this.socket.on('data', (data) => this.onData(data));
       this.socket.on('close', () => this.onClose());
       this.socket.on('error', (err) => this.onError(err));
