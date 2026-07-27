@@ -14,6 +14,7 @@ import { state, setStatus } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
 import { render, footerLine, checkAlerts, processRowBudget } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
+import { startP2PServer } from '../p2p/index.js';
 
 function handleInputModeKey(str: string, key: readline.Key) {
    if (key.name === 'escape') {
@@ -67,6 +68,36 @@ function handleInputModeKey(str: string, key: readline.Key) {
       return;
     }
 
+     if (state.inputMode === 'p2p') {
+      if (key.name === 'escape') {
+        state.inputMode = null;
+        state.inputBuffer = '';
+        render();
+        return;
+      }
+      if (key.name === 'return') {
+        const password = state.inputBuffer.trim();
+        if (password) {
+          state.p2pPassword = password;
+          startP2PServerFromTUI();
+        }
+        state.inputMode = null;
+        state.inputBuffer = '';
+        render();
+        return;
+      }
+      if (key.name === 'backspace') {
+        state.inputBuffer = state.inputBuffer.slice(0, -1);
+        render();
+        return;
+      }
+      if (str && str.length === 1 && !key.ctrl && !key.meta) {
+        state.inputBuffer += str;
+        render();
+      }
+      return;
+    }
+
    if (key.name === 'return') {
      if (state.inputMode === 'filter') {
        state.processFilter = state.inputBuffer.trim();
@@ -104,6 +135,41 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    } catch (err: any) {
      setStatus(`Failed to send ${signal} to ${pid}: ${err.message}`);
    }
+  }
+
+  async function startP2PServerFromTUI() {
+    if (state.p2pServerRunning) return;
+    try {
+      const server = await startP2PServer({
+        host: '0.0.0.0',
+        port: state.p2pPort,
+        password: state.p2pPassword,
+        intervalMs: state.interval * 1000,
+        detailed: state.detailed,
+        onLog: (msg: string) => setStatus(msg, 5000),
+      });
+      state.p2pServer = server as any;
+      state.p2pServerRunning = true;
+      setStatus(`P2P server started on port ${state.p2pPort}`);
+      render();
+    } catch (err: any) {
+      setStatus(`P2P server failed: ${err.message}`);
+      state.p2pServerRunning = false;
+      state.p2pServer = null;
+      render();
+    }
+  }
+
+  function stopP2PServer() {
+    if (!state.p2pServer) return;
+    try {
+      state.p2pServer.stop();
+    } catch {
+      // ignore stop errors
+    }
+    state.p2pServer = null;
+    state.p2pServerRunning = false;
+    setStatus('P2P server stopped');
   }
 
   function onResize() {
@@ -252,6 +318,17 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
       }
 
       switch (key.name) {
+        case 'r':
+          if (state.p2pServerRunning) {
+            stopP2PServer();
+            setStatus('P2P server stopped');
+            render();
+          } else {
+            state.inputMode = 'p2p';
+            state.inputBuffer = state.p2pPassword;
+            render();
+          }
+          return;
         case 'q':
           stopLive();
           break;
@@ -419,6 +496,11 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     if (state.logStream) {
       state.logStream.end();
       state.logStream = null;
+    }
+    if (state.p2pServer) {
+      state.p2pServer.stop();
+      state.p2pServer = null;
+      state.p2pServerRunning = false;
     }
     if (state.keypressHandler) {
       process.stdin.removeListener('keypress', state.keypressHandler);

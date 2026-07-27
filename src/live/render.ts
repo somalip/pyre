@@ -90,9 +90,11 @@ function render() {
        lines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
        lines.push(chalk.dim(`  ${sigList}`));
        lines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+     } else if (state.inputMode === 'p2p') {
+       lines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
      } else if (state.statusMessage) {
        lines.push(`  ${state.statusMessage}`);
-     }
+    }
 
   process.stdout.write('\x1b[2J\x1b[H');
   process.stdout.write(lines.join('\n'));
@@ -102,22 +104,23 @@ function footerLine(): string {
    const keys: [string, string][] = [
      ['q', 'quit'],
      ['c', 'customize UI'],
-     ['p', state.paused ? 'resume' : 'pause'],
-      ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-      ['b', `graph:${state.graphMode}`],
-      ['d', state.detailed ? 'basic' : 'detailed'],
-      ['←/→', 'tab'],
-      ['1-9', 'panels'],
-      ['s', `sort:${state.sortMode}`],
-      ['/', 'filter'],
-      ['k', 'kill'],
-      ['S', 'signal'],
-      ['t', state.treeView ? 'flat' : 'tree'],
-      ['e', 'export'],
-      ['l', state.logging ? 'stop log' : 'log'],
-      ['f', state.exportFormat],
-      ['+/-', `${state.interval}s`],
-    ];
+     ['r', state.p2pServerRunning ? 'stop p2p' : 'start p2p'],
+      ['p', state.paused ? 'resume' : 'pause'],
+       ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
+       ['b', `graph:${state.graphMode}`],
+       ['d', state.detailed ? 'basic' : 'detailed'],
+       ['←/→', 'tab'],
+       ['1-9', 'panels'],
+       ['s', `sort:${state.sortMode}`],
+       ['/', 'filter'],
+       ['k', 'kill'],
+       ['S', 'signal'],
+       ['t', state.treeView ? 'flat' : 'tree'],
+       ['e', 'export'],
+       ['l', state.logging ? 'stop log' : 'log'],
+       ['f', state.exportFormat],
+       ['+/-', `${state.interval}s`],
+     ];
     const keyStr = keys.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
 
 
@@ -125,6 +128,7 @@ function footerLine(): string {
    if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
    if (state.logging) badges.push(chalk.red.bold('● REC'));
    if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
+    if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pPort}`));
    const badgeStr = badges.join('  ');
 
    return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;

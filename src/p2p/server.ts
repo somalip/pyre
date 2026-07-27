@@ -90,6 +90,14 @@ export class P2PServer {
     this.hmacKey = deriveHMACKey(options.password);
   }
 
+  private log(msg: string): void {
+    if (this.options.onLog) {
+      this.options.onLog(msg.replace(/\x1b\[[0-9;]*m/g, ''));
+    } else {
+      console.log(msg);
+    }
+  }
+
   get info(): P2PConnectionInfo {
     return {
       host: this.options.host,
@@ -105,7 +113,7 @@ export class P2PServer {
         const logFile = `${this.options.auditLog}/p2p-audit.log`;
         this.auditStream = fs.createWriteStream(logFile, { flags: 'a' });
       } catch {
-        console.log(chalk.yellow('Warning: could not open audit log'));
+        this.log(chalk.yellow('Warning: could not open audit log'));
       }
     }
 
@@ -131,13 +139,13 @@ export class P2PServer {
         const addr = this.server?.address();
         const bound = addr ? (typeof addr === 'object' ? `${addr.address}:${addr.port}` : String(addr)) : 'unknown';
         const protocol = useTLS ? 'TLS' : 'TCP';
-        console.log(chalk.green(`P2P server listening on ${bound} (${protocol})`));
-        console.log(chalk.dim(`  Password: ${this.options.password}`));
-        console.log(chalk.dim(`  Interval: ${this.options.intervalMs}ms`));
+        this.log(chalk.green(`P2P server listening on ${bound} (${protocol})`));
+        this.log(chalk.dim(`  Password: ${this.options.password}`));
+        this.log(chalk.dim(`  Interval: ${this.options.intervalMs}ms`));
         const allowedIPs = this.options.allowedIPs ?? [];
         const deniedIPs = this.options.deniedIPs ?? [];
-        if (allowedIPs.length > 0) console.log(chalk.dim(`  Allowed IPs: ${allowedIPs.join(', ')}`));
-        if (deniedIPs.length > 0) console.log(chalk.dim(`  Denied IPs: ${deniedIPs.join(', ')}`));
+        if (allowedIPs.length > 0) this.log(chalk.dim(`  Allowed IPs: ${allowedIPs.join(', ')}`));
+        if (deniedIPs.length > 0) this.log(chalk.dim(`  Denied IPs: ${deniedIPs.join(', ')}`));
         resolve();
       });
     });
@@ -210,14 +218,14 @@ export class P2PServer {
 
     if (!isIPAllowed(ip, allowedIPs, deniedIPs)) {
       this.audit(ip, 'BLOCKED', 'IP not allowed');
-      console.log(chalk.yellow(`Blocked IP: ${ip}`));
+      this.log(chalk.yellow(`Blocked IP: ${ip}`));
       socket.destroy();
       return;
     }
 
     if (!this.checkRateLimit(ip)) {
       this.audit(ip, 'RATE_LIMITED', 'Too many auth attempts');
-      console.log(chalk.yellow(`Rate limit exceeded for IP: ${ip}`));
+      this.log(chalk.yellow(`Rate limit exceeded for IP: ${ip}`));
       socket.destroy();
       return;
     }
@@ -238,7 +246,7 @@ export class P2PServer {
     const remoteAddr = socket.remoteAddress
       ? `${socket.remoteAddress}:${socket.remotePort}`
       : 'unknown';
-    console.log(chalk.cyan(`Peer connected: ${remoteAddr}`));
+    this.log(chalk.cyan(`Peer connected: ${remoteAddr}`));
     this.audit(ip, 'CONNECT', remoteAddr);
 
     socket.on('data', (data) => this.onData(peer, data));
@@ -305,7 +313,7 @@ export class P2PServer {
       this.cleanupRateLimit(peer.ip);
       peer.pendingNonce = null;
       peer.socket.write(signMessage('auth-ok', { ok: true }, this.hmacKey));
-      console.log(chalk.green(`Peer authenticated: ${peer.socket.remoteAddress}`));
+      this.log(chalk.green(`Peer authenticated: ${peer.socket.remoteAddress}`));
       this.audit(peer.ip, 'AUTH_OK', 'Challenge-response successful');
       this.startDataStream(peer);
       this.startPing(peer);
@@ -345,17 +353,17 @@ export class P2PServer {
 
   private onPeerClose(peer: Peer): void {
     this.cleanupPeer(peer);
-    console.log(chalk.yellow(`Peer disconnected: ${peer.socket.remoteAddress}`));
+    this.log(chalk.yellow(`Peer disconnected: ${peer.socket.remoteAddress}`));
     this.audit(peer.ip, 'DISCONNECT', 'Peer closed connection');
   }
 
   private onPeerError(peer: Peer, err: Error): void {
     const code = (err as any).code;
     if (code === 'ECONNRESET') {
-      console.log(chalk.yellow(`Peer connection reset: ${peer.socket.remoteAddress}`));
+      this.log(chalk.yellow(`Peer connection reset: ${peer.socket.remoteAddress}`));
       this.audit(peer.ip, 'ERROR', 'Connection reset');
     } else {
-      console.log(chalk.red(`Peer error: ${err.message}`));
+      this.log(chalk.red(`Peer error: ${err.message}`));
       this.audit(peer.ip, 'ERROR', err.message);
     }
     this.cleanupPeer(peer);

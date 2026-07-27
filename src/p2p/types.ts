@@ -72,6 +72,7 @@ export interface P2PServerOptions {
   deniedIPs?: string[];
   auditLog?: string;
   hmacKey?: string;
+  onLog?: (msg: string) => void;
 }
 
 export interface P2PClientOptions {

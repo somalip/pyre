@@ -14,7 +14,7 @@ export interface LiveOptions {
 
 export type ExportFormat = 'json' | 'csv' | 'tsv';
 
-type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer';
+type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer' | 'p2p';
 
 type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
 
