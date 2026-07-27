@@ -34,8 +34,22 @@ export class History {
    /** Rolling window of GPU utilization percentages (0–100). */
    gpuUtil: number[] = [];
 
+   /** Rolling window of combined power draw in watts. */
+   powerWatts: number[] = [];
+
+   /** Rolling window of network receive packet rates in packets/sec. */
+   rxPacketRate: number[] = [];
+
+   /** Rolling window of network transmit packet rates in packets/sec. */
+   txPacketRate: number[] = [];
+
+   /** Rolling window of active TCP connections. */
+   connections: number[] = [];
+
    private lastRxBytes = 0;
    private lastTxBytes = 0;
+   private lastRxPackets = 0;
+   private lastTxPackets = 0;
    private lastTs = 0;
 
   /**
@@ -54,59 +68,83 @@ export class History {
    * because there is no prior sample to compute a delta from.
    */
    push(sample: {
-     cpuUsage: number;
-     memUsage: number;
-     temp: number | null;
-     rxBytes: number;
-     txBytes: number;
-     gpuUtil?: number;
-   }) {
-     const now = Date.now();
-     let rxRate = 0;
-     let txRate = 0;
+      cpuUsage: number;
+      memUsage: number;
+      temp: number | null;
+      rxBytes: number;
+      txBytes: number;
+      gpuUtil?: number;
+      powerWatts?: number;
+      rxPackets?: number;
+      txPackets?: number;
+      connections?: number;
+    }) {
+      const now = Date.now();
+      let rxRate = 0;
+      let txRate = 0;
+      let rxPktRate = 0;
+      let txPktRate = 0;
 
-     if (this.lastTs > 0) {
-       const dtSeconds = Math.max((now - this.lastTs) / 1000, 0.001);
-       rxRate = Math.max(0, (sample.rxBytes - this.lastRxBytes) / dtSeconds);
-       txRate = Math.max(0, (sample.txBytes - this.lastTxBytes) / dtSeconds);
-     }
+      if (this.lastTs > 0) {
+        const dtSeconds = Math.max((now - this.lastTs) / 1000, 0.001);
+        rxRate = Math.max(0, (sample.rxBytes - this.lastRxBytes) / dtSeconds);
+        txRate = Math.max(0, (sample.txBytes - this.lastTxBytes) / dtSeconds);
+        if (sample.rxPackets !== undefined) {
+          rxPktRate = Math.max(0, (sample.rxPackets - this.lastRxPackets) / dtSeconds);
+        }
+        if (sample.txPackets !== undefined) {
+          txPktRate = Math.max(0, (sample.txPackets - this.lastTxPackets) / dtSeconds);
+        }
+      }
 
-     this.lastRxBytes = sample.rxBytes;
-     this.lastTxBytes = sample.txBytes;
-     this.lastTs = now;
+      this.lastRxBytes = sample.rxBytes;
+      this.lastTxBytes = sample.txBytes;
+      if (sample.rxPackets !== undefined) this.lastRxPackets = sample.rxPackets;
+      if (sample.txPackets !== undefined) this.lastTxPackets = sample.txPackets;
+      this.lastTs = now;
 
-     this.pushBounded(this.cpuUsage, sample.cpuUsage);
-     this.pushBounded(this.memUsage, sample.memUsage);
-     if (sample.temp !== null) this.pushBounded(this.temp, sample.temp);
-     this.pushBounded(this.netRxRate, rxRate);
-     this.pushBounded(this.netTxRate, txRate);
-     if (sample.gpuUtil !== undefined) this.pushBounded(this.gpuUtil, sample.gpuUtil);
-   }
+      this.pushBounded(this.cpuUsage, sample.cpuUsage);
+      this.pushBounded(this.memUsage, sample.memUsage);
+      if (sample.temp !== null) this.pushBounded(this.temp, sample.temp);
+      this.pushBounded(this.netRxRate, rxRate);
+      this.pushBounded(this.netTxRate, txRate);
+      if (sample.gpuUtil !== undefined) this.pushBounded(this.gpuUtil, sample.gpuUtil);
+      if (sample.powerWatts !== undefined) this.pushBounded(this.powerWatts, sample.powerWatts);
+      if (sample.rxPackets !== undefined) this.pushBounded(this.rxPacketRate, rxPktRate);
+      if (sample.txPackets !== undefined) this.pushBounded(this.txPacketRate, txPktRate);
+      if (sample.connections !== undefined) this.pushBounded(this.connections, sample.connections);
+    }
 
-   /** Clear all rolling windows and reset cumulative byte counters. */
-   reset() {
-     this.cpuUsage = [];
-     this.memUsage = [];
-     this.temp = [];
-     this.netRxRate = [];
-     this.netTxRate = [];
-     this.gpuUtil = [];
-     this.lastRxBytes = 0;
-     this.lastTxBytes = 0;
-     this.lastTs = 0;
-   }
+    /** Clear all rolling windows and reset cumulative byte counters. */
+    reset() {
+      this.cpuUsage = [];
+      this.memUsage = [];
+      this.temp = [];
+      this.netRxRate = [];
+      this.netTxRate = [];
+      this.gpuUtil = [];
+      this.powerWatts = [];
+      this.rxPacketRate = [];
+      this.txPacketRate = [];
+      this.connections = [];
+      this.lastRxBytes = 0;
+      this.lastTxBytes = 0;
+      this.lastRxPackets = 0;
+      this.lastTxPackets = 0;
+      this.lastTs = 0;
+    }
 
    /**
     * Grow or shrink the rolling window (e.g. on terminal resize),
     * trimming from the oldest samples.
     * @param n - New maximum length; clamped to at least 1.
     */
-   setMaxLen(n: number) {
-     this.maxLen = Math.max(1, n);
-     for (const arr of [this.cpuUsage, this.memUsage, this.temp, this.netRxRate, this.netTxRate, this.gpuUtil]) {
-       while (arr.length > this.maxLen) arr.shift();
-     }
-   }
+    setMaxLen(n: number) {
+      this.maxLen = Math.max(1, n);
+      for (const arr of [this.cpuUsage, this.memUsage, this.temp, this.netRxRate, this.netTxRate, this.gpuUtil, this.powerWatts, this.rxPacketRate, this.txPacketRate, this.connections]) {
+        while (arr.length > this.maxLen) arr.shift();
+      }
+    }
 
   private pushBounded(arr: number[], v: number) {
     arr.push(v);

@@ -8,7 +8,7 @@
  */
 import chalk from 'chalk';
 
-export type ThemeName = 'default' | 'dracula' | 'cyberpunk' | 'monochrome';
+export type ThemeName = 'default' | 'dracula' | 'cyberpunk' | 'monochrome' | 'nord' | 'gruvbox';
 
 export interface ThemeColors {
    border: (s: string) => string;
@@ -73,17 +73,43 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
      graphs: chalk.hex('#00ffcc'),
      process: chalk.hex('#ffffff'),
    },
-   monochrome: {
-     border: chalk.gray,
-     cpu: chalk.white.bold,
-     mem: chalk.white.bold,
-     gpu: chalk.white.bold,
-     power: chalk.white.bold,
-     battery: chalk.white.bold,
-     thermal: chalk.white.bold,
-     network: chalk.white.bold,
-     disk: chalk.white.bold,
-     graphs: chalk.white.bold,
-     process: chalk.white.bold,
-   },
- };
+    monochrome: {
+      border: chalk.gray,
+      cpu: chalk.white.bold,
+      mem: chalk.white.bold,
+      gpu: chalk.white.bold,
+      power: chalk.white.bold,
+      battery: chalk.white.bold,
+      thermal: chalk.white.bold,
+      network: chalk.white.bold,
+      disk: chalk.white.bold,
+      graphs: chalk.white.bold,
+      process: chalk.white.bold,
+    },
+    nord: {
+      border: chalk.hex('#4c566a'),
+      cpu: chalk.hex('#88c0d0'),
+      mem: chalk.hex('#b48ead'),
+      gpu: chalk.hex('#bf616a'),
+      power: chalk.hex('#ebcb8b'),
+      battery: chalk.hex('#a3be8c'),
+      thermal: chalk.hex('#d08770'),
+      network: chalk.hex('#81a1c1'),
+      disk: chalk.hex('#b48ead'),
+      graphs: chalk.hex('#88c0d0'),
+      process: chalk.hex('#eceff4'),
+    },
+    gruvbox: {
+      border: chalk.hex('#928374'),
+      cpu: chalk.hex('#fb4934'),
+      mem: chalk.hex('#b8bb26'),
+      gpu: chalk.hex('#d3869b'),
+      power: chalk.hex('#fabd2f'),
+      battery: chalk.hex('#b8bb26'),
+      thermal: chalk.hex('#fb4934'),
+      network: chalk.hex('#83a598'),
+      disk: chalk.hex('#d3869b'),
+      graphs: chalk.hex('#fb4934'),
+      process: chalk.hex('#ebdbb2'),
+    },
+  };

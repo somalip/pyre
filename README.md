@@ -1,8 +1,8 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, and export.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, packet monitor, battery predictor, and export.
 
-![Version](https://img.shields.io/badge/version-1.3.0-blue)
+![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
 ![Node](https://img.shields.io/badge/node-18%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -12,7 +12,9 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, an
 - **Real-time system stats** — CPU brand, cores, frequency, load, and usage
 - **Memory monitoring** — usage, swap, and total/available
 - **Disk space** — mounted volume usage
-- **Battery & power** — level, power source, condition, charge cycles, max capacity
+- **Battery & power** — level, power source, condition, charge cycles, max capacity, estimated time to empty, discharge rate, power draw in watts
+- **Packet monitor** — network packet counts, packet rates, active TCP connections, top network processes
+- **Task list** — running tasks/applications sorted by CPU with PID, user, memory, state, and runtime
 - **Thermal state** — CPU temperature via `pmset` and `powermetrics` (sudo for detailed readings)
 - **Network** — RX/TX bytes and per-second rates
 - **Top processes** — sorted by CPU, memory, or PID with live filtering
@@ -54,6 +56,7 @@ pyre --csv                # CSV export
 pyre --tsv                # TSV export
 pyre --once               # Single static snapshot (same as default without live)
 pyre --out report.json    # Also write output to a file
+pyre --packets            # Include packet monitor panel
 ```
 
 ### Live dashboard
@@ -80,6 +83,7 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `--out <file>` | Write snapshot output to a file |
 | `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
 | `--log` | Start continuous CSV logging immediately when live mode starts |
+| `--packets` | Include packet monitor panel in static output |
 
 ## Live Dashboard Controls
 
@@ -109,12 +113,12 @@ When running `pyre live`, use these keyboard shortcuts:
 
 Press `c` to open the customizer overlay. From there you can:
 
-- Cycle through four built-in themes (Default, Dracula, Cyberpunk, Monochrome)
-- Toggle individual panels (CPU, Memory, Power, Battery, Thermal, Network, Disk, Processes) on or off
+- Cycle through six built-in themes (Default, Dracula, Cyberpunk, Monochrome, Nord, Gruvbox)
+- Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes) on or off
 
 ## Themes
 
-Four built-in visual themes are available in the live dashboard:
+Six built-in visual themes are available in the live dashboard:
 
 | Theme | Description |
 |---|---|
@@ -122,6 +126,8 @@ Four built-in visual themes are available in the live dashboard:
 | **dracula** | The popular Dracula dark palette |
 | **cyberpunk** | High-contrast neon on black |
 | **monochrome** | White-only; useful for colour-blind users or terminals without 256-colour support |
+| **nord** | Arctic-inspired cool tones |
+| **gruvbox** | Retro warm palette |
 
 Themes are cycled with `c` in the customizer overlay.
 
@@ -149,7 +155,7 @@ pyre-log-2026-07-26T10-54-47-191Z.csv
 Each row contains:
 
 ```
-timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,thermal_state
+timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state
 ```
 
 ## Requirements
@@ -164,8 +170,8 @@ timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,thermal_s
 pyre/
 ├── src/
 │   ├── index.ts            # CLI entry point (commander definitions, main())
-│   ├── monitors/           # System metric collection (CPU, memory, disk, battery, thermal, network)
-│   │   ├── index.ts        # Public API: collectAll, collectPower
+│   ├── monitors/           # System metric collection (CPU, memory, disk, battery, thermal, network, packets, power, tasks)
+│   │   ├── index.ts        # Public API: collectAll, collectPower, collectPackets, collectTasks
 │   │   ├── types.ts        # TypeScript interfaces for all metric types
 │   │   ├── smc.ts          # SMC sensor reading with caching
 │   │   ├── collectors.ts   # Individual metric collectors and orchestrator
@@ -174,7 +180,7 @@ pyre/
 │   │   ├── index.ts        # Public API: formatTable, formatJson, formatCsv, formatTsv, formatGraphs
 │   │   ├── output.ts       # JSON/CSV/TSV serialisation and sparkline graphs
 │   │   ├── render.ts       # Dashboard table layout, cards, and panels
-│   │   ├── themes.ts       # Four built-in colour themes
+│   │   ├── themes.ts       # Six built-in colour themes
 │   │   ├── types.ts        # TableOptions, VisibleItems, ThemeName
 │   │   └── types.ts        # Public-facing type definitions
 │   ├── live/               # Interactive live dashboard

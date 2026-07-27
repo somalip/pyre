@@ -14,14 +14,71 @@
 import chalk from 'chalk';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData } from './types.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess } from './types.js';
+
+// Retain samples over a *time* window rather than a fixed tick count. At the
+// default 2s refresh interval the old 10-sample window only spanned ~20s,
+// but battery level only moves in whole-percent steps that typically take
+// several minutes to change — so `discharged` was almost always 0 and the
+// estimate never populated. A 15-minute time window plus a minimum elapsed
+// time before we trust the numbers gives enough resolution to see a real
+// drop while still updating reasonably often.
+const BATTERY_WINDOW_MS = 15 * 60 * 1000;
+const MIN_ESTIMATE_WINDOW_MS = 30 * 1000;
+
+let prevBattery: { samples: { level: number; ts: number }[] } = { samples: [] };
+
+function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmpty?: string; dischargeRatePerHour?: number; powerWatts?: number } {
+  const now = Date.now();
+
+  if (state === 'charged' || state === 'charging') {
+    // Reset the window on a state change so a stale pre-charge sample
+    // doesn't get blended with post-charge readings once discharging
+    // resumes.
+    prevBattery.samples = [];
+    return {};
+  }
+
+  prevBattery.samples.push({ level, ts: now });
+  prevBattery.samples = prevBattery.samples.filter(s => now - s.ts <= BATTERY_WINDOW_MS);
+
+  const first = prevBattery.samples[0];
+  const elapsedMs = now - first.ts;
+  if (elapsedMs < MIN_ESTIMATE_WINDOW_MS) {
+    return {};
+  }
+
+  const dtHours = Math.max(elapsedMs / 1000 / 3600, 0.0001);
+  const discharged = first.level - level;
+  if (discharged <= 0) {
+    // No measurable drop yet within the window — report "calculating"
+    // rather than silently omitting the field, so the UI shows progress
+    // instead of a blank card.
+    return { estimatedTimeToEmpty: 'calculating' };
+  }
+
+  const dischargeRate = discharged / dtHours; // %/hour
+  const remainingLevel = Math.max(level, 0);
+  const hoursToEmpty = remainingLevel / dischargeRate;
+  const h = Math.floor(hoursToEmpty);
+  const m = Math.round((hoursToEmpty - h) * 60);
+  const estimatedTimeToEmpty = hoursToEmpty > 0 ? `${h}h ${m}m` : 'calculating';
+
+  // Rough wattage from discharge rate: %/hour * (typical battery capacity
+  // in Wh) / 100. This is only used as a last-resort estimate — collectPower()
+  // now prefers real ioreg-derived wattage when available (see below).
+  const ASSUMED_CAPACITY_WH = 55;
+  const powerWatts = Math.round(dischargeRate * (ASSUMED_CAPACITY_WH / 100) * 100) / 100;
+
+  return { estimatedTimeToEmpty, dischargeRatePerHour: Math.round(dischargeRate * 10) / 10, powerWatts };
+}
 
 /**
  * Gather every metric category in parallel and return a
  * complete {@link StatsData} snapshot.
  */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
-   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power] = await Promise.all([
+   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks] = await Promise.all([
      collectCpu(),
      collectGpu(opts.detailed),
      collectMemory(),
@@ -29,9 +86,11 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      collectBattery(),
      collectThermal(opts.detailed),
      collectNetwork(),
-     collectProcesses(opts.processLimit ?? 10),
+     collectProcesses(opts.processLimit),
      collectSystem(),
      collectPower(),
+     collectPackets(),
+     collectTasks(),
    ]);
 
    return {
@@ -51,6 +110,8 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      processes,
      power,
      timestamp: new Date().toISOString(),
+     packets,
+     tasks,
    };
  }
 
@@ -62,11 +123,54 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
 export async function collectPower(): Promise<PowerData | null> {
    try {
      const { power } = await getSmcMetrics();
-     if (power.cpu === undefined && power.gpu === undefined && power.combined === undefined) return null;
-     return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
+     if (power.cpu !== undefined || power.gpu !== undefined || power.combined !== undefined) {
+       return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
+     }
    } catch {
-     return null;
+     // ignore
    }
+
+   // `pmset -g batt` never actually prints a "mW" figure on any macOS
+   // version — that regex could never match, so this fallback was dead
+   // code and collectPower() silently returned null whenever powermetrics
+   // wasn't available (which is most machines without passwordless sudo
+   // configured). ioreg's AppleSmartBattery entry exposes instantaneous
+   // amperage (mA, signed: negative while discharging) and voltage (mV)
+   // without any privileges, so we can derive real wattage from that.
+   try {
+     const ioreg = (await run('ioreg -rn AppleSmartBattery 2>/dev/null')).trim();
+     const ampMatch = ioreg.match(/"InstantAmperage"\s*=\s*(-?\d+)/);
+     const voltMatch = ioreg.match(/"Voltage"\s*=\s*(\d+)/);
+     if (ampMatch && voltMatch) {
+       // Two representations show up in the wild: Intel Macs often print a
+       // literal minus sign ("-1200") — no unwrap needed. Apple Silicon
+       // instead wraps a negative reading into an *unsigned 64-bit* field
+       // (e.g. real -1200mA prints as 18446744073709550416). The previous
+       // 32-bit unwrap (`- 0x100000000`) didn't touch that at all, and
+       // `parseInt` can't even represent a number that large precisely, so
+       // it silently mangled into a huge garbage value → absurd wattage.
+       // Parse as BigInt and only unwrap when there's no explicit sign.
+       let ampsBig = BigInt(ampMatch[1]);
+       if (!ampMatch[1].startsWith('-')) {
+         const UINT64_MAX_PLUS_1 = 1n << 64n;
+         const INT64_MAX = (1n << 63n) - 1n;
+         if (ampsBig > INT64_MAX) ampsBig -= UINT64_MAX_PLUS_1;
+       }
+       const amps = Number(ampsBig);
+       const volts = parseInt(voltMatch[1], 10) / 1000;
+       const watts = Math.abs((amps / 1000) * volts);
+       // Sanity clamp — a real Mac never draws anywhere near this much;
+       // treat an out-of-range reading as "no usable data" rather than
+       // display nonsense.
+       if (Number.isFinite(watts) && watts < 500) {
+         return { combinedWatts: Math.round(watts * 100) / 100 };
+       }
+     }
+   } catch {
+     // ignore
+   }
+
+   return null;
  }
 
  /**
@@ -274,7 +378,7 @@ export async function collectBattery(): Promise<BatteryData | null> {
 
     const levelMatch = raw.match(/(\d+)%/);
     const stateMatch = raw.match(/;\s*(charging|discharging|charged|finishing charge|attached to charger)/i);
-    const timeMatch = raw.match(/:\s*([\d:]+)\s+remaining/i);
+    const timeMatch = raw.match(/:\s*([\d:]+)\s+remaining/i) || raw.match(/(\d+:\d+)\s+remaining/i);
     const powerPlugged = raw.includes('AC Power') || raw.includes('attached to charger');
 
     const level = levelMatch ? parseInt(levelMatch[1]) : 0;
@@ -286,10 +390,6 @@ export async function collectBattery(): Promise<BatteryData | null> {
     let maxCapacityPercent: number | undefined;
 
     try {
-      // Plain text output (NOT -json) — its field names ("Cycle Count:", "Condition:")
-      // are what the regexes below expect. Using -json here was the original bug:
-      // it silently returned JSON that these text regexes could never match, so
-      // health always fell back to 'unknown'.
       const battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null')).trim();
 
       const cycleMatch = battInfo.match(/Cycle Count:\s+(\d+)/);
@@ -302,8 +402,6 @@ export async function collectBattery(): Promise<BatteryData | null> {
       if (maxCapMatch) {
         maxCapacityPercent = parseInt(maxCapMatch[1]);
       } else {
-        // Older/alternate output reports Full Charge Capacity vs Design Capacity
-        // instead of a direct percentage — derive it if both are present.
         const fullMatch = battInfo.match(/Full Charge Capacity[^\d]*(\d+)/i);
         const designMatch = battInfo.match(/Design Capacity[^\d]*(\d+)/i);
         if (fullMatch && designMatch) {
@@ -322,6 +420,8 @@ export async function collectBattery(): Promise<BatteryData | null> {
     if (cycles !== undefined) healthParts.push(`${cycles} cycles`);
     const health = healthParts.length ? healthParts.join(', ') : 'unknown';
 
+    const estimate = estimateBatteryLife(level, state);
+
     return {
       level,
       state,
@@ -331,6 +431,7 @@ export async function collectBattery(): Promise<BatteryData | null> {
       cycles,
       condition,
       maxCapacityPercent,
+      ...estimate,
     };
   } catch {
     return null;
@@ -466,9 +567,13 @@ export async function collectNetwork(): Promise<NetworkData> {
   }
 }
 
-export async function collectProcesses(limit = 10): Promise<ProcessData[]> {
+export async function collectProcesses(limit?: number): Promise<ProcessData[]> {
    try {
-     const raw = (await run(`ps -Ao pid,ppid,user,pcpu,pmem,state,threads,time,comm -r | head -n ${limit + 1}`)).trim();
+     const isMac = process.platform === 'darwin';
+     const sortArg = isMac ? '-r' : '--sort=-pcpu';
+     const threadsArg = isMac ? 'threads' : 'nlwp';
+     const headClause = limit && limit > 0 ? ` | head -n ${limit + 1}` : '';
+     const raw = (await run(`ps -eo pid,ppid,user,pcpu,pmem,state,${threadsArg},time,comm ${sortArg}${headClause}`)).trim();
      const lines = raw.split('\n').slice(1);
      return lines
        .map(line => {
@@ -478,7 +583,105 @@ export async function collectProcesses(limit = 10): Promise<ProcessData[]> {
          return { pid: parseInt(parts[1]), ppid: parseInt(parts[2]), user: parts[3], cpu: parseFloat(parts[4]), mem: parseFloat(parts[5]), state: parts[6], threads: parseInt(parts[7]), runtime: runtimeSec, command: parts[9] };
        })
        .filter((p): p is ProcessData => p !== null && p.pid > 0);
+  } catch {
+    return [];
+  }
+}
+
+export async function collectPackets(): Promise<PacketData | null> {
+   try {
+     const netStat = (await run('netstat -ib')).trim();
+     const lines = netStat.split('\n').slice(1);
+     let totalRxPackets = 0;
+     let totalTxPackets = 0;
+     let totalRxBytes = 0;
+     let totalTxBytes = 0;
+     const ifaceStats: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[] = [];
+
+     for (const line of lines) {
+       const parts = line.split(/\s+/);
+       if (parts.length >= 11 && parts[0] && !parts[0].startsWith('Name')) {
+         const iface = parts[0];
+         const rxPackets = parseInt(parts[4]) || 0;
+         const rxBytes = parseInt(parts[5]) || 0;
+         const txPackets = parseInt(parts[6]) || 0;
+         const txBytes = parseInt(parts[7]) || 0;
+         totalRxPackets += rxPackets;
+         totalTxPackets += txPackets;
+         totalRxBytes += rxBytes;
+         totalTxBytes += txBytes;
+         if (iface && !iface.includes('lo')) {
+           ifaceStats.push({ iface, rxPackets, txPackets, rxBytes, txBytes });
+         }
+       }
+     }
+
+     let connections = 0;
+     try {
+       const tcpConns = (await run('netstat -an | grep ESTABLISHED | wc -l', '0')).trim();
+       connections = parseInt(tcpConns) || 0;
+     } catch {
+       connections = 0;
+     }
+
+     let topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[] = [];
+     let allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[] = [];
+     try {
+        const lsof = (await run('lsof -i -n -P -r 1 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
+        const lsofLines = lsof.split('\n');
+        topProcesses = lsofLines.map(line => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
+          }
+          return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
+        }).filter(p => p.pid > 0);
+
+        const allLsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
+        const allLsofLines = allLsof.split('\n');
+        allProcesses = allLsofLines.map(line => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
+          }
+          return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
+        }).filter(p => p.pid > 0);
+     } catch {
+       topProcesses = [];
+       allProcesses = [];
+     }
+
+      return {
+        totalPackets: totalRxPackets + totalTxPackets,
+        rxPackets: totalRxPackets,
+        txPackets: totalTxPackets,
+        rxRate: 0,
+        txRate: 0,
+        connections,
+        topProcesses,
+        interfaces: ifaceStats,
+        allProcesses,
+      };
    } catch {
-     return [];
+     return null;
    }
  }
+
+export async function collectTasks(limit = 12): Promise<TaskData[]> {
+   try {
+     const isMac = process.platform === 'darwin';
+     const sortArg = isMac ? '-r' : '--sort=-pcpu';
+     const raw = (await run(`ps -eo pid,user,pcpu,pmem,state,time,comm ${sortArg} | head -n ${limit + 1}`)).trim();
+     const lines = raw.split('\n').slice(1);
+     return lines
+       .map(line => {
+         const parts = line.match(/\s*(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+([\d:]+)\s+(.+)/);
+         if (!parts) return null;
+         const runtimeSec = parts[6].split(':').reduce((acc, val, idx) => acc + parseInt(val) * Math.pow(60, 2 - idx), 0);
+         return { pid: parseInt(parts[1]), user: parts[2], cpu: parseFloat(parts[3]), mem: parseFloat(parts[4]), state: parts[5], runtime: runtimeSec, command: parts[7] };
+       })
+       .filter((t): t is TaskData => t !== null && t.pid > 0);
+  } catch {
+    return [];
+  }
+}

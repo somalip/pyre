@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import readline from 'node:readline';
 import { History } from '../history.js';
 import type { StatsData } from '../monitors/index.js';
-import type { ExportFormat, InputMode, SortMode, ThemeName, VisibleItems } from './types.js';
+import type { ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
+import type { ThemeName, VisibleItems } from '../formatters/types.js';
 
 export const SIGNAL_OPTIONS = ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGHUP', 'SIGSTOP', 'SIGCONT'] as const;
 
@@ -18,21 +19,27 @@ const state = {
    running: false,
    paused: false,
    detailed: false,
-   interval: 2,
-   showGraphs: true,
-   exportFormat: 'json' as ExportFormat,
+    interval: 2,
+    showGraphs: true,
+    graphMode: 'spark' as GraphMode,
+    exportFormat: 'json' as ExportFormat,
+
+
    exportDir: './pyre-exports',
    currentTheme: 'default' as ThemeName,
-   visiblePanels: {
-     cpu: true,
-     mem: true,
-     power: true,
-     battery: true,
-     thermal: true,
-     network: true,
-     disk: true,
-     process: true,
-   } as VisibleItems,
+    visiblePanels: {
+      cpu: true,
+      mem: true,
+      gpu: true,
+      power: true,
+      battery: true,
+      thermal: true,
+      network: true,
+      packets: true,
+      tasks: true,
+      disk: true,
+      process: true,
+    } as VisibleItems,
    logging: false,
    logStream: null as fs.WriteStream | null,
    statusMessage: '',
@@ -49,22 +56,41 @@ const state = {
    treeView: false,
    SIGNAL_OPTIONS,
    customizerIndex: 0,
-   CUSTOMIZER_OPTIONS: [
-     'Theme',
-     'Toggle CPU',
-     'Toggle Memory',
-     'Toggle Power',
-     'Toggle Battery',
-     'Toggle Thermal',
-     'Toggle Network',
-     'Toggle Disk',
-     'Toggle Processes',
-     'Toggle Tree View',
-   ],
+    CUSTOMIZER_OPTIONS: [
+      'Theme',
+      'Graph Mode',
+      'Toggle CPU',
+      'Toggle Memory',
+      'Toggle GPU',
+      'Toggle Power',
+      'Toggle Battery',
+      'Toggle Thermal',
+      'Toggle Network',
+      'Toggle Packets',
+      'Toggle Tasks',
+      'Toggle Disk',
+      'Toggle Processes',
+      'Toggle Tree View',
+    ],
    CPU_ALERT_PCT: 90,
    TEMP_ALERT_C: 95,
    alerted: false,
- };
+   activePanel: 'grid' as 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process',
+   mouseEnabled: true,
+    PANEL_TABS: [
+      { id: 'cpu', label: 'CPU', key: '1' },
+      { id: 'mem', label: 'Memory', key: '2' },
+      { id: 'gpu', label: 'GPU', key: '3' },
+      { id: 'power', label: 'Power', key: '4' },
+      { id: 'battery', label: 'Battery', key: '5' },
+      { id: 'thermal', label: 'Thermal', key: '6' },
+      { id: 'network', label: 'Network', key: '7' },
+      { id: 'packets', label: 'Packets', key: '8' },
+      { id: 'tasks', label: 'Tasks', key: '9' },
+      { id: 'disk', label: 'Disk', key: '0' },
+      { id: 'process', label: 'Process', key: 'P' },
+    ] as const,
+  };
 
 function setStatus(msg: string, ms = 3000) {
   state.statusMessage = msg;

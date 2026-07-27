@@ -7,8 +7,25 @@
  * `live/`.
  */
 import type { ThemeName } from './themes.js';
+import type { StatsData } from '../monitors/types.js';
 
 export type { ThemeName };
+
+export interface ThemeColors {
+   border: (s: string) => string;
+   cpu: (s: string) => string;
+   mem: (s: string) => string;
+   gpu: (s: string) => string;
+   power: (s: string) => string;
+   battery: (s: string) => string;
+   thermal: (s: string) => string;
+   network: (s: string) => string;
+   disk: (s: string) => string;
+   graphs: (s: string) => string;
+   process: (s: string) => string;
+}
+
+export type { StatsData };
 
 export interface VisibleItems {
    cpu?: boolean;
@@ -18,6 +35,8 @@ export interface VisibleItems {
    battery?: boolean;
    thermal?: boolean;
    network?: boolean;
+   packets?: boolean;
+   tasks?: boolean;
    disk?: boolean;
    process?: boolean;
    tree?: boolean;
@@ -38,4 +57,6 @@ export interface TableOptions {
    visible?: VisibleItems;
    /** Show process tree view instead of flat list. */
    treeView?: boolean;
+   /** Active panel for detail/focus view. 'grid' means show all panels. */
+   activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process';
 }

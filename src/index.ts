@@ -18,7 +18,7 @@ const program = new Command();
 program
    .name('pyre')
    .version('2.0.0')
-   .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export')
+   .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export, packet monitor, battery predictor')
    .option('-j, --json', 'Output as JSON')
    .option('-c, --csv', 'Output as CSV')
    .option('-t, --tsv', 'Output as TSV')
@@ -29,7 +29,9 @@ program
    .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', './pyre-exports')
    .option('--log', 'Start continuous CSV logging immediately when live mode starts')
    .option('--tree', 'Show process tree view instead of flat list')
-   .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu');
+   .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu')
+   .option('--packets', 'Include packet monitor panel in output')
+   .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10');
 
 program.parse(process.argv);
 
@@ -58,13 +60,18 @@ async function main() {
     return;
   }
 
-  const data = await collectAll({ detailed: opts.detailed });
+  // `0` means "no cap" — collectProcesses treats an undefined limit as
+  // unlimited by grabbing every row `ps` returns instead of head-limiting it.
+  const requestedLimit = parseInt(opts.limit, 10);
+  const processLimit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? requestedLimit : undefined;
+
+  const data = await collectAll({ detailed: opts.detailed, processLimit });
 
   let output: string;
   if (opts.json) output = formatJson(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree, visible: { packets: opts.packets ? true : undefined } });
 
   console.log(output);
 

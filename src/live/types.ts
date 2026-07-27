@@ -18,4 +18,6 @@ type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer';
 
 type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
 
-export type { InputMode, SortMode };
+type GraphMode = 'spark' | 'bar';
+
+export type { InputMode, SortMode, GraphMode };

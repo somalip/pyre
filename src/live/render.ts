@@ -19,7 +19,8 @@ import type { StatsData } from '../monitors/index.js';
  */
 function processRowBudget(): number {
   const columns = gridColumns(state.termWidth);
-  const cardRows = Math.ceil(6 / columns);
+  const visibleCards = Object.values(state.visiblePanels).filter(v => v !== false).length;
+  const cardRows = Math.ceil(visibleCards / columns);
   const reserved = 2 + cardRows * 8 + 11 + (state.showGraphs ? 9 : 0) + 4;
   return Math.max(3, Math.min(40, state.termHeight - reserved));
 }
@@ -34,9 +35,12 @@ function renderCustomizerOverlay(): string {
      const isSelected = idx === state.customizerIndex;
      const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
 
-     if (opt === 'Theme') {
-       lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-     } else if (opt === 'Toggle Tree View') {
+      if (opt === 'Theme') {
+        lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
+      } else if (opt === 'Graph Mode') {
+        lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
+      } else if (opt === 'Toggle Tree View') {
+
        const status = state.treeView ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
        lines.push(`${prefix}${opt}: ${status}`);
      } else {
@@ -62,32 +66,33 @@ function render() {
       theme: state.currentTheme,
       visible: state.visiblePanels,
       treeView: state.treeView,
+      activePanel: state.activePanel,
     })
   );
 
   if (state.showGraphs) {
     lines.push('');
-    lines.push(formatGraphs(state.history, state.termWidth, state.currentTheme));
+    lines.push(formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode));
   }
 
   lines.push('');
   lines.push(footerLine());
 
-if (state.inputMode === 'customizer') {
-     lines.push(renderCustomizerOverlay());
-   } else if (state.inputMode === 'filter') {
-     lines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
-   } else if (state.inputMode === 'kill') {
-     lines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
-   } else if (state.inputMode === 'signal') {
-     const sigIdx = SIGNAL_OPTIONS.indexOf(state.inputBuffer);
-     const sigList = SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
-     lines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
-     lines.push(chalk.dim(`  ${sigList}`));
-     lines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
-   } else if (state.statusMessage) {
-     lines.push(`  ${state.statusMessage}`);
-   }
+  if (state.inputMode === 'customizer') {
+      lines.push(renderCustomizerOverlay());
+    } else if (state.inputMode === 'filter') {
+      lines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
+    } else if (state.inputMode === 'kill') {
+      lines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
+     } else if (state.inputMode === 'signal') {
+       const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
+       const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
+       lines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
+       lines.push(chalk.dim(`  ${sigList}`));
+       lines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+     } else if (state.statusMessage) {
+       lines.push(`  ${state.statusMessage}`);
+     }
 
   process.stdout.write('\x1b[2J\x1b[H');
   process.stdout.write(lines.join('\n'));
@@ -98,28 +103,32 @@ function footerLine(): string {
      ['q', 'quit'],
      ['c', 'customize UI'],
      ['p', state.paused ? 'resume' : 'pause'],
-     ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-     ['d', state.detailed ? 'basic' : 'detailed'],
-     ['s', `sort:${state.sortMode}`],
-     ['/', 'filter'],
-     ['k', 'kill'],
-     ['S', 'signal'],
-     ['t', state.treeView ? 'flat' : 'tree'],
-     ['e', 'export'],
-     ['l', state.logging ? 'stop log' : 'log'],
-     ['f', state.exportFormat],
-     ['+/-', `${state.interval}s`],
-   ];
+      ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
+      ['b', `graph:${state.graphMode}`],
+      ['d', state.detailed ? 'basic' : 'detailed'],
+      ['←/→', 'tab'],
+      ['1-9', 'panels'],
+      ['s', `sort:${state.sortMode}`],
+      ['/', 'filter'],
+      ['k', 'kill'],
+      ['S', 'signal'],
+      ['t', state.treeView ? 'flat' : 'tree'],
+      ['e', 'export'],
+      ['l', state.logging ? 'stop log' : 'log'],
+      ['f', state.exportFormat],
+      ['+/-', `${state.interval}s`],
+    ];
     const keyStr = keys.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
 
 
    const badges: string[] = [];
    if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
    if (state.logging) badges.push(chalk.red.bold('● REC'));
+   if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
    const badgeStr = badges.join('  ');
 
    return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;
- }
+  }
 
 function checkAlerts(data: StatsData) {
   const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;

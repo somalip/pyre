@@ -19,7 +19,9 @@ export interface StatsData {
    processes: ProcessData[];
    power: PowerData | null;
    timestamp: string;
- }
+   packets: PacketData | null;
+   tasks: TaskData[];
+}
 
 export interface GpuData {
    model: string;
@@ -33,6 +35,29 @@ export interface GpuData {
    cpuWatts?: number;
    gpuWatts?: number;
    combinedWatts?: number;
+ }
+
+ export interface PacketData {
+   totalPackets: number;
+   rxPackets: number;
+   txPackets: number;
+   rxRate: number;
+   txRate: number;
+   connections: number;
+   topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[];
+   /** Every process with an open network connection (unlike topProcesses, not truncated). */
+   allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[];
+   interfaces: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[];
+ }
+
+ export interface TaskData {
+   pid: number;
+   user: string;
+   cpu: number;
+   mem: number;
+   command: string;
+   state: string;
+   runtime: number;
  }
 
 export interface CpuData {
@@ -74,6 +99,9 @@ export interface BatteryData {
   cycles?: number;
   condition?: string;
   maxCapacityPercent?: number;
+  estimatedTimeToEmpty?: string;
+  dischargeRatePerHour?: number;
+  powerWatts?: number;
 }
 
 export interface DiskData {
@@ -88,6 +116,19 @@ export interface DiskData {
 export interface NetworkData {
   interface: string;
   ip: string;
+  rxBytes: number;
+  txBytes: number;
+  rxPackets: number;
+  txPackets: number;
+  rxPacketsPerSec?: number;
+  txPacketsPerSec?: number;
+  connections?: number;
+  topProcesses?: NetworkProcess[];
+}
+
+export interface NetworkProcess {
+  pid: number;
+  command: string;
   rxBytes: number;
   txBytes: number;
   rxPackets: number;

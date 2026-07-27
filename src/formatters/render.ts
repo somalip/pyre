@@ -12,7 +12,7 @@
 import chalk from 'chalk';
 import { sparkline } from '../sparkline.js';
 import type { History } from '../history.js';
-import type { StatsData, VisibleItems } from './types.js';
+import type { StatsData, VisibleItems, TableOptions } from './types.js';
 import { THEMES, type ThemeName } from './themes.js';
 
 // --- low-level box drawing ---------------------------------------------------
@@ -81,16 +81,21 @@ function statRow(label: string, value: string, width = 9): string {
 function bar(percent: number, width = 20): string {
   const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * width);
   const empty = width - filled;
-  const barStr = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
+  const filledStr = '█'.repeat(Math.max(0, filled));
+  const emptyStr = '░'.repeat(Math.max(0, empty));
   const color = percent > 90 ? chalk.red : percent > 70 ? chalk.yellow : chalk.green;
-  return color(barStr);
+  return color(filledStr + emptyStr);
 }
 
 function gaugeRow(label: string, percent: number, contentWidth: number): string {
   const labelW = 9;
   const pctText = `${Math.round(percent)}%`;
   const barW = Math.max(6, contentWidth - labelW - pctText.length - 1);
-  return `${chalk.dim(label.padEnd(labelW))}${bar(percent, barW)} ${pctText}`;
+  const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * barW);
+  const empty = barW - filled;
+  const barStr = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
+  const color = percent > 90 ? chalk.red : percent > 70 ? chalk.yellow : chalk.green;
+  return `${chalk.dim(label.padEnd(labelW))}${color(barStr)} ${pctText}`;
 }
 
 export function thermalColor(pressureLevel: number) {
@@ -158,14 +163,18 @@ function gpuCard(data: StatsData, contentWidth: number): string[] | null {
    return lines;
  }
 
- function powerCard(data: StatsData): string[] | null {
-  if (!data.power) return null;
-  const lines: string[] = [];
-  if (data.power.cpuWatts !== undefined) lines.push(statRow('CPU', `${data.power.cpuWatts.toFixed(2)} W`));
-  if (data.power.gpuWatts !== undefined) lines.push(statRow('GPU', `${data.power.gpuWatts.toFixed(2)} W`));
-  if (data.power.combinedWatts !== undefined) lines.push(statRow('Total', `${data.power.combinedWatts.toFixed(2)} W`));
-  return lines.length ? lines : null;
-}
+  function powerCard(data: StatsData): string[] | null {
+   const lines: string[] = [];
+   if (data.power) {
+     if (data.power.cpuWatts !== undefined) lines.push(statRow('CPU', `${data.power.cpuWatts.toFixed(2)} W`));
+     if (data.power.gpuWatts !== undefined) lines.push(statRow('GPU', `${data.power.gpuWatts.toFixed(2)} W`));
+     if (data.power.combinedWatts !== undefined) lines.push(statRow('Total', `${data.power.combinedWatts.toFixed(2)} W`));
+   }
+   if (data.battery?.powerWatts !== undefined && data.battery.powerWatts > 0) {
+     lines.push(statRow('Battery', `${data.battery.powerWatts.toFixed(2)} W`));
+   }
+   return lines.length ? lines : null;
+ }
 
 function batteryCard(data: StatsData, contentWidth: number): string[] | null {
   if (!data.battery) return null;
@@ -180,6 +189,12 @@ function batteryCard(data: StatsData, contentWidth: number): string[] | null {
     lines.push(statRow('Capacity', capacityColor(data.battery.maxCapacityPercent)(`${data.battery.maxCapacityPercent}%`)));
   }
   lines.push(statRow('Source', data.battery.powerSource));
+  if (data.battery.estimatedTimeToEmpty && data.battery.state !== 'charged') {
+    lines.push(statRow('Est. Empty', data.battery.estimatedTimeToEmpty));
+  }
+  if (data.battery.dischargeRatePerHour !== undefined && data.battery.state !== 'charged') {
+    lines.push(statRow('Disch. Rate', `${data.battery.dischargeRatePerHour}%/h`));
+  }
   return lines;
 }
 
@@ -204,14 +219,106 @@ function networkCard(data: StatsData, contentWidth: number): string[] {
   ];
 }
 
-// --- header ------------------------------------------------------------------
+function packetCard(data: StatsData, contentWidth: number): string[] | null {
+  if (!data.packets) return null;
+  const lines: string[] = [];
+  lines.push(statRow('Total', `${data.packets.totalPackets} pkt`));
+  lines.push(statRow('RX', `${data.packets.rxPackets} pkt`));
+  lines.push(statRow('TX', `${data.packets.txPackets} pkt`));
+  lines.push(statRow('Conns', `${data.packets.connections} TCP`));
+  if (data.packets.topProcesses && data.packets.topProcesses.length) {
+    lines.push(statRow('Top Proc', truncatePlain(data.packets.topProcesses[0].command, contentWidth - 10)));
+  }
+  if (data.packets.allProcesses && data.packets.allProcesses.length > 1) {
+    lines.push(statRow('Net Procs', `${data.packets.allProcesses.length} processes`));
+  }
+  if (data.packets.interfaces && data.packets.interfaces.length) {
+    lines.push(statRow('Ifaces', `${data.packets.interfaces.length} active`));
+  }
+  return lines;
+}
+
+function tasksCard(data: StatsData, contentWidth: number): string[] | null {
+  if (!data.tasks || !data.tasks.length) return null;
+  const lines: string[] = [];
+  for (const task of data.tasks.slice(0, 6)) {
+    const cmd = truncatePlain(task.command, Math.max(4, contentWidth - 28));
+    lines.push(statRow(`${task.pid}`, `${task.user.padEnd(8)} ${task.cpu.toFixed(1).padStart(5)}% ${task.mem.toFixed(1).padStart(5)}% ${task.state} ${cmd}`));
+  }
+  return lines;
+}
+
+// --- header / tabs -----------------------------------------------------------
 
 function header(data: StatsData, width: number, badges: string[] = [], borderAccent = THEMES.default.border): string[] {
+  const now = new Date().toLocaleTimeString();
   const left = `${chalk.hex('#ff5500').bold(' PYRE ')} ${chalk.bold(data.header.hostname)}  ${chalk.dim(data.header.os)}  ${chalk.dim('up ' + data.header.uptime)}`;
-  const right = `${chalk.dim(new Date().toLocaleTimeString())}  ${badges.join('  ')}`;
+  const right = `${chalk.dim(now)}  ${badges.join('  ')}`;
   const gap = Math.max(1, width - visLen(left) - visLen(right));
   const line = left + ' '.repeat(gap) + right;
   return [line, borderAccent('─'.repeat(width))];
+}
+
+/**
+ * Canonical tab list shared between the renderer (drawing the tab bar)
+ * and the live dashboard's mouse handler (hit-testing clicks against it).
+ * Keeping a single source of truth here avoids the two drifting apart.
+ */
+export const TAB_DEFS: { id: string; label: string; key: string }[] = [
+  { id: 'cpu', label: 'CPU', key: '1' },
+  { id: 'mem', label: 'Memory', key: '2' },
+  { id: 'gpu', label: 'GPU', key: '3' },
+  { id: 'power', label: 'Power', key: '4' },
+  { id: 'battery', label: 'Battery', key: '5' },
+  { id: 'thermal', label: 'Thermal', key: '6' },
+  { id: 'network', label: 'Network', key: '7' },
+  { id: 'packets', label: 'Packets', key: '8' },
+  { id: 'tasks', label: 'Tasks', key: '9' },
+  { id: 'disk', label: 'Disk', key: '0' },
+  { id: 'process', label: 'Process', key: 'p' },
+];
+
+/** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */
+const TAB_BAR_INDENT = 2;
+/** Visible width of the ' │ ' separator drawn between tabs. */
+const TAB_SEPARATOR_WIDTH = 3;
+
+/**
+ * Compute the column range (inclusive start, exclusive end) each tab
+ * occupies when rendered by `tabBar`, so a click at a given column can be
+ * mapped back to a panel id. Row is always the same line the tab bar is
+ * printed on (see `formatTable`: header takes 2 lines, then a blank line,
+ * then the tab bar — i.e. row 4 in a 1-indexed terminal, row index 3 if
+ * 0-indexed from the top of the dashboard).
+ */
+export function getTabHitboxes(): { id: string; start: number; end: number }[] {
+  const boxes: { id: string; start: number; end: number }[] = [];
+  let col = TAB_BAR_INDENT;
+  TAB_DEFS.forEach((t, i) => {
+    const text = `[${t.key}]${t.label}`;
+    const start = col;
+    const end = col + text.length;
+    boxes.push({ id: t.id, start, end });
+    col = end;
+    if (i < TAB_DEFS.length - 1) col += TAB_SEPARATOR_WIDTH;
+  });
+  return boxes;
+}
+
+/** Row (1-indexed, matching terminal mouse-report coordinates) the tab bar renders on. */
+export const TAB_BAR_ROW = 4;
+
+function tabBar(activePanel: string, width: number, theme: ThemeColors): string {
+  const rendered = TAB_DEFS.map(t => {
+    const isActive = activePanel === t.id;
+    const label = isActive ? chalk.bold(t.label) : chalk.dim(t.label);
+    const keyHint = chalk.dim(`[${t.key}]`);
+    return `${keyHint}${label}`;
+  });
+
+  const joined = rendered.join(chalk.dim(' │ '));
+  const padded = visLen(joined) < width ? joined + ' '.repeat(width - visLen(joined)) : joined;
+  return chalk.dim('  ') + padded;
 }
 
 // --- process / disk tables ---------------------------------------------------
@@ -353,15 +460,87 @@ function diskTableLines(
 
 // --- main dashboard ------------------------------------------------------------
 
-/**
- * Render the full static dashboard as a single string.
- *
- * Cards are arranged in rows of {@link gridColumns} columns,
- * and the process table is appended below.  Visibility of
- * individual panels is controlled via {@link TableOptions.visible}.
- */
+function detailPanelTitle(panel: string): string {
+  const map: Record<string, string> = {
+    cpu: 'CPU',
+    mem: 'Memory',
+    gpu: 'GPU',
+    power: 'Power',
+    battery: 'Battery',
+    thermal: 'Thermal',
+    network: 'Network',
+    packets: 'Packets',
+    tasks: 'Tasks',
+    disk: 'Disk',
+    process: 'Processes',
+  };
+  return map[panel] || panel;
+}
+
+function activeDetailLines(data: StatsData, activePanel: string, width: number): string[] | null {
+  const contentWidth = width - 4;
+  switch (activePanel) {
+    case 'cpu':
+      return cpuCard(data, contentWidth);
+    case 'mem':
+      return memCard(data, contentWidth);
+    case 'gpu': {
+      const gpu = gpuCard(data, contentWidth);
+      return gpu ?? ['No GPU data available'];
+    }
+    case 'power': {
+      const power = powerCard(data);
+      if (!power && !data.battery) return ['No power data available'];
+      const lines: string[] = [];
+      if (power) lines.push(...power);
+      if (data.battery?.powerWatts !== undefined && data.battery.powerWatts > 0) {
+        lines.push(statRow('Battery', `${data.battery.powerWatts.toFixed(2)} W`));
+      }
+      return lines.length ? lines : ['No power data available'];
+    }
+    case 'battery':
+      return data.battery ? batteryCard(data, contentWidth) : ['No battery data available'];
+    case 'thermal':
+      return thermalCard(data, contentWidth);
+    case 'network':
+      return networkCard(data, contentWidth);
+    case 'packets': {
+      if (!data.packets) return ['No packet data available'];
+      const lines: string[] = [];
+      lines.push(statRow('Total', `${data.packets.totalPackets} pkt`));
+      lines.push(statRow('RX', `${data.packets.rxPackets} pkt`));
+      lines.push(statRow('TX', `${data.packets.txPackets} pkt`));
+      lines.push(statRow('Conns', `${data.packets.connections} TCP`));
+      if (data.packets.interfaces && data.packets.interfaces.length) {
+        lines.push(statRow('Ifaces', `${data.packets.interfaces.length} active`));
+        for (const iface of data.packets.interfaces.slice(0, 8)) {
+          lines.push(statRow(`  ${iface.iface}`, `RX ${formatBytes(iface.rxBytes)} / TX ${formatBytes(iface.txBytes)}`));
+        }
+      }
+      if (data.packets.allProcesses && data.packets.allProcesses.length) {
+        lines.push(statRow('Net Procs', `${data.packets.allProcesses.length} total`));
+        for (const proc of data.packets.allProcesses.slice(0, 10)) {
+          lines.push(statRow(`  ${proc.pid}`, `${truncatePlain(proc.command, 20)}  TX ${formatBytes(proc.txBytes)}`));
+        }
+      }
+      return lines;
+    }
+    case 'tasks':
+      return data.tasks?.length ? tasksCard(data, contentWidth) : ['No task data available'];
+    case 'disk':
+      return data.disk.length ? diskTableLines(data.disk, width - 4, THEMES.default.border) : ['No disk data available'];
+    case 'process': {
+      const sorted = sortProcesses([...data.processes], 'cpu');
+      return processTableLines(sorted.slice(0, 50), width - 4, THEMES.default.border);
+    }
+    default:
+      return null;
+  }
+}
+
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   const width = clampWidth(opts.width);
+  const activePanel = opts.activePanel || 'grid';
   const columns = gridColumns(width);
   const gap = 2;
   const cardWidth = Math.floor((width - gap * (columns - 1)) / columns);
@@ -374,6 +553,16 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   const out: string[] = [];
   out.push(...header(data, width, [], theme.border));
   out.push('');
+  out.push(tabBar(activePanel, width, theme));
+  out.push('');
+
+  if (activePanel !== 'grid') {
+    const lines = activeDetailLines(data, activePanel, width);
+    if (lines) {
+      out.push(...panel(detailPanelTitle(activePanel), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border));
+    }
+    return out.join('\n');
+  }
 
   type Card = { title: string; accent: (s: string) => string; lines: string[] };
   const cards: Card[] = [];
@@ -401,6 +590,14 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   }
   if (vis.network !== false) {
     cards.push({ title: 'Network', accent: theme.network, lines: networkCard(data, contentWidth) });
+  }
+  if (vis.packets !== false) {
+    const packets = packetCard(data, contentWidth);
+    if (packets) cards.push({ title: 'Packets', accent: theme.network, lines: packets });
+  }
+  if (vis.tasks !== false) {
+    const tasks = tasksCard(data, contentWidth);
+    if (tasks) cards.push({ title: 'Tasks', accent: theme.process, lines: tasks });
   }
 
   for (let i = 0; i < cards.length; i += columns) {

@@ -42,7 +42,7 @@ function startLogging() {
     ensureDir(state.exportDir);
     const file = path.join(state.exportDir, `pyre-log-${timestampForFile()}.csv`);
     state.logStream = fs.createWriteStream(file, { flags: 'a' });
-    state.logStream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,thermal_state\n');
+    state.logStream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state\n');
     state.logging = true;
     setStatus(`Logging every tick -> ${file}`);
   } catch (err: any) {
@@ -65,8 +65,11 @@ function toggleLogging() {
 function writeLogRow(data: any) {
   if (!state.logging || !state.logStream) return;
   const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? '';
+  const rxPackets = data.network.rxPackets ?? 0;
+  const txPackets = data.network.txPackets ?? 0;
+  const connections = data.network.connections ?? 0;
   state.logStream.write(
-    `${data.timestamp},${data.cpu.usage},${data.memory.usagePercent},${temp},${data.network.rxBytes},${data.network.txBytes},${data.thermal.state}\n`
+    `${data.timestamp},${data.cpu.usage},${data.memory.usagePercent},${temp},${data.network.rxBytes},${data.network.txBytes},${rxPackets},${txPackets},${connections},${data.thermal.state}\n`
   );
 }
 
