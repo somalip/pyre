@@ -290,6 +290,20 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
               <span style="background:#6b7280"></span><span style="background:#f3f4f6"></span>
             </div>
           </div>
+          <div class="theme-swatch" data-theme="nord">
+            <div class="swname">nord</div>
+            <div class="dotsrow">
+              <span style="background:#88c0d0"></span><span style="background:#b48ead"></span>
+              <span style="background:#bf616a"></span><span style="background:#81a1c1"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="gruvbox">
+            <div class="swname">gruvbox</div>
+            <div class="dotsrow">
+              <span style="background:#fb4934"></span><span style="background:#b8bb26"></span>
+              <span style="background:#d3869b"></span><span style="background:#83a598"></span>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -541,7 +555,7 @@ pyre p2p server --p2p-audit-log ./p2p-logs
             <button class="copy-btn" data-copy="launch-cmd">copy</button>
             <pre id="launch-cmd">pyre live --interval 2 --export-dir ./pyre-exports</pre>
           </div>
-          <p class="note">Theme (<b id="reviewTheme">default</b>) is applied on first launch — change it anytime with <b>c</b>.</p>
+          <p class="note">Theme (<b id="reviewTheme">default</b>) is applied via <b>--theme</b> on launch — change it anytime with <b>c</b>.</p>
         </div>
 
         <div class="card">
@@ -728,6 +742,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       const cmdParts = [`pyre live --interval ${state.interval} --export-dir ${state.exportDir}`];
       if(state.autoLog) cmdParts.push('--log');
       if(state.detailed) cmdParts.push('--detailed');
+      if(state.theme && state.theme !== 'default') cmdParts.push(`--theme ${state.theme}`);
       const liveCmd = cmdParts.join(' ');
       document.getElementById('launch-cmd').textContent = liveCmd;
       document.getElementById('alias-cmd').textContent =

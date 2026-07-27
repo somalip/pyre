@@ -10,6 +10,7 @@ export interface LiveOptions {
   detailed?: boolean;
   exportDir?: string;
   autoLog?: boolean;
+  theme?: ThemeName;
 }
 
 export type ExportFormat = 'json' | 'csv' | 'tsv';

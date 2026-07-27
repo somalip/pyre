@@ -28,6 +28,7 @@ program
     .option('-c, --csv', 'Output as CSV')
     .option('-t, --tsv', 'Output as TSV')
     .option('--detailed', 'Include detailed system info and sensor readings')
+    .option('--theme <name>', 'Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox)', 'default')
     .option('--interval <seconds>', 'Refresh interval for live mode', '2')
     .option('--once', 'Show a single static snapshot instead of live feed')
     .option('--out <file>', 'Also write the snapshot output to a file (--once/--json/--csv/--tsv modes)')
@@ -76,6 +77,7 @@ async function main() {
     await startLive({
       interval,
       detailed: opts.detailed,
+      theme: opts.theme,
       exportDir: opts.exportDir,
       autoLog: opts.log,
     }, splashPromise);

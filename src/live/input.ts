@@ -267,6 +267,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     state.running = true;
     state.paused = false;
     state.detailed = !!opts.detailed;
+    if (opts.theme) state.currentTheme = opts.theme;
     state.interval = opts.interval;
     if (opts.exportDir) state.exportDir = opts.exportDir;
     state.termWidth = process.stdout.columns || 80;
