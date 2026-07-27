@@ -209,6 +209,15 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+function celsiusToFahrenheit(c: number): number {
+  return c * (9 / 5) + 32;
+}
+
+/** Render a Celsius reading with its Fahrenheit equivalent alongside it, e.g. "62.0°C / 143.6°F". */
+function formatTemp(c: number): string {
+  return `${c.toFixed(1)}°C / ${celsiusToFahrenheit(c).toFixed(1)}°F`;
+}
+
 // --- cards -------------------------------------------------------------------
 
 function cpuCard(data: StatsData, contentWidth: number): string[] {
@@ -219,7 +228,7 @@ function cpuCard(data: StatsData, contentWidth: number): string[] {
     gaugeRow('Usage', data.cpu.usage, contentWidth),
     statRow('Load', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' · ')),
   ];
-  if (data.cpu.temperature) lines.push(statRow('Temp', `${data.cpu.temperature}°C`));
+  if (data.cpu.temperature) lines.push(statRow('Temp', formatTemp(data.cpu.temperature)));
   return lines;
 }
 
@@ -262,7 +271,7 @@ function thermalCard(data: StatsData, contentWidth: number): string[] {
   const lines = [statRow('State', thermalColor(data.thermal.pressureLevel)(truncatePlain(data.thermal.state, valW)))];
   if (data.thermal.temperatures) {
     for (const [k, v] of Object.entries(data.thermal.temperatures)) {
-      lines.push(statRow(k.replace('_', ' '), v !== null ? `${v}°C` : 'N/A'));
+      lines.push(statRow(k.replace('_', ' '), v !== null && v !== undefined ? formatTemp(v) : 'N/A'));
     }
   }
   if (data.thermal.error) lines.push(statRow('Error', truncatePlain(data.thermal.error, valW)));
@@ -454,7 +463,12 @@ export function formatCsv(data: StatsData): string {
     ['memory', 'swapUsed', String(data.memory.swapUsed)],
     ['memory', 'swapTotal', String(data.memory.swapTotal)],
     ['thermal', 'state', data.thermal.state],
-    ['thermal', 'cpuTemp', data.thermal.temperatures?.cpu_die ? String(data.thermal.temperatures.cpu_die) : ''],
+    ['thermal', 'cpuTempC', data.thermal.temperatures?.cpu_die ? String(data.thermal.temperatures.cpu_die) : ''],
+    [
+      'thermal',
+      'cpuTempF',
+      data.thermal.temperatures?.cpu_die !== undefined ? String(celsiusToFahrenheit(data.thermal.temperatures.cpu_die)) : '',
+    ],
     ['network', 'rxBytes', String(data.network.rxBytes)],
     ['network', 'txBytes', String(data.network.txBytes)],
     ['battery', 'level', data.battery ? String(data.battery.level) : ''],
@@ -485,9 +499,9 @@ export function formatGraphs(history: History, width = 80, themeName: ThemeName 
   const lines: string[] = [];
   lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth));
   lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth));
-  if (history.temp.length) {
-    lines.push(graphRow('Temp', history.temp, {}, v => `${v.toFixed(1)}°C`, sparkWidth));
-  }
+  lines.push(
+    graphRow('Temp', history.temp, {}, formatTemp, sparkWidth, 'no sensor access (needs sudo powermetrics)')
+  );
   lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth));
   lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth));
 
@@ -500,10 +514,11 @@ function graphRow(
   values: number[],
   bounds: { min?: number; max?: number },
   fmt: (v: number) => string,
-  sparkWidth = 40
+  sparkWidth = 40,
+  emptyMessage = 'collecting data...'
 ): string {
   if (!values.length) {
-    return `${chalk.dim(label.padEnd(10))} ${chalk.dim('collecting data...')}`;
+    return `${chalk.dim(label.padEnd(10))} ${chalk.dim(emptyMessage)}`;
   }
   const visible = values.slice(-sparkWidth);
   const spark = sparkline(visible, bounds);

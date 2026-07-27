@@ -230,9 +230,13 @@ export async function collectCpu(): Promise<CpuData> {
   let usage = 0;
   try {
     const top = (await run('top -l 1 -n 0')).trim();
-    const cpuLine = top.match(/CPU usage: (.+?);/);
+    // Real `top -l 1 -n 0` output is comma-separated and newline-terminated,
+    // e.g. "CPU usage: 5.26% user, 10.52% sys, 84.21% idle" — there is no
+    // semicolon anywhere on that line. The old regex required one to
+    // terminate the match, so it never matched and usage stayed at 0.
+    const cpuLine = top.match(/CPU usage:\s*[\d.]+%\s*user,\s*[\d.]+%\s*sys,\s*([\d.]+)%\s*idle/);
     if (cpuLine) {
-      const idle = parseFloat(cpuLine[1].match(/([\d.]+)% idle/)?.[1] || '0');
+      const idle = parseFloat(cpuLine[1]);
       usage = Math.round(100 - idle);
     }
   } catch {
@@ -278,11 +282,18 @@ export async function collectMemory(): Promise<MemoryData> {
   let swapFree = 0;
   try {
     const swapRaw = (await run('sysctl -n vm.swapusage')).trim();
-    const swapMatch = swapRaw.match(/total\s+=\s+([\d.]+)([KMG])\s+\(\s+([\d.]+)([KMG])\s+used/);
+    // Real output is "total = 3072.00M  used = 1497.75M  free = 1574.25M
+    // (encrypted)" — the parentheses wrap the trailing "(encrypted)" note,
+    // not the used value. The old regex required a literal "(" right before
+    // "used", which never appears, so this never matched and swap stayed at
+    // 0 forever instead of updating.
+    const swapMatch = swapRaw.match(
+      /total\s*=\s*([\d.]+)([KMGkmg])\s+used\s*=\s*([\d.]+)([KMGkmg])\s+free\s*=\s*([\d.]+)([KMGkmg])/
+    );
     if (swapMatch) {
       swapTotal = parseFloat(swapMatch[1]) * parseSuffix(swapMatch[2]);
       swapUsed = parseFloat(swapMatch[3]) * parseSuffix(swapMatch[4]);
-      swapFree = swapTotal - swapUsed;
+      swapFree = parseFloat(swapMatch[5]) * parseSuffix(swapMatch[6]);
     }
   } catch {
     // ignore
@@ -423,6 +434,17 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
         else state = 'Critical';
 
         detail = `${state} (CPU limit ${limit}%)`;
+      } else if (/no thermal warning level has been recorded/i.test(therm)) {
+        // The most common real-world case: pmset hasn't recorded any warning
+        // and never emits a CPU_Speed_Limit line at all when nothing has ever
+        // throttled. That's not "unknown" — it's the system telling us
+        // everything is nominal — but the old code fell through to
+        // 'Unknown' here with no other way to recover, since the
+        // powermetrics fallback below almost always fails without
+        // passwordless sudo configured. That's the bug: thermal state read
+        // as "Unknown" on effectively every normal, non-throttling Mac.
+        state = 'Nominal';
+        detail = 'Nominal (no thermal warning recorded)';
       }
     }
 
