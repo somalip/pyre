@@ -155,7 +155,11 @@ export async function collectCpu(): Promise<CpuData> {
     try {
       const { freq } = await getSmcMetrics();
       const values = Object.values(freq);
-      if (values.length) frequency = Math.round(Math.max(...values));
+      if (values.length) {
+        // powermetrics reports in Hz, system profiler reports in MHz.
+        // We need MHz for the display.
+        frequency = Math.round(Math.max(...values) / 1_000_000);
+      }
     } catch {
       // ignore — frequency stays 0, meaning "unavailable" rather than wrong
     }

@@ -45,9 +45,8 @@ export function panel(
   const h = height ?? lines.length;
   const contentWidth = Math.max(1, width - 4);
   const label = ` ${title} `;
-  const dashLen = Math.max(0, width - 3 - label.length);
-  const top = borderAccent('╭─' + label + '─'.repeat(dashLen) + '╮');
-  const bottom = borderAccent('╰' + '─'.repeat(width - 2) + '╯');
+  const top = borderAccent('┌' + label + '─'.repeat(width - label.length - 2) + '┐');
+  const bottom = borderAccent('└' + '─'.repeat(width - 2) + '┘');
   const body: string[] = [];
   for (let i = 0; i < h; i++) {
     const line = lines[i] ?? '';
@@ -209,7 +208,7 @@ function networkCard(data: StatsData, contentWidth: number): string[] {
 
 function header(data: StatsData, width: number, badges: string[] = [], borderAccent = THEMES.default.border): string[] {
   const left = `${chalk.hex('#ff5500').bold(' PYRE ')} ${chalk.bold(data.header.hostname)}  ${chalk.dim(data.header.os)}  ${chalk.dim('up ' + data.header.uptime)}`;
-  const right = badges.join('   ');
+  const right = `${chalk.dim(new Date().toLocaleTimeString())}  ${badges.join('  ')}`;
   const gap = Math.max(1, width - visLen(left) - visLen(right));
   const line = left + ' '.repeat(gap) + right;
   return [line, borderAccent('─'.repeat(width))];
@@ -247,15 +246,15 @@ function processTableLines(
 
    const cmdW = Math.max(10, contentWidth - pidW - ppidW - userW - cpuW - memW - stateW - thrW - rtW - 8);
     const head =
-      chalk.bold.dim('PID'.padEnd(pidW)) +
-      chalk.bold.dim('PPID'.padEnd(ppidW)) +
-      chalk.bold.dim('USER'.padEnd(userW)) +
-      chalk.bold.dim('CPU%'.padEnd(cpuW)) +
-      chalk.bold.dim('MEM%'.padEnd(memW)) +
-      chalk.bold.dim('STATE'.padEnd(stateW)) +
-      chalk.bold.dim('THREADS'.padEnd(thrW)) +
-      chalk.bold.dim('RUNTIME'.padEnd(rtW)) +
-      chalk.bold.dim('COMMAND');
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PID    ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PPID   ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' USER       ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' STATE   ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' THREADS') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' RUNTIME  ') +
+      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' COMMAND'.padEnd(cmdW + 1));
 
    const rows = processes.map(p => {
      const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}`.padEnd(cpuW));
@@ -330,12 +329,12 @@ function diskTableLines(
 
   const mountW = Math.max(8, contentWidth - fsW - sizeW - usedW - availW - capW - 5);
   const head =
-    chalk.bold.dim('FILESYSTEM'.padEnd(fsW)) +
-    chalk.bold.dim('SIZE'.padEnd(sizeW)) +
-    chalk.bold.dim('USED'.padEnd(usedW)) +
-    chalk.bold.dim('AVAIL'.padEnd(availW)) +
-    chalk.bold.dim('CAP'.padEnd(capW)) +
-    chalk.bold.dim('MOUNT');
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' FILESYSTEM          ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' SIZE      ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' USED      ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' AVAIL     ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CAP     ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MOUNT'.padEnd(mountW + 1));
     const rows = disks.map(d => {
 
     const capNum = parseInt(d.capacity, 10) || 0;

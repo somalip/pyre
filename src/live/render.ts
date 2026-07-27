@@ -110,7 +110,8 @@ function footerLine(): string {
      ['f', state.exportFormat],
      ['+/-', `${state.interval}s`],
    ];
-   const keyStr = keys.map(([k, label]) => `${chalk.cyan.bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  ·  '));
+    const keyStr = keys.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
+
 
    const badges: string[] = [];
    if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
