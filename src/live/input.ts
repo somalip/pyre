@@ -10,14 +10,27 @@ import readline from 'node:readline';
 import chalk from 'chalk';
 import { collectAll, StatsData } from '../monitors/index.js';
 import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
-import { state, setStatus } from './state.js';
+import { state, setStatus, getToggleKey } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
-import { render, footerLine, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame } from './render.js';
+import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
 import { startP2PServer } from '../p2p/index.js';
 
+function isUpKey(key: readline.Key, str?: string): boolean {
+  return key.name === 'up' || str === 'k' || key.sequence === '\x1b[A' || key.sequence === '\x1bOA';
+}
+function isDownKey(key: readline.Key, str?: string): boolean {
+  return key.name === 'down' || str === 'j' || key.sequence === '\x1b[B' || key.sequence === '\x1bOB';
+}
+function isEnterKey(key: readline.Key, str?: string): boolean {
+  return key.name === 'return' || key.name === 'enter' || key.sequence === '\r' || key.sequence === '\n' || str === '\r' || str === '\n';
+}
+function isEscKey(key: readline.Key, str?: string): boolean {
+  return key.name === 'escape' || key.name === 'esc' || key.sequence === '\x1b' || str === '\x1b';
+}
+
 function handleInputModeKey(str: string, key: readline.Key) {
-   if (key.name === 'escape') {
+   if (isEscKey(key, str)) {
      state.inputMode = null;
      state.inputBuffer = '';
      render();
@@ -27,40 +40,56 @@ function handleInputModeKey(str: string, key: readline.Key) {
    if (state.inputMode === 'customizer') {
      const themesList = Object.keys(THEMES) as ThemeName[];
 
-     if (key.name === 'up' || str === 'k') {
+     if (isUpKey(key, str)) {
        state.customizerIndex = (state.customizerIndex - 1 + state.CUSTOMIZER_OPTIONS.length) % state.CUSTOMIZER_OPTIONS.length;
-     } else if (key.name === 'down' || str === 'j') {
+     } else if (isDownKey(key, str)) {
        state.customizerIndex = (state.customizerIndex + 1) % state.CUSTOMIZER_OPTIONS.length;
-     } else if (key.name === 'return' || str === ' ') {
+     } else if (isEnterKey(key, str) || str === ' ') {
        const selected = state.CUSTOMIZER_OPTIONS[state.customizerIndex];
        if (selected === 'Theme') {
          const nextIdx = (themesList.indexOf(state.currentTheme) + 1) % themesList.length;
          state.currentTheme = themesList[nextIdx];
-        } else if (selected === 'Toggle Tree View') {
-          state.treeView = !state.treeView;
-        } else if (selected === 'Graph Mode') {
-          state.graphMode = state.graphMode === 'spark' ? 'bar' : 'spark';
-        } else {
-
-         const itemKey = selected.replace('Toggle ', '').toLowerCase() as keyof VisibleItems;
-         state.visiblePanels[itemKey] = !state.visiblePanels[itemKey];
+       } else if (selected === 'Graph Mode') {
+         state.graphMode = state.graphMode === 'spark' ? 'bar' : 'spark';
+       } else {
+         const toggleKey = getToggleKey(selected);
+         if (toggleKey) {
+           if (toggleKey === 'tree') {
+             state.treeView = !state.treeView;
+             state.visiblePanels.tree = state.treeView;
+           } else {
+             const isVisible = state.visiblePanels[toggleKey] !== false;
+             state.visiblePanels[toggleKey] = !isVisible;
+           }
+         }
        }
+       invalidateTableCache();
+       invalidateFrame();
      }
      render();
      return;
    }
 
     if (state.inputMode === 'signal') {
-      if (key.name === 'up' || str === 'k') {
+      if (isUpKey(key, str)) {
        const idx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
        state.inputBuffer = state.SIGNAL_OPTIONS[(idx - 1 + state.SIGNAL_OPTIONS.length) % state.SIGNAL_OPTIONS.length];
-      } else if (key.name === 'down' || str === 'j') {
+       state.selectedSignal = state.inputBuffer as any;
+      } else if (isDownKey(key, str)) {
        const idx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
        state.inputBuffer = state.SIGNAL_OPTIONS[(idx + 1) % state.SIGNAL_OPTIONS.length];
-      } else if (key.name === 'return' || str === ' ') {
-        killProcess(state.inputBuffer.trim(), state.inputBuffer.trim() as NodeJS.Signals);
-        state.inputMode = null;
-        state.inputBuffer = '';
+       state.selectedSignal = state.inputBuffer as any;
+      } else if (isEnterKey(key, str) || str === ' ') {
+        state.selectedSignal = state.inputBuffer.trim() as any;
+        if (state.targetPid) {
+          killProcess(state.targetPid, state.selectedSignal);
+          state.inputMode = null;
+          state.inputBuffer = '';
+        } else {
+          state.inputMode = 'kill';
+          state.inputBuffer = '';
+          setStatus(`Signal ${state.selectedSignal} selected. Enter target PID to kill:`, 5000);
+        }
         render();
         return;
       }
@@ -69,13 +98,13 @@ function handleInputModeKey(str: string, key: readline.Key) {
     }
 
      if (state.inputMode === 'p2p') {
-      if (key.name === 'escape') {
+      if (isEscKey(key, str)) {
         state.inputMode = null;
         state.inputBuffer = '';
         render();
         return;
       }
-      if (key.name === 'return') {
+      if (isEnterKey(key, str)) {
         const password = state.inputBuffer.trim();
         if (password) {
           state.p2pPassword = password;
@@ -98,12 +127,14 @@ function handleInputModeKey(str: string, key: readline.Key) {
       return;
     }
 
-   if (key.name === 'return') {
+   if (isEnterKey(key, str)) {
      if (state.inputMode === 'filter') {
        state.processFilter = state.inputBuffer.trim();
        setStatus(state.processFilter ? `Filtering: "${state.processFilter}"` : 'Filter cleared');
      } else if (state.inputMode === 'kill') {
-       killProcess(state.inputBuffer.trim());
+       const pidStr = state.inputBuffer.trim();
+       state.targetPid = pidStr;
+       killProcess(pidStr, state.selectedSignal);
      }
      state.inputMode = null;
      state.inputBuffer = '';
@@ -203,7 +234,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
 
   async function doWarmup() {
     try {
-      const data = await collectAll({ detailed: state.detailed, processLimit: processRowBudget() });
+      const data = await collectAll({ detailed: state.detailed });
       state.lastData = data;
       invalidateTableCache();
 
@@ -232,7 +263,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   async function tick() {
     if (state.paused) return;
     try {
-      const data = await collectAll({ detailed: state.detailed, processLimit: processRowBudget() });
+      const data = await collectAll({ detailed: state.detailed });
       state.lastData = data;
       invalidateTableCache();
 

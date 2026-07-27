@@ -8,7 +8,7 @@
  */
 import chalk from 'chalk';
 import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel } from '../formatters/index.js';
-import { state, setStatus, SIGNAL_OPTIONS } from './state.js';
+import { state, setStatus, SIGNAL_OPTIONS, getToggleKey } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
 // --- render caching -----------------------------------------------------------
@@ -54,11 +54,20 @@ function graphsCacheParams(): string {
  * cards, graphs, and footer.
  */
   function processRowBudget(): number {
+    let overlayRows = 0;
+    if (state.inputMode === 'customizer') overlayRows = state.CUSTOMIZER_OPTIONS.length + 3;
+    else if (state.inputMode === 'signal') overlayRows = 6;
+    else if (state.inputMode === 'filter' || state.inputMode === 'kill' || state.inputMode === 'p2p') overlayRows = 3;
+
+    if (state.activePanel === 'process') {
+      return Math.max(10, state.termHeight - 12 - overlayRows);
+    }
+
     const columns = gridColumns(state.termWidth);
     const visibleCards = Object.values(state.visiblePanels).filter(v => v !== false).length;
     const cardRows = Math.ceil(visibleCards / columns);
-    const reserved = 4 + cardRows * 8 + 8 + (state.showGraphs ? 11 : 0) + 4;
-    return Math.max(3, Math.min(40, state.termHeight - reserved));
+    const reserved = 4 + cardRows * 8 + 8 + (state.showGraphs ? 11 : 0) + 5 + overlayRows;
+    return Math.max(5, state.termHeight - reserved);
   }
 
 function p2pPanelLines(): { title: string; body: string[] } {
@@ -102,16 +111,12 @@ function renderCustomizerOverlay(): string {
         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
       } else if (opt === 'Graph Mode') {
         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
-      } else if (opt === 'Toggle Tree View') {
-
-       const status = state.treeView ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-       lines.push(`${prefix}${opt}: ${status}`);
-     } else {
-       const key = opt.replace('Toggle ', '').toLowerCase();
-       const isVisible = state.visiblePanels[key as keyof typeof state.visiblePanels] !== false;
-       const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-       lines.push(`${prefix}${opt}: ${status}`);
-     }
+      } else {
+        const toggleKey = getToggleKey(opt);
+        const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
+        const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+        lines.push(`${prefix}${opt}: ${status}`);
+      }
    });
 
    return lines.map(l => `  ${l}`).join('\n');
@@ -134,7 +139,7 @@ function invalidateFrame() {
 
 function writeFrame(lines: string[]) {
   if (_frameDirty || _prevFrameLines.length === 0 || lines.length !== _prevFrameLines.length) {
-    process.stdout.write('\x1b[2J\x1b[H' + lines.join('\n'));
+    process.stdout.write('\x1b[?25l\x1b[H' + lines.map(l => `\x1b[2K${l}`).join('\r\n') + '\x1b[0J');
     _prevFrameLines = lines;
     _frameDirty = false;
     return;
@@ -179,11 +184,12 @@ function render() {
       })()
     : _cachedTable;
 
+  const bodyLines: string[] = [];
   if (state.activePanel === 'p2p') {
     const panelLines = p2pPanelLines();
-    lines.push(...panel(panelLines.title, panelLines.body, state.termWidth, theme.process, theme.border));
+    bodyLines.push(...panel(panelLines.title, panelLines.body, state.termWidth, theme.process, theme.border));
   } else {
-    lines.push(tableStr);
+    bodyLines.push(...tableStr.split('\n'));
   }
 
   const graphsParams = graphsCacheParams();
@@ -199,66 +205,81 @@ function render() {
       : _cachedGraphs;
 
   if (state.showGraphs && state.activePanel !== 'p2p') {
-    lines.push('');
-    lines.push(graphsStr);
+    bodyLines.push('');
+    bodyLines.push(...graphsStr.split('\n'));
   }
 
-  lines.push('');
-  lines.push(footerLine());
+  const footerLines: string[] = [];
+  footerLines.push('');
+  footerLines.push(...footerLine().split('\n'));
 
   if (state.inputMode === 'customizer') {
-      lines.push(renderCustomizerOverlay());
+      footerLines.push(...renderCustomizerOverlay().split('\n'));
     } else if (state.inputMode === 'filter') {
-      lines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
+      footerLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
     } else if (state.inputMode === 'kill') {
-      lines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
+      footerLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
      } else if (state.inputMode === 'signal') {
        const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
        const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
-       lines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
-       lines.push(chalk.dim(`  ${sigList}`));
-       lines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+       footerLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
+       footerLines.push(chalk.dim(`  ${sigList}`));
+       footerLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
      } else if (state.inputMode === 'p2p') {
-       lines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
+       footerLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
      } else if (state.statusMessage) {
-       lines.push(`  ${state.statusMessage}`);
+       footerLines.push(`  ${state.statusMessage}`);
+     } else {
+       footerLines.push('');
      }
 
-  writeFrame(lines.join('\n').split('\n'));
+  const maxBodyLines = Math.max(1, state.termHeight - footerLines.length);
+  if (bodyLines.length > maxBodyLines) {
+    bodyLines.length = maxBodyLines;
+  }
+
+  const frameLines = [...bodyLines, ...footerLines];
+  if (frameLines.length > state.termHeight) {
+    frameLines.length = state.termHeight;
+  }
+  writeFrame(frameLines);
 }
 
 function footerLine(): string {
-   const keys: [string, string][] = [
+   const row1: [string, string][] = [
      ['q', 'quit'],
      ['c', 'customize UI'],
+     ['←/→', 'tab'],
+     ['1-9', 'panels'],
+     ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
+     ['b', `graph:${state.graphMode}`],
+     ['t', state.treeView ? 'flat' : 'tree'],
+     ['d', state.detailed ? 'basic' : 'detailed'],
+     ['p', state.paused ? 'resume' : 'pause'],
+   ];
+   const row2: [string, string][] = [
+     ['s', `sort:${state.sortMode}`],
+     ['/', 'filter'],
+     ['k', 'kill'],
+     ['S', 'signal'],
+     ['e', 'export'],
+     ['l', state.logging ? 'stop log' : 'log'],
+     ['f', state.exportFormat],
+     ['+/-', `${state.interval}s`],
      ['r', state.p2pServerRunning ? 'stop p2p' : 'start p2p'],
-      ['p', state.paused ? 'resume' : 'pause'],
-       ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-       ['b', `graph:${state.graphMode}`],
-       ['d', state.detailed ? 'basic' : 'detailed'],
-       ['←/→', 'tab'],
-       ['1-9', 'panels'],
-       ['s', `sort:${state.sortMode}`],
-       ['/', 'filter'],
-       ['k', 'kill'],
-       ['S', 'signal'],
-       ['t', state.treeView ? 'flat' : 'tree'],
-       ['e', 'export'],
-       ['l', state.logging ? 'stop log' : 'log'],
-       ['f', state.exportFormat],
-       ['+/-', `${state.interval}s`],
-     ];
-    const keyStr = keys.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
-
+   ];
+   const fmt = (list: [string, string][]) => list.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
+   const str1 = fmt(row1);
+   const str2 = fmt(row2);
 
    const badges: string[] = [];
    if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
    if (state.logging) badges.push(chalk.red.bold('● REC'));
    if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
-     if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
+   if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
    const badgeStr = badges.join('  ');
 
-   return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;
+   return badgeStr ? `${str1}\n${str2}    ${badgeStr}` : `${str1}\n${str2}`;
   }
 
 function checkAlerts(data: StatsData) {

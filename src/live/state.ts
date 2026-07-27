@@ -54,6 +54,8 @@ const state = {
    processFilter: '',
    inputMode: null as InputMode,
    inputBuffer: '',
+   targetPid: '',
+   selectedSignal: 'SIGTERM' as typeof SIGNAL_OPTIONS[number],
    treeView: false,
    SIGNAL_OPTIONS,
    customizerIndex: 0,
@@ -108,4 +110,22 @@ function setStatus(msg: string, ms = 3000) {
   }, ms);
 }
 
-export { state, setStatus };
+function getToggleKey(opt: string): keyof VisibleItems | null {
+  const map: Record<string, keyof VisibleItems> = {
+    'Toggle CPU': 'cpu',
+    'Toggle Memory': 'mem',
+    'Toggle GPU': 'gpu',
+    'Toggle Power': 'power',
+    'Toggle Battery': 'battery',
+    'Toggle Thermal': 'thermal',
+    'Toggle Network': 'network',
+    'Toggle Packets': 'packets',
+    'Toggle Tasks': 'tasks',
+    'Toggle Disk': 'disk',
+    'Toggle Processes': 'process',
+    'Toggle Tree View': 'tree',
+  };
+  return map[opt] ?? null;
+}
+
+export { state, setStatus, getToggleKey };

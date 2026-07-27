@@ -501,8 +501,10 @@ function detailPanelTitle(panel: string): string {
   return map[panel] || panel;
 }
 
-function activeDetailLines(data: StatsData, activePanel: string, width: number): string[] | null {
+function activeDetailLines(data: StatsData, activePanel: string, width: number, opts: TableOptions = {}): string[] | null {
   const contentWidth = width - 4;
+  const themeName = opts.theme || 'default';
+  const theme = THEMES[themeName] || THEMES.default;
   switch (activePanel) {
     case 'cpu':
       return cpuCard(data, contentWidth);
@@ -552,10 +554,17 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number):
     case 'tasks':
       return data.tasks?.length ? tasksCard(data, contentWidth) : ['No task data available'];
     case 'disk':
-      return data.disk.length ? diskTableLines(data.disk, width - 4, THEMES.default.border) : ['No disk data available'];
+      return data.disk.length ? diskTableLines(data.disk, width - 4, theme.border) : ['No disk data available'];
     case 'process': {
-      const sorted = sortProcesses([...data.processes], 'cpu');
-      return processTableLines(sorted.slice(0, 50), width - 4, THEMES.default.border);
+      const filtered = opts.filter
+        ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
+        : data.processes;
+      const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
+      const limited = opts.processLimit ? sorted.slice(0, opts.processLimit) : sorted;
+      if (opts.treeView) {
+        return buildProcessTree(limited);
+      }
+      return processTableLines(limited, width - 4, theme.border);
     }
     default:
       return null;
@@ -581,7 +590,7 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   out.push('');
 
   if (activePanel !== 'grid') {
-    const lines = activeDetailLines(data, activePanel, width);
+    const lines = activeDetailLines(data, activePanel, width, opts);
     if (lines) {
       out.push(...panel(detailPanelTitle(activePanel), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border));
     }
