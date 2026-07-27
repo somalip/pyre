@@ -16,11 +16,13 @@ import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
 
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
+
 const program = new Command();
 
 program
     .name('pyre')
-    .version('2.0.0')
+    .version(pkg.version)
     .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export, packet monitor, battery predictor')
     .option('-j, --json', 'Output as JSON')
     .option('-c, --csv', 'Output as CSV')

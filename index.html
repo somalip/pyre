@@ -334,6 +334,18 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
           TLS encryption, rate limiting, and IP filtering.</p>
 
         <div class="card">
+          <h3>CLIENT CONNECT</h3>
+          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server. Replace <b>&lt;server-ip&gt;</b> with your server's IP address or hostname.</p>
+          <div class="code-box">
+            <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
+            <pre id="p2p-client-cmd">pyre p2p connect \
+  --p2p-host &lt;server-ip&gt; \
+  --p2p-port 9876 \
+  --p2p-password mysecret</pre>
+          </div>
+        </div>
+
+        <div class="card">
           <h3>SERVER SETTINGS</h3>
           <label class="field">
             <span class="lbl">P2P Password <b id="p2pPasswordOut">••••••••</b></span>
