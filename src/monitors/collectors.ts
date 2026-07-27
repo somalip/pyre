@@ -627,7 +627,7 @@ export async function collectPackets(): Promise<PacketData | null> {
      let topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[] = [];
      let allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[] = [];
      try {
-        const lsof = (await run('lsof -i -n -P -r 1 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
+         const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
         const lsofLines = lsof.split('\n');
         topProcesses = lsofLines.map(line => {
           const parts = line.trim().split(/\s+/);

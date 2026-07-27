@@ -1,6 +1,6 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, packet monitor, battery predictor, and export.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, packet monitor, battery predictor, export, and P2P live data streaming.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
@@ -9,6 +9,7 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, pa
 
 ## Features
 
+- **P2P live data streaming** — send live system stats to another system over TCP with password authentication, TLS encryption, rate limiting, IP allow/deny lists, audit logging, and HMAC message signing
 - **Real-time system stats** — CPU brand, cores, frequency, load, and usage
 - **Memory monitoring** — usage, swap, and total/available
 - **Disk space** — mounted volume usage
@@ -40,7 +41,6 @@ curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
 ### Homebrew
 
 ```bash
-brew tap somalip/tap
 brew install pyre
 ```
 
@@ -84,6 +84,147 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
 | `--log` | Start continuous CSV logging immediately when live mode starts |
 | `--packets` | Include packet monitor panel in static output |
+
+## P2P Live Data Streaming
+
+Send live system stats to another system over a TCP connection with password authentication. The server streams `StatsData` snapshots to authenticated peers at the configured interval.
+
+### Start a P2P server (host)
+
+On the machine that will send data:
+
+```bash
+pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret
+```
+
+The server binds to the specified host and port, and streams live system stats to any authenticated peer.
+
+| Option | Description |
+|---|---|
+| `--p2p-host <host>` | Bind address (default: `0.0.0.0`) |
+| `--p2p-port <port>` | Port number (default: `9876`) |
+| `--p2p-password <password>` | Password for authentication (required) |
+| `--interval <seconds>` | Data refresh interval (default: `2`) |
+| `--detailed` | Include detailed sensor readings |
+
+### Server-Side Security Features
+
+#### TLS Encryption
+
+Enable TLS for encrypted connections between the server and clients:
+
+```bash
+pyre p2p server --p2p-cert /path/to/cert.pem --p2p-key /path/to/key.pem --p2p-password mysecret
+```
+
+| Option | Description |
+|---|---|
+| `--p2p-cert <file>` | TLS certificate file (PEM) for the server |
+| `--p2p-key <file>` | TLS private key file (PEM) for the server |
+| `--p2p-ca <file>` | TLS CA certificate file (PEM) — required by clients using `--p2p-tls` |
+
+#### Rate Limiting
+
+Prevent brute-force password attacks by limiting authentication attempts per IP:
+
+```bash
+pyre p2p server --p2p-rate-limit 10 --p2p-password mysecret
+```
+
+| Option | Description |
+|---|---|
+| `--p2p-rate-limit <n>` | Max auth attempts per IP per minute (default: `5`) |
+
+#### IP Allow/Deny Lists
+
+Restrict connections to specific IPs or block known bad actors:
+
+```bash
+# Allow only specific IPs
+pyre p2p server --p2p-allow 192.168.1.100,192.168.1.101 --p2p-password mysecret
+
+# Deny specific IPs (all others allowed)
+pyre p2p server --p2p-deny 10.0.0.99 --p2p-password mysecret
+```
+
+| Option | Description |
+|---|---|
+| `--p2p-allow <ips>` | Comma-separated list of allowed IPs (empty = all) |
+| `--p2p-deny <ips>` | Comma-separated list of denied IPs |
+
+#### Audit Logging
+
+Log all connection events (connects, auth successes/failures, disconnects, rate limit hits, IP blocks) to a directory:
+
+```bash
+pyre p2p server --p2p-audit-log /var/log/pyre --p2p-password mysecret
+```
+
+| Option | Description |
+|---|---|
+| `--p2p-audit-log <dir>` | Directory for P2P audit logs |
+
+#### HMAC Message Signing
+
+All P2P messages are signed with HMAC-SHA256 to ensure integrity and authenticity. The HMAC key is derived from the password by default, but can be overridden for rotation or interoperability:
+
+```bash
+pyre p2p server --p2p-hmac-key my-custom-key --p2p-password mysecret
+```
+
+| Option | Description |
+|---|---|
+| `--p2p-hmac-key <key>` | HMAC key for message signing (default: derived from password) |
+
+### Connect a P2P client (peer)
+
+On the machine that will receive data:
+
+```bash
+pyre p2p connect --p2p-host <server-ip> --p2p-port 9876 --p2p-password mysecret
+```
+
+The client connects to the server, authenticates with the password, and displays live system stats.
+
+| Option | Description |
+|---|---|
+| `--p2p-host <host>` | Server address (default: `127.0.0.1`) |
+| `--p2p-port <port>` | Server port (default: `9876`) |
+| `--p2p-password <password>` | Password for authentication (required) |
+| `--p2p-tls` | Enable TLS encryption for the connection |
+| `--p2p-ca <file>` | TLS CA certificate file (PEM) — required when using `--p2p-tls` |
+| `--p2p-insecure` | Skip TLS certificate verification (client only) |
+| `--p2p-audit-log <dir>` | Directory for P2P client audit logs |
+| `--p2p-hmac-key <key>` | HMAC key for message signing (must match server) |
+
+### P2P Protocol
+
+The P2P connection uses a length-prefixed JSON protocol over TCP with HMAC-SHA256 message signing:
+
+1. Client connects to the server
+2. Server sends a `challenge` message with a random nonce
+3. Client responds with an `auth` message containing the SHA-256 hash of `password:nonce`
+4. Server validates the hash and responds with `auth-ok` or `auth-fail`
+5. Once authenticated, the server streams `data` messages containing `StatsData` snapshots at the configured interval
+6. Both sides exchange `ping`/`pong` keepalive messages every 15 seconds
+7. Either side can send a `disconnect` message to close gracefully
+
+All messages are signed with HMAC-SHA256 using a key derived from the password, ensuring message integrity and authenticity.
+
+### Server Controls
+
+While the P2P server is running, type these commands on the server's stdin:
+
+| Command | Action |
+|---|---|
+| `status` | Print the number of currently connected peers |
+| `q` / `quit` / `exit` | Shut down the server gracefully |
+
+Press `Ctrl+C` to shut down the server as well.
+
+### P2P Client Controls
+
+While connected, the client displays live system stats in a formatted table. Press `Ctrl+C` to disconnect. The client will attempt to reconnect automatically after 3 seconds if the connection is lost.
 
 ## Live Dashboard Controls
 
@@ -190,6 +331,12 @@ pyre/
 │   │   ├── render.ts       # Screen rendering and alert checking
 │   │   ├── export.ts       # Snapshot export and CSV logging
 │   │   └── types.ts        # LiveOptions, ExportFormat, InputMode, SortMode
+│   ├── p2p/                # P2P live data streaming (server + client)
+│   │   ├── index.ts        # Public API: P2PServer, P2PClient
+│   │   ├── types.ts        # P2P protocol type definitions
+│   │   ├── protocol.ts     # Length-prefixed JSON message framing
+│   │   ├── server.ts       # TCP server: auth, TLS, rate limiting, IP filtering, audit logging, HMAC signing, data streaming
+│   │   └── client.ts       # TCP client that connects and displays live data
 │   ├── history.ts          # Rolling history buffer for sparkline data
 │   ├── sparkline.ts        # ASCII sparkline rendering
 │   └── utils/              # Shared utility functions
