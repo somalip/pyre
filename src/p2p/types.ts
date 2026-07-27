@@ -73,6 +73,7 @@ export interface P2PServerOptions {
   auditLog?: string;
   hmacKey?: string;
   onLog?: (msg: string) => void;
+  onPeerEvent?: (event: { type: 'connect' | 'auth' | 'disconnect' | 'error' | 'blocked' | 'rate_limited'; detail: string; ts: number }) => void;
 }
 
 export interface P2PClientOptions {

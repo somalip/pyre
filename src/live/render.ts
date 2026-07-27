@@ -7,7 +7,7 @@
  * `state.ts`.
  */
 import chalk from 'chalk';
-import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName } from '../formatters/index.js';
+import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel } from '../formatters/index.js';
 import { state, setStatus, SIGNAL_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
@@ -23,6 +23,33 @@ function processRowBudget(): number {
   const cardRows = Math.ceil(visibleCards / columns);
   const reserved = 2 + cardRows * 8 + 11 + (state.showGraphs ? 9 : 0) + 4;
   return Math.max(3, Math.min(40, state.termHeight - reserved));
+}
+
+function p2pPanelLines(): { title: string; body: string[] } {
+  const events = state.p2pServer ? state.p2pServer.peerEventHistory : state.p2pEvents;
+  const body: string[] = [];
+  const bindAddr = state.p2pBind || `0.0.0.0:${state.p2pPort}`;
+
+  body.push(`Status:   ${state.p2pServerRunning ? chalk.green('Running') : chalk.red('Stopped')}`);
+  body.push(`Bind:     ${bindAddr}`);
+  body.push(`Password: ${state.p2pPassword}`);
+  body.push('');
+
+  const typeColor = (t: string) => {
+    if (t === 'auth') return chalk.green;
+    if (t === 'disconnect') return chalk.yellow;
+    if (t === 'error' || t === 'blocked' || t === 'rate_limited') return chalk.red;
+    return chalk.cyan;
+  };
+  body.push(chalk.dim('Events (most recent):'));
+  const recent = events.slice(-20).reverse();
+  for (const evt of recent) {
+    const time = new Date(evt.ts).toLocaleTimeString();
+    body.push(`${chalk.dim(time)} ${typeColor(evt.type)(evt.type.padEnd(14))} ${evt.detail}`);
+  }
+
+  const title = `P2P · ${state.p2pServerRunning ? 'ON' : 'OFF'} · ${events.length} events`;
+  return { title, body };
 }
 
 function renderCustomizerOverlay(): string {
@@ -57,20 +84,27 @@ function renderCustomizerOverlay(): string {
 function render() {
   if (!state.lastData) return;
   const lines: string[] = [];
-  lines.push(
-    formatTable(state.lastData, {
-      width: state.termWidth,
-      sortBy: state.sortMode,
-      filter: state.processFilter || undefined,
-      processLimit: processRowBudget(),
-      theme: state.currentTheme,
-      visible: state.visiblePanels,
-      treeView: state.treeView,
-      activePanel: state.activePanel,
-    })
-  );
+  const theme = THEMES[state.currentTheme] || THEMES.default;
 
-  if (state.showGraphs) {
+  if (state.activePanel === 'p2p') {
+    const panelLines = p2pPanelLines();
+    lines.push(...panel(panelLines.title, panelLines.body, state.termWidth, theme.process, theme.border));
+  } else {
+    lines.push(
+      formatTable(state.lastData, {
+        width: state.termWidth,
+        sortBy: state.sortMode,
+        filter: state.processFilter || undefined,
+        processLimit: processRowBudget(),
+        theme: state.currentTheme,
+        visible: state.visiblePanels,
+        treeView: state.treeView,
+        activePanel: state.activePanel,
+      })
+    );
+  }
+
+  if (state.showGraphs && state.activePanel !== 'p2p') {
     lines.push('');
     lines.push(formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode));
   }
@@ -128,7 +162,7 @@ function footerLine(): string {
    if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
    if (state.logging) badges.push(chalk.red.bold('● REC'));
    if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
-    if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pPort}`));
+     if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
    const badgeStr = badges.join('  ');
 
    return badgeStr ? `${keyStr}    ${badgeStr}` : keyStr;

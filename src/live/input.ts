@@ -147,16 +147,31 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         intervalMs: state.interval * 1000,
         detailed: state.detailed,
         onLog: (msg: string) => setStatus(msg, 5000),
+        onPeerEvent: (evt) => {
+          state.p2pEvents.push(evt);
+          if (state.p2pEvents.length > 200) state.p2pEvents.shift();
+        },
       });
       state.p2pServer = server as any;
       state.p2pServerRunning = true;
-      setStatus(`P2P server started on port ${state.p2pPort}`);
+      state.p2pBind = (server as any).boundAddress || '0.0.0.0';
+      state.p2pEvents = [];
+      setStatus(`P2P server started on ${state.p2pBind}:${state.p2pPort}`);
       render();
     } catch (err: any) {
       setStatus(`P2P server failed: ${err.message}`);
       state.p2pServerRunning = false;
       state.p2pServer = null;
+      state.p2pBind = '';
       render();
+    }
+  }
+
+  function syncP2PEvents() {
+    if (!state.p2pServer) return;
+    const history = state.p2pServer.peerEventHistory;
+    if (history && history !== state.p2pEvents) {
+      state.p2pEvents = history;
     }
   }
 
@@ -206,6 +221,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
 
       writeLogRow(data);
       checkAlerts(data);
+      syncP2PEvents();
       render();
     } catch {
       // skip bad tick
@@ -439,7 +455,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   }
 
   function tabKeyToId(str: string): string | null {
-    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process' };
+    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'r': 'p2p' };
     return map[str] ?? null;
   }
 

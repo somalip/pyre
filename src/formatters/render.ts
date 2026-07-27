@@ -275,7 +275,8 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'packets', label: 'Packets', key: '8' },
   { id: 'tasks', label: 'Tasks', key: '9' },
   { id: 'disk', label: 'Disk', key: '0' },
-  { id: 'process', label: 'Process', key: 'p' },
+  { id: 'process', label: 'Process', key: 'P' },
+  { id: 'p2p', label: 'P2P', key: 'R' },
 ];
 
 /** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */

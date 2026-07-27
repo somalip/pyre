@@ -84,10 +84,16 @@ export class P2PServer {
   private rateLimitMap: Map<string, RateLimitEntry> = new Map();
   private auditStream: fs.WriteStream | null = null;
   private hmacKey: string;
+  private peerEvents: { type: string; detail: string; ts: number }[] = [];
+  private boundAddress = '';
 
   constructor(options: P2PServerOptions) {
     this.options = options;
     this.hmacKey = deriveHMACKey(options.password);
+  }
+
+  get peerEventHistory(): { type: string; detail: string; ts: number }[] {
+    return this.peerEvents;
   }
 
   private log(msg: string): void {
@@ -95,6 +101,15 @@ export class P2PServer {
       this.options.onLog(msg.replace(/\x1b\[[0-9;]*m/g, ''));
     } else {
       console.log(msg);
+    }
+  }
+
+  private emitPeerEvent(type: string, detail: string): void {
+    const evt = { type, detail, ts: Date.now() };
+    this.peerEvents.push(evt);
+    if (this.peerEvents.length > 200) this.peerEvents.shift();
+    if (this.options.onPeerEvent) {
+      this.options.onPeerEvent(evt as any);
     }
   }
 
@@ -138,6 +153,7 @@ export class P2PServer {
         this.running = true;
         const addr = this.server?.address();
         const bound = addr ? (typeof addr === 'object' ? `${addr.address}:${addr.port}` : String(addr)) : 'unknown';
+        this.boundAddress = typeof addr === 'object' && addr ? addr.address : String(addr);
         const protocol = useTLS ? 'TLS' : 'TCP';
         this.log(chalk.green(`P2P server listening on ${bound} (${protocol})`));
         this.log(chalk.dim(`  Password: ${this.options.password}`));
@@ -146,6 +162,7 @@ export class P2PServer {
         const deniedIPs = this.options.deniedIPs ?? [];
         if (allowedIPs.length > 0) this.log(chalk.dim(`  Allowed IPs: ${allowedIPs.join(', ')}`));
         if (deniedIPs.length > 0) this.log(chalk.dim(`  Denied IPs: ${deniedIPs.join(', ')}`));
+        this.emitPeerEvent('connect', `Server listening on ${bound}`);
         resolve();
       });
     });
@@ -158,6 +175,7 @@ export class P2PServer {
     }
     this.peers.clear();
     this.rateLimitMap.clear();
+    this.peerEvents = [];
     if (this.server) {
       this.server.close();
       this.server = null;
@@ -219,6 +237,7 @@ export class P2PServer {
     if (!isIPAllowed(ip, allowedIPs, deniedIPs)) {
       this.audit(ip, 'BLOCKED', 'IP not allowed');
       this.log(chalk.yellow(`Blocked IP: ${ip}`));
+      this.emitPeerEvent('blocked', ip);
       socket.destroy();
       return;
     }
@@ -226,6 +245,7 @@ export class P2PServer {
     if (!this.checkRateLimit(ip)) {
       this.audit(ip, 'RATE_LIMITED', 'Too many auth attempts');
       this.log(chalk.yellow(`Rate limit exceeded for IP: ${ip}`));
+      this.emitPeerEvent('rate_limited', ip);
       socket.destroy();
       return;
     }
@@ -248,6 +268,7 @@ export class P2PServer {
       : 'unknown';
     this.log(chalk.cyan(`Peer connected: ${remoteAddr}`));
     this.audit(ip, 'CONNECT', remoteAddr);
+    this.emitPeerEvent('connect', remoteAddr);
 
     socket.on('data', (data) => this.onData(peer, data));
     socket.on('close', () => this.onPeerClose(peer));
@@ -284,6 +305,7 @@ export class P2PServer {
       if (msg.kind !== 'auth') {
         peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Expected auth message first' }, this.hmacKey));
         this.disconnectPeer(peer, 'Expected auth message');
+        this.emitPeerEvent('error', `Expected auth message from ${peer.ip}`);
         return;
       }
 
@@ -291,6 +313,7 @@ export class P2PServer {
       if (!authPayload.passwordHash || !authPayload.nonce) {
         peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid auth payload' }, this.hmacKey));
         this.disconnectPeer(peer, 'Invalid auth payload');
+        this.emitPeerEvent('error', `Invalid auth payload from ${peer.ip}`);
         return;
       }
 
@@ -298,6 +321,7 @@ export class P2PServer {
         this.audit(peer.ip, 'AUTH_FAIL', 'Nonce mismatch');
         peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid nonce' }, this.hmacKey));
         this.disconnectPeer(peer, 'Invalid nonce');
+        this.emitPeerEvent('error', `Invalid nonce from ${peer.ip}`);
         return;
       }
 
@@ -306,6 +330,7 @@ export class P2PServer {
         this.audit(peer.ip, 'AUTH_FAIL', 'Invalid password hash');
         peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid password' }, this.hmacKey));
         this.disconnectPeer(peer, 'Authentication failed');
+        this.emitPeerEvent('error', `Invalid password from ${peer.ip}`);
         return;
       }
 
@@ -315,6 +340,7 @@ export class P2PServer {
       peer.socket.write(signMessage('auth-ok', { ok: true }, this.hmacKey));
       this.log(chalk.green(`Peer authenticated: ${peer.socket.remoteAddress}`));
       this.audit(peer.ip, 'AUTH_OK', 'Challenge-response successful');
+      this.emitPeerEvent('auth', peer.socket.remoteAddress ?? peer.ip);
       this.startDataStream(peer);
       this.startPing(peer);
     } catch {
@@ -354,6 +380,7 @@ export class P2PServer {
   private onPeerClose(peer: Peer): void {
     this.cleanupPeer(peer);
     this.log(chalk.yellow(`Peer disconnected: ${peer.socket.remoteAddress}`));
+    this.emitPeerEvent('disconnect', peer.socket.remoteAddress ?? peer.ip);
     this.audit(peer.ip, 'DISCONNECT', 'Peer closed connection');
   }
 
@@ -362,9 +389,11 @@ export class P2PServer {
     if (code === 'ECONNRESET') {
       this.log(chalk.yellow(`Peer connection reset: ${peer.socket.remoteAddress}`));
       this.audit(peer.ip, 'ERROR', 'Connection reset');
+      this.emitPeerEvent('error', `connection reset: ${peer.socket.remoteAddress}`);
     } else {
       this.log(chalk.red(`Peer error: ${err.message}`));
       this.audit(peer.ip, 'ERROR', err.message);
+      this.emitPeerEvent('error', err.message);
     }
     this.cleanupPeer(peer);
   }
