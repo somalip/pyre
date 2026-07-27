@@ -6,10 +6,14 @@
  * crashes the entire collection pipeline.
  */
 
-async function run(cmd: string, fallback: string = ''): Promise<string> {
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execAsync = promisify(exec);
+
+async function run(cmd: string, fallback: string = '', timeout = 5000): Promise<string> {
   try {
-    const { execSync } = await import('node:child_process');
-    return execSync(cmd, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 5000 }).trim();
+    return (await execAsync(cmd, { encoding: 'utf8', timeout })).stdout.trim();
   } catch {
     return fallback;
   }

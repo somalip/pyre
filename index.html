@@ -143,7 +143,8 @@
     display:flex; align-items:center; justify-content:space-between;
     padding: 12px 0; border-bottom: 1px solid var(--border-soft);
   }
-  .toggle-row:last-child{ border-bottom:none; }
+  .tls-fields{ display:none; }
+   .tls-fields.visible{ display:block; }
   .toggle-row .t-label{ font-size:0.85rem; }
   .toggle-row .t-desc{ font-size:0.75rem; color: var(--ash); margin-top:2px; }
   .switch{
@@ -221,9 +222,9 @@
       <div class="step-pip" data-step="0"><span>01 · sensor</span><div class="bar"></div></div>
       <div class="step-pip" data-step="1"><span>02 · appearance</span><div class="bar"></div></div>
       <div class="step-pip" data-step="2"><span>03 · behavior</span><div class="bar"></div></div>
-<div class="step-pip" data-step="3"><span>04 · p2p server</span><div class="bar"></div></div>
-	      <div class="step-pip" data-step="4"><span>05 · security</span><div class="bar"></div></div>
-	      <div class="step-pip" data-step="5"><span>06 · review</span><div class="bar"></div></div>
+    <div class="step-pip" data-step="3"><span>04 · p2p server</span><div class="bar"></div></div>
+    <div class="step-pip" data-step="4"><span>05 · security</span><div class="bar"></div></div>
+    <div class="step-pip" data-step="5"><span>06 · review</span><div class="bar"></div></div>
     </div>
 
     <main>
@@ -363,7 +364,7 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
           <h3>SERVER SETTINGS</h3>
           <label class="field">
             <span class="lbl">P2P Password <b id="p2pPasswordOut">••••••••</b></span>
-            <input type="text" id="p2pPassword" value="mysecret" placeholder="shared secret password">
+            <input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret password">
           </label>
           <label class="field">
             <span class="lbl">Bind address <b id="p2pHostOut">0.0.0.0</b></span>
@@ -371,7 +372,7 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
           </label>
           <label class="field">
             <span class="lbl">Port <b id="p2pPortOut">9876</b></span>
-            <input type="text" id="p2pPort" value="9876" placeholder="9876">
+            <input type="number" id="p2pPort" value="9876" placeholder="9876">
           </label>
           <label class="field">
             <span class="lbl">Data interval <b id="p2pIntervalOut">2s</b></span>
@@ -382,51 +383,53 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
         <div class="card">
           <h3>SECURITY</h3>
           <div class="toggle-row">
-            <div>
-              <div class="t-label">Enable TLS encryption</div>
-              <div class="t-desc">Encrypt all traffic. Requires cert and key files.</div>
-            </div>
-            <div class="switch" id="toggle-p2p-tls"></div>
-          </div>
-          <label class="field">
-            <span class="lbl">TLS cert file (PEM)</span>
-            <input type="text" id="p2pCert" value="" placeholder="/path/to/server.crt">
-          </label>
-          <label class="field">
-            <span class="lbl">TLS key file (PEM)</span>
-            <input type="text" id="p2pKey" value="" placeholder="/path/to/server.key">
-          </label>
-          <div class="toggle-row">
-            <div>
-              <div class="t-label">Challenge-response auth</div>
-              <div class="t-desc">Server sends a nonce; client responds with SHA-256(password + nonce). Password never sent in plaintext.</div>
-            </div>
-            <div class="switch on" id="toggle-p2p-challenge" disabled></div>
-          </div>
-          <div class="toggle-row">
-            <div>
-              <div class="t-label">HMAC message signing</div>
-              <div class="t-desc">Every message is signed with HMAC-SHA256 to prevent tampering.</div>
-            </div>
-            <div class="switch on" id="toggle-p2p-hmac" disabled></div>
-          </div>
-          <label class="field">
-            <span class="lbl">Rate limit (auth attempts per IP per minute)</span>
-            <input type="text" id="p2pRateLimit" value="5" placeholder="5">
-          </label>
-          <label class="field">
-            <span class="lbl">Allowed IPs (comma-separated, empty = all)</span>
-            <input type="text" id="p2pAllow" value="" placeholder="192.168.1.0/24, 10.0.0.1">
-          </label>
-          <label class="field">
-            <span class="lbl">Denied IPs (comma-separated)</span>
-            <input type="text" id="p2pDeny" value="" placeholder="192.168.1.100, 10.0.0.50">
-          </label>
-          <label class="field">
-            <span class="lbl">Audit log directory</span>
-            <input type="text" id="p2pAuditLog" value="" placeholder="./p2p-logs">
-          </label>
-        </div>
+             <div>
+               <div class="t-label">Enable TLS encryption</div>
+               <div class="t-desc">Encrypt all traffic. Requires cert and key files.</div>
+             </div>
+             <div class="switch" id="toggle-p2p-tls"></div>
+           </div>
+           <div class="tls-fields" id="tlsFields">
+             <label class="field">
+               <span class="lbl">TLS cert file (PEM)</span>
+               <input type="text" id="p2pCert" value="" placeholder="/path/to/server.crt">
+             </label>
+             <label class="field">
+               <span class="lbl">TLS key file (PEM)</span>
+               <input type="text" id="p2pKey" value="" placeholder="/path/to/server.key">
+             </label>
+           </div>
+           <div class="toggle-row">
+             <div>
+               <div class="t-label">Challenge-response auth</div>
+               <div class="t-desc">Server sends a nonce; client responds with SHA-256(password + nonce). Password never sent in plaintext.</div>
+             </div>
+             <div class="switch on" id="toggle-p2p-challenge" style="cursor:default;opacity:0.7"></div>
+           </div>
+           <div class="toggle-row">
+             <div>
+               <div class="t-label">HMAC message signing</div>
+               <div class="t-desc">Every message is signed with HMAC-SHA256 to prevent tampering.</div>
+             </div>
+             <div class="switch on" id="toggle-p2p-hmac" style="cursor:default;opacity:0.7"></div>
+           </div>
+           <label class="field">
+             <span class="lbl">Rate limit (auth attempts per IP per minute)</span>
+             <input type="number" id="p2pRateLimit" value="5" placeholder="5">
+           </label>
+           <label class="field">
+             <span class="lbl">Allowed IPs (comma-separated, empty = all)</span>
+             <input type="text" id="p2pAllow" value="" placeholder="192.168.1.0/24, 10.0.0.1">
+           </label>
+           <label class="field">
+             <span class="lbl">Denied IPs (comma-separated)</span>
+             <input type="text" id="p2pDeny" value="" placeholder="192.168.1.100, 10.0.0.50">
+           </label>
+           <label class="field">
+             <span class="lbl">Audit log directory</span>
+             <input type="text" id="p2pAuditLog" value="" placeholder="./p2p-logs">
+           </label>
+         </div>
       </section>
 
       <section class="panel" data-panel="4">
@@ -580,9 +583,9 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
           <h3>CHECKLIST</h3>
           <div class="checklist" id="checklist">
             <div><span id="chk-sudo">○</span> Sensor access command run</div>
-            <div><span class="ok">✓</span> Theme selected: <span id="chk-theme">default</span></div>
-            <div><span class="ok">✓</span> Refresh interval: <span id="chk-interval">2s</span></div>
-            <div><span class="ok">✓</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
+            <div><span id="chk-theme-ok">○</span> Theme selected: <span id="chk-theme">default</span></div>
+            <div><span id="chk-interval-ok">○</span> Refresh interval: <span id="chk-interval">2s</span></div>
+            <div><span id="chk-dir-ok">○</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
             <div><span id="chk-p2p">○</span> P2P password set</div>
             <div><span id="chk-p2p-tls">○</span> TLS configured</div>
           </div>
@@ -749,8 +752,14 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
         `echo 'alias pyre-live="${liveCmd}"' >> ~/.zshrc\necho 'alias pyre-p2p="${buildP2PCmd()}"' >> ~/.zshrc`;
       document.getElementById('reviewTheme').textContent = state.theme;
       document.getElementById('chk-theme').textContent = state.theme;
+      document.getElementById('chk-theme-ok').textContent = '✓';
+      document.getElementById('chk-theme-ok').className = 'ok';
       document.getElementById('chk-interval').textContent = state.interval + 's';
+      document.getElementById('chk-interval-ok').textContent = '✓';
+      document.getElementById('chk-interval-ok').className = 'ok';
       document.getElementById('chk-dir').textContent = state.exportDir;
+      document.getElementById('chk-dir-ok').textContent = '✓';
+      document.getElementById('chk-dir-ok').className = 'ok';
       document.getElementById('chk-sudo').textContent = state.sudoDone ? '✓' : '○';
       document.getElementById('chk-sudo').className = state.sudoDone ? 'ok' : '';
       document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
@@ -785,7 +794,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
     const intervalInput = document.getElementById('interval');
     intervalInput.addEventListener('input', () => {
-      state.interval = intervalInput.value;
+      state.interval = parseInt(intervalInput.value, 10) || 2;
       document.getElementById('intervalOut').textContent = state.interval + 's';
     });
     document.getElementById('exportDir').addEventListener('input', (e) => {
@@ -819,7 +828,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     });
     const p2pInterval = document.getElementById('p2pInterval');
     p2pInterval.addEventListener('input', () => {
-      state.p2p.interval = p2pInterval.value;
+      state.p2p.interval = parseInt(p2pInterval.value, 10) || 2;
       document.getElementById('p2pIntervalOut').textContent = state.p2p.interval + 's';
     });
     const p2pCert = document.getElementById('p2pCert');
@@ -838,12 +847,13 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     p2pTlsToggle.addEventListener('click', () => {
       state.p2p.tls = !state.p2p.tls;
       p2pTlsToggle.classList.toggle('on', state.p2p.tls);
+      document.getElementById('tlsFields').classList.toggle('visible', state.p2p.tls);
     });
 
     document.querySelectorAll('.copy-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const target = document.getElementById(btn.dataset.copy);
-        const text = target.textContent.replace(/^#.*\n/, '').trim();
+        const text = target.textContent.replace(/^(#|\/\/).*\n/gm, '').trim();
         navigator.clipboard.writeText(text).then(() => {
           const orig = btn.textContent;
           btn.textContent = 'copied';

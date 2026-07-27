@@ -12,7 +12,7 @@ import { collectAll, StatsData } from '../monitors/index.js';
 import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
 import { state, setStatus } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
-import { render, footerLine, checkAlerts, processRowBudget } from './render.js';
+import { render, footerLine, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
 import { startP2PServer } from '../p2p/index.js';
 
@@ -191,6 +191,8 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    state.termWidth = process.stdout.columns || 80;
    state.termHeight = process.stdout.rows || 24;
    state.history.setMaxLen(Math.max(20, Math.min(200, state.termWidth - 30)));
+   invalidateFrame();
+   process.stdout.write('\x1b[2J\x1b[H');
    render();
  }
 
@@ -203,6 +205,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     try {
       const data = await collectAll({ detailed: state.detailed, processLimit: processRowBudget() });
       state.lastData = data;
+      invalidateTableCache();
 
       const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
       state.history.push({
@@ -231,6 +234,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     try {
       const data = await collectAll({ detailed: state.detailed, processLimit: processRowBudget() });
       state.lastData = data;
+      invalidateTableCache();
 
       const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
       state.history.push({
@@ -302,6 +306,11 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     process.stdin.resume();
 
     process.stdout.on('resize', onResize);
+
+    if (state.uiIntervalHandle) clearInterval(state.uiIntervalHandle);
+    state.uiIntervalHandle = setInterval(() => {
+      if (state.running && !state.paused) render();
+    }, 250);
 
     state.keypressHandler = (str: string, key: readline.Key) => {
       if (!key) return;
@@ -384,28 +393,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         case 'q':
           stopLive();
           break;
-        case 'left': {
-          const currentIdx = state.PANEL_TABS.findIndex(t => t.id === state.activePanel);
-          if (currentIdx > 0) {
-            state.activePanel = state.PANEL_TABS[currentIdx - 1].id;
-          } else if (currentIdx === -1) {
-            state.activePanel = state.PANEL_TABS[state.PANEL_TABS.length - 1].id;
-          }
-          setStatus(`Panel: ${state.activePanel}`);
-          render();
+        case 'left':
+          cycleTab(-1);
           break;
-        }
-        case 'right': {
-          const currentIdx = state.PANEL_TABS.findIndex(t => t.id === state.activePanel);
-          if (currentIdx < state.PANEL_TABS.length - 1) {
-            state.activePanel = state.PANEL_TABS[currentIdx + 1].id;
-          } else if (currentIdx === -1) {
-            state.activePanel = state.PANEL_TABS[0].id;
-          }
-          setStatus(`Panel: ${state.activePanel}`);
-          render();
+        case 'right':
+          cycleTab(1);
           break;
-        }
         case 'c':
           state.inputMode = 'customizer';
           state.customizerIndex = 0;
@@ -427,9 +420,9 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
            break;
          case 'd':
 
-          state.detailed = !state.detailed;
-          setStatus(`Detailed sensor mode: ${state.detailed ? 'on' : 'off'}`);
-          break;
+           state.detailed = !state.detailed;
+           setStatus(`Detailed sensor mode: ${state.detailed ? 'on' : 'off'}`);
+           break;
         case 's':
           const sortCycle: SortMode[] = ['cpu', 'mem', 'pid', 'user', 'command', 'state', 'threads', 'runtime'];
           const curIdx = sortCycle.indexOf(state.sortMode);
@@ -466,12 +459,6 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           render();
           break;
         case 'tab':
-          cycleTab(1);
-          break;
-        case 'left':
-          cycleTab(-1);
-          break;
-        case 'right':
           cycleTab(1);
           break;
         default:
@@ -518,8 +505,8 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     const match = seq.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])/);
     if (!match) return;
     const button = parseInt(match[1]);
-    const cx = parseInt(match[2]);
-    const cy = parseInt(match[3]);
+    const cx = parseInt(match[2]) - 1;
+    const cy = parseInt(match[3]) - 1;
     if (button === 0 || button === 1) {
       handleMouseClick(cy, cx);
     }
@@ -540,6 +527,10 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     if (state.intervalHandle) {
       clearInterval(state.intervalHandle);
       state.intervalHandle = null;
+    }
+    if (state.uiIntervalHandle) {
+      clearInterval(state.uiIntervalHandle);
+      state.uiIntervalHandle = null;
     }
     if (state.statusTimer) {
       clearTimeout(state.statusTimer);

@@ -16,6 +16,7 @@ export const SIGNAL_OPTIONS = ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGHUP', 'SIGSTO
 
 const state = {
    intervalHandle: null as NodeJS.Timeout | null,
+   uiIntervalHandle: null as NodeJS.Timeout | null,
    running: false,
    paused: false,
    detailed: false,

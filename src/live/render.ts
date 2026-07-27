@@ -11,19 +11,55 @@ import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel }
 import { state, setStatus, SIGNAL_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
+// --- render caching -----------------------------------------------------------
+
+let _cachedTable = '';
+let _cachedTableData: StatsData | null = null;
+let _cachedTableParams = '';
+let _tableDataDirty = false;
+
+function invalidateTableCache() {
+  _tableDataDirty = true;
+}
+
+let _cachedGraphs = '';
+let _cachedGraphsVersion = -1;
+let _cachedGraphsParams = '';
+
+function tableCacheParams(): string {
+  const limit = processRowBudget();
+  return [
+    state.sortMode,
+    state.processFilter || '',
+    limit,
+    state.currentTheme,
+    state.activePanel,
+    state.treeView ? '1' : '0',
+    JSON.stringify(state.visiblePanels),
+  ].join('|');
+}
+
+function graphsCacheParams(): string {
+  return [
+    state.termWidth,
+    state.currentTheme,
+    state.graphMode,
+  ].join('|');
+}
+
 /**
  * How many process rows we can realistically fit given
  * current terminal height.  Computed from the number of
  * card columns and the reserved space for the header,
  * cards, graphs, and footer.
  */
-function processRowBudget(): number {
-  const columns = gridColumns(state.termWidth);
-  const visibleCards = Object.values(state.visiblePanels).filter(v => v !== false).length;
-  const cardRows = Math.ceil(visibleCards / columns);
-  const reserved = 2 + cardRows * 8 + 11 + (state.showGraphs ? 9 : 0) + 4;
-  return Math.max(3, Math.min(40, state.termHeight - reserved));
-}
+  function processRowBudget(): number {
+    const columns = gridColumns(state.termWidth);
+    const visibleCards = Object.values(state.visiblePanels).filter(v => v !== false).length;
+    const cardRows = Math.ceil(visibleCards / columns);
+    const reserved = 4 + cardRows * 8 + 8 + (state.showGraphs ? 11 : 0) + 4;
+    return Math.max(3, Math.min(40, state.termHeight - reserved));
+  }
 
 function p2pPanelLines(): { title: string; body: string[] } {
   const events = state.p2pServer ? state.p2pServer.peerEventHistory : state.p2pEvents;
@@ -81,32 +117,90 @@ function renderCustomizerOverlay(): string {
    return lines.map(l => `  ${l}`).join('\n');
  }
 
+// --- frame diffing -------------------------------------------------------
+// Instead of erasing the whole screen (`\x1b[2J`) and repainting everything
+// on every keypress/tick, we keep the previous frame's lines around and
+// only move the cursor + rewrite the lines that actually changed. A full
+// erase forces a scrollback/display invalidation in many terminals
+// (iTerm2, Windows Terminal, tmux, various SSH clients), which is what
+// made menu navigation and tab switches feel like they took a second or
+// two even though the underlying data was already cached.
+let _prevFrameLines: string[] = [];
+let _frameDirty = true; // force full paint on first render / resize
+
+function invalidateFrame() {
+  _frameDirty = true;
+}
+
+function writeFrame(lines: string[]) {
+  if (_frameDirty || _prevFrameLines.length === 0 || lines.length !== _prevFrameLines.length) {
+    process.stdout.write('\x1b[2J\x1b[H' + lines.join('\n'));
+    _prevFrameLines = lines;
+    _frameDirty = false;
+    return;
+  }
+
+  // Incremental repaint: move to each changed line and rewrite only
+  // that line, clearing to end-of-line first so shorter replacement
+  // text doesn't leave stale characters behind.
+  let out = '';
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] !== _prevFrameLines[i]) {
+      out += `\x1b[${i + 1};1H\x1b[2K${lines[i]}`;
+    }
+  }
+  if (out) process.stdout.write(out);
+  _prevFrameLines = lines;
+}
+
 function render() {
   if (!state.lastData) return;
   const lines: string[] = [];
   const theme = THEMES[state.currentTheme] || THEMES.default;
 
+  const params = tableCacheParams();
+  const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || params !== _cachedTableParams
+    ? (() => {
+        const out = formatTable(state.lastData, {
+          width: state.termWidth,
+          sortBy: state.sortMode,
+          filter: state.processFilter || undefined,
+          processLimit: processRowBudget(),
+          theme: state.currentTheme,
+          visible: state.visiblePanels,
+          treeView: state.treeView,
+          activePanel: state.activePanel,
+        });
+        _cachedTableData = state.lastData;
+        _cachedTableParams = params;
+        _cachedTable = out;
+        _tableDataDirty = false;
+        return out;
+      })()
+    : _cachedTable;
+
   if (state.activePanel === 'p2p') {
     const panelLines = p2pPanelLines();
     lines.push(...panel(panelLines.title, panelLines.body, state.termWidth, theme.process, theme.border));
   } else {
-    lines.push(
-      formatTable(state.lastData, {
-        width: state.termWidth,
-        sortBy: state.sortMode,
-        filter: state.processFilter || undefined,
-        processLimit: processRowBudget(),
-        theme: state.currentTheme,
-        visible: state.visiblePanels,
-        treeView: state.treeView,
-        activePanel: state.activePanel,
-      })
-    );
+    lines.push(tableStr);
   }
+
+  const graphsParams = graphsCacheParams();
+  const graphsStr =
+    state.history.version !== _cachedGraphsVersion || graphsParams !== _cachedGraphsParams
+      ? (() => {
+          const out = formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode);
+          _cachedGraphsVersion = state.history.version;
+          _cachedGraphsParams = graphsParams;
+          _cachedGraphs = out;
+          return out;
+        })()
+      : _cachedGraphs;
 
   if (state.showGraphs && state.activePanel !== 'p2p') {
     lines.push('');
-    lines.push(formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode));
+    lines.push(graphsStr);
   }
 
   lines.push('');
@@ -128,10 +222,9 @@ function render() {
        lines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
      } else if (state.statusMessage) {
        lines.push(`  ${state.statusMessage}`);
-    }
+     }
 
-  process.stdout.write('\x1b[2J\x1b[H');
-  process.stdout.write(lines.join('\n'));
+  writeFrame(lines.join('\n').split('\n'));
 }
 
 function footerLine(): string {
@@ -181,4 +274,4 @@ function checkAlerts(data: StatsData) {
   }
 }
 
-export { render, footerLine, renderCustomizerOverlay, checkAlerts, processRowBudget };
+export { render, footerLine, renderCustomizerOverlay, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame };

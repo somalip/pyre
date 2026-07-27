@@ -33,7 +33,7 @@ let smcCache: { data: SmcMetrics; ts: number } | null = null;
  */
 export async function getSmcMetrics(): Promise<SmcMetrics> {
   const now = Date.now();
-  if (smcCache && now - smcCache.ts < 1500) return smcCache.data;
+  if (smcCache && now - smcCache.ts < 4000) return smcCache.data;
 
   const result: SmcMetrics = { temps: {}, power: {}, freq: {} };
   try {

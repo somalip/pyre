@@ -16,6 +16,9 @@ export class History {
   /** Maximum number of samples retained in the rolling window. */
   maxLen: number;
 
+  /** Monotonically increasing version, bumped on every push. */
+  version = 0;
+
   /** Rolling window of CPU usage percentages (0–100). */
   cpuUsage: number[] = [];
 
@@ -113,6 +116,8 @@ export class History {
       if (sample.rxPackets !== undefined) this.pushBounded(this.rxPacketRate, rxPktRate);
       if (sample.txPackets !== undefined) this.pushBounded(this.txPacketRate, txPktRate);
       if (sample.connections !== undefined) this.pushBounded(this.connections, sample.connections);
+
+      this.version++;
     }
 
     /** Clear all rolling windows and reset cumulative byte counters. */
@@ -132,6 +137,7 @@ export class History {
       this.lastRxPackets = 0;
       this.lastTxPackets = 0;
       this.lastTs = 0;
+      this.version = 0;
     }
 
    /**

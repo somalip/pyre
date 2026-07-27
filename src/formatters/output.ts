@@ -104,21 +104,21 @@ export function formatGraphs(history: History, width = 80, themeName: ThemeName 
   const sparkWidth = Math.max(10, contentWidth - 28);
 
   const lines: string[] = [];
-  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, graphMode));
-  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, graphMode));
+  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode));
+  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode));
   lines.push(
     graphRow('Temp', history.temp, {}, formatTemp, sparkWidth, 'no sensor access (needs sudo powermetrics)', graphMode)
   );
-  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, graphMode));
-  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, graphMode));
+  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode));
+  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode));
   if (history.powerWatts.length) {
-    lines.push(graphRow('Power W', history.powerWatts, {}, v => `${v.toFixed(1)} W`, sparkWidth, graphMode));
+    lines.push(graphRow('Power W', history.powerWatts, {}, v => `${v.toFixed(1)} W`, sparkWidth, 'collecting data...', graphMode));
   }
   if (history.rxPacketRate.length) {
-    lines.push(graphRow('RX pkt/s', history.rxPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, graphMode));
+    lines.push(graphRow('RX pkt/s', history.rxPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode));
   }
   if (history.txPacketRate.length) {
-    lines.push(graphRow('TX pkt/s', history.txPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, graphMode));
+    lines.push(graphRow('TX pkt/s', history.txPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode));
   }
 
   const title = `Graphs · mode:${graphMode} · last ${sampleCount} sample${sampleCount === 1 ? '' : 's'}`;
@@ -151,8 +151,14 @@ function graphRow(
 }
 
 function barGraph(values: number[], bounds: { min?: number; max?: number }, width: number): string {
-  const min = bounds.min ?? Math.min(...values);
-  const max = bounds.max ?? Math.max(...values);
+  let min = bounds.min ?? Infinity;
+  let max = bounds.max ?? -Infinity;
+  if (bounds.min === undefined || bounds.max === undefined) {
+    for (const v of values) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
   const range = max - min || 1;
   return values.map(v => {
     const pct = (v - min) / range;

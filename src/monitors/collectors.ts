@@ -16,6 +16,52 @@ import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
 import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess } from './types.js';
 
+const SP_TTL_MS = 10_000;
+const NETSTAT_TTL_MS = 1000;
+const ROUTE_TTL_MS = 5_000;
+const SYSCTL_TTL_MS = 60_000;
+
+let spGpuCache: { raw: string; ts: number } | null = null;
+let spBatteryCache: { raw: string; ts: number } | null = null;
+let netstatIbCache: { raw: string; ts: number } | null = null;
+let routeCache: { iface: string; ip: string; ts: number } | null = null;
+const sysctlCache = new Map<string, { value: string; ts: number }>();
+
+async function cachedSysctl(key: string, fallback: string): Promise<string> {
+  const now = Date.now();
+  const hit = sysctlCache.get(key);
+  if (hit && now - hit.ts < SYSCTL_TTL_MS) return hit.value;
+  const value = await run(`sysctl -n ${key}`, fallback);
+  sysctlCache.set(key, { value, ts: now });
+  return value;
+}
+
+async function cachedNetstatIb(): Promise<string> {
+  const now = Date.now();
+  if (netstatIbCache && now - netstatIbCache.ts < NETSTAT_TTL_MS) return netstatIbCache.raw;
+  const raw = await run('netstat -ib');
+  netstatIbCache = { raw, ts: now };
+  return raw;
+}
+
+async function cachedRouteIface(): Promise<{ iface: string; ip: string }> {
+  const now = Date.now();
+  if (routeCache && now - routeCache.ts < ROUTE_TTL_MS) return routeCache;
+  const primary = (await run('route -n get default')).trim();
+  const ifaceMatch = primary.match(/interface:\s+(\S+)/);
+  const iface = ifaceMatch?.[1] || 'en0';
+  let ip = '0.0.0.0';
+  try {
+    const ifconfig = (await run(`ifconfig ${iface}`)).trim();
+    const ipMatch = ifconfig.match(/inet\s+([\d.]+)\s+netmask/);
+    if (ipMatch) ip = ipMatch[1];
+  } catch {
+    // ignore
+  }
+  routeCache = { iface, ip, ts: now };
+  return routeCache;
+}
+
 // Retain samples over a *time* window rather than a fixed tick count. At the
 // default 2s refresh interval the old 10-sample window only spanned ~20s,
 // but battery level only moves in whole-percent steps that typically take
@@ -178,58 +224,61 @@ export async function collectPower(): Promise<PowerData | null> {
   * Returns null when GPU data is unavailable (e.g. on machines
   * without a discrete GPU or when powermetrics is inaccessible).
   */
- export async function collectGpu(detailed?: boolean): Promise<GpuData | null> {
-   try {
-     const spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null')).trim();
-     if (!spRaw) return null;
+  export async function collectGpu(detailed?: boolean): Promise<GpuData | null> {
+    let spRaw = '';
+    const now = Date.now();
+    if (spGpuCache && now - spGpuCache.ts < SP_TTL_MS) {
+      spRaw = spGpuCache.raw;
+    } else {
+      spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null')).trim();
+      spGpuCache = { raw: spRaw, ts: now };
+    }
+    if (!spRaw) return null;
 
-     const modelMatch = spRaw.match(/Chipset Model:\s*(.+)/i);
-     const model = modelMatch ? modelMatch[1].trim() : 'Unknown';
+    const modelMatch = spRaw.match(/Chipset Model:\s*(.+)/i);
+    const model = modelMatch ? modelMatch[1].trim() : 'Unknown';
 
-     const memMatch = spRaw.match(/VRAM \(Total\):\s*(.+)/i);
-     let memory = 0;
-     if (memMatch) {
-       const memStr = memMatch[1].trim();
-       const memNum = parseFloat(memStr);
-       if (memStr.includes('GB')) memory = memNum * 1024 * 1024 * 1024;
-       else if (memStr.includes('MB')) memory = memNum * 1024 * 1024;
-     }
+    const memMatch = spRaw.match(/VRAM \(Total\):\s*(.+)/i);
+    let memory = 0;
+    if (memMatch) {
+      const memStr = memMatch[1].trim();
+      const memNum = parseFloat(memStr);
+      if (memStr.includes('GB')) memory = memNum * 1024 * 1024 * 1024;
+      else if (memStr.includes('MB')) memory = memNum * 1024 * 1024;
+    }
 
-     let utilization = 0;
-     let temperature: number | undefined;
-     let gpuProcesses = 0;
+    let utilization = 0;
+    let temperature: number | undefined;
+    let gpuProcesses = 0;
 
-     if (detailed) {
-       try {
-         const pm = (await run('sudo -n powermetrics --samplers gpu_power -n 1 --format text 2>/dev/null', '')).trim();
-         const gpuPowerMatch = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
-         if (gpuPowerMatch) {
-           utilization = Math.min(100, Math.round(parseFloat(gpuPowerMatch[1]) / 10));
-         }
-       } catch {
-         // ignore
-       }
+    if (detailed) {
+      try {
+        const pm = (await run('sudo -n powermetrics --samplers gpu_power -n 1 --format text 2>/dev/null', '')).trim();
+        const gpuPowerMatch = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
+        if (gpuPowerMatch) {
+          utilization = Math.min(100, Math.round(parseFloat(gpuPowerMatch[1]) / 10));
+        }
+      } catch {
+        // ignore
+      }
 
-       try {
-         const { temps } = await getSmcMetrics();
-         if (temps.gpu_die !== undefined) temperature = temps.gpu_die;
-       } catch {
-         // ignore
-       }
+      try {
+        const { temps } = await getSmcMetrics();
+        if (temps.gpu_die !== undefined) temperature = temps.gpu_die;
+      } catch {
+        // ignore
+      }
 
-       try {
-         const psRaw = (await run('ps aux | grep -i "[g]pu" | wc -l')).trim();
-         gpuProcesses = parseInt(psRaw) || 0;
-       } catch {
-         // ignore
-       }
-     }
+      try {
+        const psRaw = (await run('ps aux | grep -i "[g]pu" | wc -l')).trim();
+        gpuProcesses = parseInt(psRaw) || 0;
+      } catch {
+        // ignore
+      }
+    }
 
-     return { model, memory, utilization, temperature, processes: gpuProcesses };
-   } catch {
-     return null;
-   }
- }
+    return { model, memory, utilization, temperature, processes: gpuProcesses };
+  }
 
 async function collectSystem(): Promise<{ hostname: string; os: string; uptime: string }> {
   const hostname = (await run('hostname', 'Mac')).trim();
@@ -244,28 +293,21 @@ async function collectSystem(): Promise<{ hostname: string; os: string; uptime: 
 }
 
 export async function collectCpu(): Promise<CpuData> {
-  const brand = (await run('sysctl -n machdep.cpu.brand_string', 'Unknown CPU')).trim();
-  const cores = parseInt((await run('sysctl -n hw.ncpu')).trim()) || 1;
-  const physicalCores = parseInt((await run('sysctl -n hw.physicalcpu')).trim()) || cores;
-  const frequencyHz = parseInt((await run('sysctl -n hw.cpufrequency')).trim());
+  const brand = (await cachedSysctl('machdep.cpu.brand_string', 'Unknown CPU')).trim();
+  const cores = parseInt(await cachedSysctl('hw.ncpu', '1')) || 1;
+  const physicalCores = parseInt(await cachedSysctl('hw.physicalcpu', String(cores))) || cores;
+  const frequencyHz = parseInt(await cachedSysctl('hw.cpufrequency', '0'));
   let frequency = frequencyHz > 0 ? Math.round(frequencyHz / 1_000_000) : 0;
 
   if (frequency === 0) {
-    // hw.cpufrequency is an Intel-era sysctl. On Apple Silicon it's either
-    // absent or reads back 0, so frequency was silently stuck at 0 MHz on
-    // every M-series Mac. powermetrics reports the actual active clock speed
-    // per core cluster (E/P-cluster) instead — reuse the same cached call
-    // already used for temperature/power rather than shelling out again.
     try {
       const { freq } = await getSmcMetrics();
       const values = Object.values(freq);
       if (values.length) {
-        // powermetrics reports in Hz, system profiler reports in MHz.
-        // We need MHz for the display.
         frequency = Math.round(Math.max(...values) / 1_000_000);
       }
     } catch {
-      // ignore — frequency stays 0, meaning "unavailable" rather than wrong
+      // ignore — frequency stays 0
     }
   }
 
@@ -300,8 +342,8 @@ export async function collectCpu(): Promise<CpuData> {
 }
 
 export async function collectMemory(): Promise<MemoryData> {
-  const totalBytes = parseInt((await run('sysctl -n hw.memsize')).trim()) || 0;
-  const pageSize = parseInt((await run('sysctl -n hw.pagesize', '4096')).trim()) || 4096;
+  const totalBytes = parseInt(await cachedSysctl('hw.memsize', '0')) || 0;
+  const pageSize = parseInt(await cachedSysctl('hw.pagesize', '4096')) || 4096;
 
   const vmStat = (await run('vm_stat')).trim();
   const getPageCount = (label: string) => {
@@ -390,7 +432,14 @@ export async function collectBattery(): Promise<BatteryData | null> {
     let maxCapacityPercent: number | undefined;
 
     try {
-      const battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null')).trim();
+      const now = Date.now();
+      let battInfo: string;
+      if (spBatteryCache && now - spBatteryCache.ts < SP_TTL_MS) {
+        battInfo = spBatteryCache.raw;
+      } else {
+        battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null')).trim();
+        spBatteryCache = { raw: battInfo, ts: now };
+      }
 
       const cycleMatch = battInfo.match(/Cycle Count:\s+(\d+)/);
       if (cycleMatch) cycles = parseInt(cycleMatch[1]);
@@ -530,20 +579,8 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
 
 export async function collectNetwork(): Promise<NetworkData> {
   try {
-    const primary = (await run('route -n get default')).trim();
-    const ifaceMatch = primary.match(/interface:\s+(\S+)/);
-    const iface = ifaceMatch?.[1] || 'en0';
-
-    let ip = '0.0.0.0';
-    try {
-      const ifconfig = (await run(`ifconfig ${iface}`)).trim();
-      const ipMatch = ifconfig.match(/inet\s+([\d.]+)\s+netmask/);
-      if (ipMatch) ip = ipMatch[1];
-    } catch {
-      // ignore
-    }
-
-    const netStat = (await run('netstat -ib')).trim();
+    const { iface, ip } = await cachedRouteIface();
+    const netStat = await cachedNetstatIb();
     let rxBytes = 0;
     let txBytes = 0;
     let rxPackets = 0;
@@ -590,7 +627,7 @@ export async function collectProcesses(limit?: number): Promise<ProcessData[]> {
 
 export async function collectPackets(): Promise<PacketData | null> {
    try {
-     const netStat = (await run('netstat -ib')).trim();
+     const netStat = await cachedNetstatIb();
      const lines = netStat.split('\n').slice(1);
      let totalRxPackets = 0;
      let totalTxPackets = 0;
@@ -626,26 +663,18 @@ export async function collectPackets(): Promise<PacketData | null> {
 
      let topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[] = [];
      let allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[] = [];
-     try {
-         const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
-        const lsofLines = lsof.split('\n');
-        topProcesses = lsofLines.map(line => {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 3) {
-            return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
-          }
-          return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
-        }).filter(p => p.pid > 0);
+       try {
+          const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
+         const lsofLines = lsof.split('\n');
+         topProcesses = lsofLines.map(line => {
+           const parts = line.trim().split(/\s+/);
+           if (parts.length >= 3) {
+             return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
+           }
+           return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
+         }).filter(p => p.pid > 0);
 
-        const allLsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
-        const allLsofLines = allLsof.split('\n');
-        allProcesses = allLsofLines.map(line => {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 3) {
-            return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
-          }
-          return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
-        }).filter(p => p.pid > 0);
+         allProcesses = topProcesses;
      } catch {
        topProcesses = [];
        allProcesses = [];

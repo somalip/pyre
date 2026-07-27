@@ -56,7 +56,7 @@ export function panel(
 }
 
 /** Join equal-or-uneven-height panel blocks side by side with a gap. */
-function hstack(blocks: string[][], gap = 2): string[] {
+function hstack(blocks: string[][], gap = 2, targetWidth?: number): string[] {
   if (!blocks.length) return [];
   const height = Math.max(...blocks.map(b => b.length));
   const widths = blocks.map(b => visLen(b[0] ?? ''));
@@ -68,7 +68,12 @@ function hstack(blocks: string[][], gap = 2): string[] {
   });
   const out: string[] = [];
   for (let row = 0; row < height; row++) {
-    out.push(padded.map(a => a[row]).join(' '.repeat(gap)));
+    let line = padded.map(a => a[row]).join(' '.repeat(gap));
+    if (targetWidth !== undefined) {
+      const pad = Math.max(0, targetWidth - visLen(line));
+      line += ' '.repeat(pad);
+    }
+    out.push(line);
   }
   return out;
 }
@@ -393,36 +398,54 @@ function processTableLines(
    return `${hrs}h ${mins % 60}m`;
  }
 
- function buildProcessTree(
+function buildProcessTree(
    processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[]
- ): string[] {
+  ): string[] {
    const map = new Map<number, typeof processes[0]>();
    const roots: typeof processes[0][] = [];
    for (const p of processes) map.set(p.pid, p);
    for (const p of processes) {
      if (p.ppid === 0 || !map.has(p.ppid)) roots.push(p);
    }
-   const lines: string[] = [];
-   const visited = new Set<number>();
-   function renderNode(proc: typeof processes[0], prefix: string, isLast: boolean) {
-     if (visited.has(proc.pid)) return;
-     visited.add(proc.pid);
-     const connector = isLast ? '└── ' : '├── ';
-    const pidStr = String(proc.pid).padEnd(8);
-      const cpuStr = pctColor(proc.cpu)(`${proc.cpu.toFixed(1)}%`.padEnd(8));
-      const memStr = pctColor(proc.mem)(`${proc.mem.toFixed(1)}%`.padEnd(8));
-      const stateStr = chalk.dim(proc.state.padEnd(8));
-      const thrStr = String(proc.threads).padEnd(6);
 
-     const cmd = truncatePlain(proc.command, Math.max(10, 100 - pidStr.length - cpuStr.length - memStr.length - stateStr.length - thrStr.length - 10));
-     lines.push(`${prefix}${connector}${pidStr}${cpuStr}${memStr}${stateStr}${thrStr} ${cmd}`);
-     const children = processes.filter(p => p.ppid === proc.pid && !visited.has(p.pid));
-     children.sort((a, b) => b.cpu - a.cpu);
-     children.forEach((child, i) => {
-       const nextPrefix = prefix + (isLast ? '    ' : '│   ');
-       renderNode(child, nextPrefix, i === children.length - 1);
-     });
+   const childrenMap = new Map<number, typeof processes[0][]>();
+   for (const p of processes) {
+     const list = childrenMap.get(p.ppid) || [];
+     list.push(p);
+     childrenMap.set(p.ppid, list);
    }
+   for (const list of childrenMap.values()) {
+     list.sort((a, b) => b.cpu - a.cpu);
+   }
+
+    const lines: string[] = [];
+    const visited = new Set<number>();
+    function renderNode(proc: typeof processes[0], prefix: string, isLast: boolean) {
+      if (visited.has(proc.pid)) return;
+      visited.add(proc.pid);
+      const connector = isLast ? '└── ' : '├── ';
+     const pidStr = String(proc.pid).padEnd(8);
+       const cpuStr = pctColor(proc.cpu)(`${proc.cpu.toFixed(1)}%`.padEnd(8));
+       const memStr = pctColor(proc.mem)(`${proc.mem.toFixed(1)}%`.padEnd(8));
+       const stateStr = chalk.dim(proc.state.padEnd(8));
+       const thrStr = String(proc.threads).padEnd(6);
+
+      const cmd = truncatePlain(proc.command, Math.max(10, 100 - pidStr.length - cpuStr.length - memStr.length - stateStr.length - thrStr.length - 10));
+      lines.push(`${prefix}${connector}${pidStr}${cpuStr}${memStr}${stateStr}${thrStr} ${cmd}`);
+      const children = childrenMap.get(proc.pid);
+      if (children) {
+        let idx = 0;
+        let total = 0;
+        for (const c of children) {
+          if (!visited.has(c.pid)) total++;
+        }
+        for (const child of children) {
+          if (visited.has(child.pid)) continue;
+          const nextPrefix = prefix + (isLast ? '    ' : '│   ');
+          renderNode(child, nextPrefix, ++idx === total);
+        }
+      }
+    }
    roots.sort((a, b) => b.cpu - a.cpu);
    roots.forEach((root, i) => renderNode(root, '', i === roots.length - 1));
    return lines;
@@ -601,13 +624,13 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     if (tasks) cards.push({ title: 'Tasks', accent: theme.process, lines: tasks });
   }
 
-  for (let i = 0; i < cards.length; i += columns) {
-    const row = cards.slice(i, i + columns);
-    const rowHeight = Math.max(...row.map(c => c.lines.length));
-    const blocks = row.map(c => panel(c.title, c.lines, cardWidth, c.accent, theme.border, rowHeight));
-    out.push(...hstack(blocks, gap));
-    out.push('');
-  }
+   for (let i = 0; i < cards.length; i += columns) {
+     const row = cards.slice(i, i + columns);
+     const rowHeight = Math.max(...row.map(c => c.lines.length));
+     const blocks = row.map(c => panel(c.title, c.lines, cardWidth, c.accent, theme.border, rowHeight));
+     out.push(...hstack(blocks, gap, width));
+     out.push('');
+   }
 
   if (vis.disk !== false && data.disk.length) {
     const dw = width - 4;

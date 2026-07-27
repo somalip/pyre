@@ -20,8 +20,14 @@ const BLOCKS = '▁▂▃▄▅▆▇█';
  */
 export function sparkline(values: number[], opts: { min?: number; max?: number } = {}): string {
   if (!values.length) return '';
-  const min = opts.min ?? Math.min(...values);
-  const max = opts.max ?? Math.max(...values);
+  let min = opts.min ?? Infinity;
+  let max = opts.max ?? -Infinity;
+  if (opts.min === undefined || opts.max === undefined) {
+    for (const v of values) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
   const range = max - min || 1;
 
   return values
