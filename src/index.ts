@@ -69,14 +69,14 @@ async function main() {
     if (cmd === 'live') {
       program.args.shift();
     }
-    await showSplash();
+    const splashPromise = showSplash();
     const interval = parseFloat(opts.interval) || 2;
     await startLive({
       interval,
       detailed: opts.detailed,
       exportDir: opts.exportDir,
       autoLog: opts.log,
-    });
+    }, splashPromise);
     return;
   }
 

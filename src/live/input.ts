@@ -199,6 +199,33 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    state.intervalHandle = setInterval(tick, state.interval * 1000);
  }
 
+  async function doWarmup() {
+    try {
+      const data = await collectAll({ detailed: state.detailed, processLimit: processRowBudget() });
+      state.lastData = data;
+
+      const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
+      state.history.push({
+        cpuUsage: data.cpu.usage,
+        memUsage: data.memory.usagePercent,
+        temp,
+        rxBytes: data.network.rxBytes,
+        txBytes: data.network.txBytes,
+        gpuUtil: data.gpu?.utilization,
+        powerWatts: data.power?.combinedWatts ?? data.power?.cpuWatts ?? 0,
+        rxPackets: data.network.rxPackets,
+        txPackets: data.network.txPackets,
+        connections: data.network.connections ?? 0,
+      });
+
+      writeLogRow(data);
+      checkAlerts(data);
+      syncP2PEvents();
+    } catch {
+      // skip bad warmup
+    }
+  }
+
   async function tick() {
     if (state.paused) return;
     try {
@@ -235,7 +262,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   * rendering interval.  Idempotent — calling while already
   * running is a no-op.
   */
-  export async function startLive(opts: LiveOptions) {
+  export async function startLive(opts: LiveOptions, splashPromise?: Promise<void>) {
     if (state.running) return;
     state.running = true;
     state.paused = false;
@@ -247,6 +274,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     state.history.reset();
     state.history.setMaxLen(Math.max(20, Math.min(200, state.termWidth - 30)));
 
+    const warmupPromise = doWarmup();
+
+    if (splashPromise) {
+      await splashPromise;
+    }
+
     process.stdout.write('\x1b[?1049h');
     process.stdout.write('\x1b[?25l');
     process.stdout.write('\x1b[2J\x1b[H');
@@ -256,7 +289,9 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
       process.stdout.write('\x1b[?1000h');
     }
 
-    await tick();
+    await warmupPromise;
+    render();
+
     restartTicker();
 
     if (opts.autoLog) startLogging();
