@@ -1,6 +1,6 @@
 {
-  "name": "@somalip/pyre",
-  "version": "1.1.0",
+  "name": "pyre-cli",
+  "version": "1.3.0",
   "description": "CLI Mac monitoring tool: temps, system stats, live dashboard, and export",
   "main": "dist/index.js",
   "type": "module",

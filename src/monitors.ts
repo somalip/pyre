@@ -106,6 +106,7 @@ async function run(cmd: string, fallback: string = ''): Promise<string> {
 interface SmcMetrics {
   temps: Record<string, number>;
   power: { cpu?: number; gpu?: number; combined?: number };
+  freq: Record<string, number>;
 }
 
 let smcCache: { data: SmcMetrics; ts: number } | null = null;
@@ -114,7 +115,7 @@ async function getSmcMetrics(): Promise<SmcMetrics> {
   const now = Date.now();
   if (smcCache && now - smcCache.ts < 1500) return smcCache.data;
 
-  const result: SmcMetrics = { temps: {}, power: {} };
+  const result: SmcMetrics = { temps: {}, power: {}, freq: {} };
   try {
     // `sudo -n` (non-interactive) so we never hang waiting on a password
     // prompt that can't be answered from a piped child process; if the user
@@ -145,10 +146,23 @@ async function getSmcMetrics(): Promise<SmcMetrics> {
 
       const combinedPower = pm.match(/Combined Power \(CPU \+ GPU.*?\):\s*([\d.]+)\s*mW/i);
       if (combinedPower) result.power.combined = parseFloat(combinedPower[1]) / 1000;
+
+      // Apple Silicon reports active clock speed per core cluster rather
+      // than a single number — grab whichever cluster(s) this chip has.
+      const eFreq = pm.match(/E-Cluster HW active frequency:\s*([\d.]+)/i);
+      if (eFreq) result.freq['e_cluster'] = parseFloat(eFreq[1]);
+
+      const pFreq = pm.match(/P-Cluster HW active frequency:\s*([\d.]+)/i);
+      if (pFreq) result.freq['p_cluster'] = parseFloat(pFreq[1]);
+
+      // Some single-cluster/older chips report just "CPU HW active frequency".
+      const cpuFreq = pm.match(/CPU HW active frequency:\s*([\d.]+)/i);
+      if (cpuFreq) result.freq['cpu'] = parseFloat(cpuFreq[1]);
     }
   } catch {
-    // powermetrics unavailable/unauthorized — leave temps/power empty, the
-    // rest of the app degrades gracefully (thermal state string still shows).
+    // powermetrics unavailable/unauthorized — leave temps/power/freq empty,
+    // the rest of the app degrades gracefully (thermal state string still
+    // shows, and CPU frequency falls back to 0/"unavailable").
   }
 
   smcCache = { data: result, ts: now };
@@ -225,7 +239,22 @@ export async function collectCpu(): Promise<CpuData> {
   const cores = parseInt((await run('sysctl -n hw.ncpu')).trim()) || 1;
   const physicalCores = parseInt((await run('sysctl -n hw.physicalcpu')).trim()) || cores;
   const frequencyHz = parseInt((await run('sysctl -n hw.cpufrequency')).trim());
-  const frequency = frequencyHz > 0 ? Math.round(frequencyHz / 1_000_000) : 0;
+  let frequency = frequencyHz > 0 ? Math.round(frequencyHz / 1_000_000) : 0;
+
+  if (frequency === 0) {
+    // hw.cpufrequency is an Intel-era sysctl. On Apple Silicon it's either
+    // absent or reads back 0, so frequency was silently stuck at 0 MHz on
+    // every M-series Mac. powermetrics reports the actual active clock speed
+    // per core cluster (E/P-cluster) instead — reuse the same cached call
+    // already used for temperature/power rather than shelling out again.
+    try {
+      const { freq } = await getSmcMetrics();
+      const values = Object.values(freq);
+      if (values.length) frequency = Math.round(Math.max(...values));
+    } catch {
+      // ignore — frequency stays 0, meaning "unavailable" rather than wrong
+    }
+  }
 
   let usage = 0;
   try {

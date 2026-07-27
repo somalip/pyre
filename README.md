@@ -10,7 +10,7 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, an
 
 ### npm
 ```bash
-npm install -g @somalip/pyre
+npm install -g pyre-cli
 ```
 
 ### curl
