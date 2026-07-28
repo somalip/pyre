@@ -197,6 +197,30 @@ The client connects to the server, authenticates with the password, and displays
 | `--p2p-audit-log <dir>` | Directory for P2P client audit logs |
 | `--p2p-hmac-key <key>` | HMAC key for message signing (must match server) |
 
+### Same local network (LAN)
+
+Both machines must be connected to the same local network (same WiFi or wired subnet). The server listens on `0.0.0.0` (all interfaces) by default, so any device on the LAN can reach it as long as the port is reachable.
+
+On the **server machine**, find its local IP address:
+
+```bash
+hostname -I
+# or
+ifconfig | grep "inet " | grep -v 127.0.0
+```
+
+Use the server's local IP (for example `192.168.1.25`) in the client command:
+
+```bash
+pyre p2p connect --p2p-host 192.168.1.25 --p2p-port 9876 --p2p-password mysecret
+```
+
+**Troubleshooting**
+
+- If the client cannot reach the server, confirm both machines are on the same subnet (ping the server IP from the client).
+- Verify the port is open (no local firewall blocking TCP `9876`).
+- Never expose the server directly to the public internet; it is designed for LAN use only.
+
 ### P2P Protocol
 
 The P2P connection uses a length-prefixed JSON protocol over TCP with HMAC-SHA256 message signing:

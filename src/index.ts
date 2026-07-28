@@ -38,7 +38,7 @@ program
     .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu')
     .option('--packets', 'Include packet monitor panel in output')
     .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10')
-    .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)', '0.0.0.0')
+    .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)')
     .option('--p2p-port <port>', 'P2P port number', '9876')
     .option('--p2p-password <password>', 'Password for P2P authentication')
     .option('--p2p-tls', 'Enable TLS encryption for P2P connections')

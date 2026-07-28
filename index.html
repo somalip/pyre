@@ -218,14 +218,13 @@
   </nav>
 
   <div class="wrap">
-    <div class="steps" id="steps">
+<div class="steps" id="steps">
       <div class="step-pip" data-step="0"><span>01 · sensor</span><div class="bar"></div></div>
       <div class="step-pip" data-step="1"><span>02 · appearance</span><div class="bar"></div></div>
       <div class="step-pip" data-step="2"><span>03 · behavior</span><div class="bar"></div></div>
-    <div class="step-pip" data-step="3"><span>04 · p2p server</span><div class="bar"></div></div>
-    <div class="step-pip" data-step="4"><span>05 · security</span><div class="bar"></div></div>
-    <div class="step-pip" data-step="5"><span>06 · review</span><div class="bar"></div></div>
-    </div>
+      <div class="step-pip" data-step="3"><span>04 · p2p server</span><div class="bar"></div></div>
+      <div class="step-pip" data-step="4"><span>05 · review</span><div class="bar"></div></div>
+      </div>
 
     <main>
       <section class="panel" data-panel="0">
@@ -342,26 +341,10 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
         </div>
       </section>
 
-      <section class="panel" data-panel="3">
+<section class="panel" data-panel="3">
         <div class="eyebrow">p2p server</div>
-        <h2>Configure P2P live streaming</h2>
-        <p class="lead">Stream live system stats to another machine over TCP with password authentication,
-          TLS encryption, rate limiting, and IP filtering.</p>
-
-        <div class="card">
-          <h3>CLIENT CONNECT</h3>
-          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server. The server IP below was auto-detected from your network.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
-            <pre id="p2p-client-cmd">pyre p2p connect \
-  --p2p-host &lt;server-ip&gt; \
-  --p2p-port 9876 \
-  --p2p-password mysecret</pre>
-          </div>
-          <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok); margin-top:8px">
-            ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP shown above.
-          </div>
-        </div>
+        <h2>Set up the P2P server</h2>
+        <p class="lead">Configure the server, then connect from another machine using the command shown below.</p>
 
         <div class="card">
           <h3>SERVER SETTINGS</h3>
@@ -377,180 +360,28 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
             <span class="lbl">Port <b id="p2pPortOut">9876</b></span>
             <input type="number" id="p2pPort" value="9876" placeholder="9876">
           </label>
-          <label class="field">
-            <span class="lbl">Data interval <b id="p2pIntervalOut">2s</b></span>
-            <input type="range" id="p2pInterval" min="1" max="30" step="1" value="2">
-          </label>
         </div>
 
         <div class="card">
-          <h3>SECURITY</h3>
-          <div class="toggle-row">
-             <div>
-               <div class="t-label">Enable TLS encryption</div>
-               <div class="t-desc">Encrypt all traffic. Requires cert and key files.</div>
-             </div>
-             <div class="switch" id="toggle-p2p-tls"></div>
-           </div>
-           <div class="tls-fields" id="tlsFields">
-             <label class="field">
-               <span class="lbl">TLS cert file (PEM)</span>
-               <input type="text" id="p2pCert" value="" placeholder="/path/to/server.crt">
-             </label>
-             <label class="field">
-               <span class="lbl">TLS key file (PEM)</span>
-               <input type="text" id="p2pKey" value="" placeholder="/path/to/server.key">
-             </label>
-           </div>
-           <div class="toggle-row">
-             <div>
-               <div class="t-label">Challenge-response auth</div>
-               <div class="t-desc">Server sends a nonce; client responds with SHA-256(password + nonce). Password never sent in plaintext.</div>
-             </div>
-             <div class="switch on" id="toggle-p2p-challenge" style="cursor:default;opacity:0.7"></div>
-           </div>
-           <div class="toggle-row">
-             <div>
-               <div class="t-label">HMAC message signing</div>
-               <div class="t-desc">Every message is signed with HMAC-SHA256 to prevent tampering.</div>
-             </div>
-             <div class="switch on" id="toggle-p2p-hmac" style="cursor:default;opacity:0.7"></div>
-           </div>
-           <label class="field">
-             <span class="lbl">Rate limit (auth attempts per IP per minute)</span>
-             <input type="number" id="p2pRateLimit" value="5" placeholder="5">
-           </label>
-           <label class="field">
-             <span class="lbl">Allowed IPs (comma-separated, empty = all)</span>
-             <input type="text" id="p2pAllow" value="" placeholder="192.168.1.0/24, 10.0.0.1">
-           </label>
-           <label class="field">
-             <span class="lbl">Denied IPs (comma-separated)</span>
-             <input type="text" id="p2pDeny" value="" placeholder="192.168.1.100, 10.0.0.50">
-           </label>
-           <label class="field">
-             <span class="lbl">Audit log directory</span>
-             <input type="text" id="p2pAuditLog" value="" placeholder="./p2p-logs">
-           </label>
-         </div>
-      </section>
-
-      <section class="panel" data-panel="4">
-        <div class="eyebrow">security</div>
-        <h2>Security architecture</h2>
-        <p class="lead">The P2P system includes multiple layers of defense. Each feature can be toggled on or off depending on your threat model and deployment environment.</p>
-
-        <div class="card">
-          <h3>challenge-response authentication</h3>
-          <p class="lead" style="margin-bottom:14px">Passwords are never transmitted over the wire. The server generates a random nonce and sends it to the client. The client computes SHA-256(password + nonce) and sends the hash back. The server verifies the hash without ever seeing the plaintext password.</p>
+          <h3>CONNECT FROM CLIENT</h3>
+          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server.</p>
           <div class="code-box">
-            <button class="copy-btn" data-copy="auth-flow">copy</button>
-            <pre id="auth-flow"><span class="dim">// server sends nonce to client</span>
-nonce = generateRandomNonce()
-
-<span class="dim">// client computes response</span>
-response = SHA256(password + nonce)
-
-<span class="dim">// server verifies</span>
-expected = SHA256(storedPasswordHash + nonce)
-valid = (response === expected)</pre>
+            <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
+            <pre id="p2p-client-cmd">pyre p2p connect \
+  --p2p-host &lt;server-ip&gt; \
+  --p2p-port 9876 \
+  --p2p-password mysecret</pre>
           </div>
-        </div>
-
-        <div class="card">
-          <h3>HMAC message signing</h3>
-          <p class="lead" style="margin-bottom:14px">Every message exchanged between client and server is signed with HMAC-SHA256 using a key derived from the password. This ensures message integrity — any tampering with the payload is detected immediately.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="hmac-flow">copy</button>
-            <pre id="hmac-flow"><span class="dim">// key derived from password</span>
-hmacKey = SHA256(password).slice(0, 32)
-
-<span class="dim">// each message is signed</span>
-signature = HMAC-SHA256(hmacKey, canonicalJSON(payload))
-
-<span class="dim">// receiver verifies</span>
-expected = HMAC-SHA256(hmacKey, canonicalJSON(payload))
-valid = (signature === expected)</pre>
+          <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok); margin-top:8px">
+            ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP shown above.
           </div>
-        </div>
-
-        <div class="card">
-          <h3>TLS encryption</h3>
-          <p class="lead" style="margin-bottom:14px">All traffic can be encrypted using TLS 1.3. The server presents a certificate signed by a trusted CA, and the client verifies it before exchanging any data. Self-signed certificates are supported for development environments.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="tls-flow">copy</button>
-            <pre id="tls-flow"><span class="dim">// server with TLS</span>
-pyre p2p server --p2p-tls \
-  --p2p-cert /path/to/server.crt \
-  --p2p-key  /path/to/server.key
-
-<span class="dim">// client connecting to TLS server</span>
-pyre p2p connect --p2p-tls \
-  --p2p-ca /path/to/ca.crt \
-  --p2p-host 203.0.113.42 \
-  --p2p-port 9876</pre>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>rate limiting</h3>
-          <p class="lead" style="margin-bottom:14px">Authentication attempts are throttled per IP address. After exceeding the configured limit, the IP is temporarily blocked from further connection attempts. This prevents brute-force password guessing.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="rate-flow">copy</button>
-            <pre id="rate-flow"><span class="dim">// limit: 5 attempts per IP per minute</span>
-pyre p2p server --p2p-rate-limit 5
-
-<span class="dim">// in production, consider a lower limit</span>
-pyre p2p server --p2p-rate-limit 3</pre>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>IP filtering</h3>
-          <p class="lead" style="margin-bottom:14px">Allow and deny lists restrict which IPs or subnets can connect to the P2P server. Deny rules take precedence over allow rules. CIDR notation is supported for subnet filtering.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="ip-flow">copy</button>
-            <pre id="ip-flow"><span class="dim">// allow only specific subnet, deny a known bad actor</span>
-pyre p2p server \
-  --p2p-allow "192.168.1.0/24,10.0.0.5" \
-  --p2p-deny  "203.0.113.99"
-
-<span class="dim">// allow all (default when lists are empty)</span>
-pyre p2p server --p2p-allow "" --p2p-deny ""</pre>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>audit logging</h3>
-          <p class="lead" style="margin-bottom:14px">Every connection attempt, authentication event, and message exchange is logged to a configurable directory. Logs include timestamps, source IPs, and event types — useful for incident response and compliance.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="audit-flow">copy</button>
-            <pre id="audit-flow"><span class="dim">// log to a dedicated directory</span>
-pyre p2p server --p2p-audit-log ./p2p-logs
-
-<span class="dim">// sample log entry</span>
-[2026-07-27T10:13:04Z] AUTH_SUCCESS ip=203.0.113.42
-[2026-07-27T10:13:05Z] MSG_SENT ip=203.0.113.42 type=stats
-[2026-07-27T10:13:06Z] AUTH_FAILED ip=198.51.100.7 reason=invalid_password</pre>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>best practices</h3>
-          <div class="checklist">
-            <div><span class="ok">✓</span> Always enable TLS in production environments</div>
-            <div><span class="ok">✓</span> Use challenge-response auth — never send plaintext passwords</div>
-            <div><span class="ok">✓</span> Enable HMAC signing to detect message tampering</div>
-            <div><span class="ok">✓</span> Set rate limiting to at least 3 attempts per minute</div>
-            <div><span class="ok">✓</span> Use IP allow lists to restrict access to known peers</div>
-            <div><span class="ok">✓</span> Enable audit logging for compliance and monitoring</div>
-            <div><span class="ok">✓</span> Rotate HMAC keys and passwords periodically</div>
-            <div><span class="ok">✓</span> Store TLS certificates and keys with restricted file permissions (chmod 600)</div>
+          <div class="note" style="margin-top:8px">
+            Both machines must be on the <b>same local network (same Wi-Fi / subnet)</b>. Never expose this server to the public internet.
           </div>
         </div>
       </section>
 
-      <section class="panel" data-panel="5">
+      <section class="panel" data-panel="4">
         <div class="eyebrow">all set</div>
         <h2>Your setup, ready to launch</h2>
         <p class="lead">Copy the commands below to start pyre with everything you just configured.</p>
@@ -568,7 +399,7 @@ pyre p2p server --p2p-audit-log ./p2p-logs
           <h3>P2P SERVER</h3>
           <div class="code-box">
             <button class="copy-btn" data-copy="p2p-cmd">copy</button>
-            <pre id="p2p-cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret --p2p-audit-log ./p2p-logs</pre>
+            <pre id="p2p-cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret</pre>
           </div>
           <p class="note">Clients connect with: <b id="p2pConnectCmd">pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-port 9876 --p2p-password mysecret</b></p>
         </div>
@@ -578,7 +409,7 @@ pyre p2p server --p2p-audit-log ./p2p-logs
           <div class="code-box">
             <button class="copy-btn" data-copy="alias-cmd">copy</button>
             <pre id="alias-cmd">echo 'alias pyre-live="pyre live --interval 2 --export-dir ./pyre-exports"' >> ~/.zshrc
-echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret --p2p-audit-log ./p2p-logs"' >> ~/.zshrc</pre>
+echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret"' >> ~/.zshrc</pre>
           </div>
         </div>
 
@@ -590,7 +421,6 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
             <div><span id="chk-interval-ok">○</span> Refresh interval: <span id="chk-interval">2s</span></div>
             <div><span id="chk-dir-ok">○</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
             <div><span id="chk-p2p">○</span> P2P password set</div>
-            <div><span id="chk-p2p-tls">○</span> TLS configured</div>
           </div>
         </div>
       </section>
@@ -720,20 +550,9 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       autoLog: false,
       detailed: false,
       p2p: {
-        enabled: true,
         password: 'mysecret',
         host: '0.0.0.0',
         port: '9876',
-        interval: 2,
-        tls: false,
-        cert: '',
-        key: '',
-        challenge: true,
-        hmac: true,
-        rateLimit: '5',
-        allow: '',
-        deny: '',
-        auditLog: './p2p-logs',
       }
     };
 
@@ -757,17 +576,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
     function buildP2PCmd(){
       const p = state.p2p;
-      const parts = ['pyre p2p server', `--p2p-host ${p.host || '0.0.0.0'}`, `--p2p-port ${p.port}`, `--p2p-password ${p.password}`, `--p2p-rate-limit ${p.rateLimit}`];
-      if(p.interval !== 2) parts.push(`--interval ${p.interval}`);
-      if(p.tls){
-        parts.push('--p2p-tls');
-        if(p.cert) parts.push(`--p2p-cert ${p.cert}`);
-        if(p.key) parts.push(`--p2p-key ${p.key}`);
-      }
-      if(p.allow) parts.push(`--p2p-allow ${p.allow}`);
-      if(p.deny) parts.push(`--p2p-deny ${p.deny}`);
-      if(p.auditLog) parts.push(`--p2p-audit-log ${p.auditLog}`);
-      return parts.join(' ');
+      return `pyre p2p server --p2p-host ${p.host || '0.0.0.0'} --p2p-port ${p.port} --p2p-password ${p.password}`;
     }
 
     function updateReview(){
@@ -791,11 +600,9 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       document.getElementById('chk-dir-ok').className = 'ok';
       document.getElementById('chk-sudo').textContent = state.sudoDone ? '✓' : '○';
       document.getElementById('chk-sudo').className = state.sudoDone ? 'ok' : '';
-      document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
-      document.getElementById('chk-p2p').className = state.p2p.password ? 'ok' : '';
-      document.getElementById('chk-p2p-tls').textContent = state.p2p.tls ? '✓' : '○';
-      document.getElementById('chk-p2p-tls').className = state.p2p.tls ? 'ok' : '';
-      document.getElementById('p2p-cmd').textContent = buildP2PCmd();
+document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
+       document.getElementById('chk-p2p').className = state.p2p.password ? 'ok' : '';
+       document.getElementById('p2p-cmd').textContent = buildP2PCmd();
       document.getElementById('p2pConnectCmd').textContent =
         `pyre p2p connect --p2p-host <server-ip> --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
     }
@@ -884,29 +691,6 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     p2pPort.addEventListener('input', (e) => {
       state.p2p.port = e.target.value || '9876';
       document.getElementById('p2pPortOut').textContent = state.p2p.port;
-    });
-    const p2pInterval = document.getElementById('p2pInterval');
-    p2pInterval.addEventListener('input', () => {
-      state.p2p.interval = parseInt(p2pInterval.value, 10) || 2;
-      document.getElementById('p2pIntervalOut').textContent = state.p2p.interval + 's';
-    });
-    const p2pCert = document.getElementById('p2pCert');
-    p2pCert.addEventListener('input', (e) => { state.p2p.cert = e.target.value; });
-    const p2pKey = document.getElementById('p2pKey');
-    p2pKey.addEventListener('input', (e) => { state.p2p.key = e.target.value; });
-    const p2pRateLimit = document.getElementById('p2pRateLimit');
-    p2pRateLimit.addEventListener('input', (e) => { state.p2p.rateLimit = e.target.value || '5'; });
-    const p2pAllow = document.getElementById('p2pAllow');
-    p2pAllow.addEventListener('input', (e) => { state.p2p.allow = e.target.value; });
-    const p2pDeny = document.getElementById('p2pDeny');
-    p2pDeny.addEventListener('input', (e) => { state.p2p.deny = e.target.value; });
-    const p2pAuditLog = document.getElementById('p2pAuditLog');
-    p2pAuditLog.addEventListener('input', (e) => { state.p2p.auditLog = e.target.value; });
-    const p2pTlsToggle = document.getElementById('toggle-p2p-tls');
-    p2pTlsToggle.addEventListener('click', () => {
-      state.p2p.tls = !state.p2p.tls;
-      p2pTlsToggle.classList.toggle('on', state.p2p.tls);
-      document.getElementById('tlsFields').classList.toggle('visible', state.p2p.tls);
     });
 
     document.querySelectorAll('.copy-btn').forEach(btn => {
