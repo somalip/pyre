@@ -81,6 +81,116 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `--log` | Start continuous CSV logging immediately when live mode starts |
 | `--packets` | Include packet monitor panel in static output |
 
+## Commands
+
+### Static snapshot
+
+| Command | Description |
+|---|---|
+| `pyre` | Show all system stats in a formatted table |
+| `pyre --detailed` | Include detailed sensor and powermetrics readings |
+| `pyre --json` | Output stats as JSON |
+| `pyre --csv` | Output stats as CSV |
+| `pyre --tsv` | Output stats as TSV |
+| `pyre --once` | Show a single static snapshot (same as default without live) |
+| `pyre --out <file>` | Write snapshot output to a file |
+| `pyre --packets` | Include packet monitor panel in static output |
+
+### Live dashboard
+
+| Command | Description |
+|---|---|
+| `pyre live` | Start the interactive live dashboard |
+| `pyre live --interval <seconds>` | Set refresh interval for live mode (default: `2`) |
+| `pyre live --detailed` | Live mode with detailed sensor readings |
+| `pyre live --export-dir <dir>` | Custom directory for snapshot exports and logs |
+| `pyre live --log` | Start continuous CSV logging immediately |
+
+### Quick P2P setup
+
+| Command | Description |
+|---|---|
+| `pyre server` | Detect the local IP and print ready-to-paste commands for starting a P2P server and connecting a client on the same LAN |
+
+`pyre server` automatically detects the machine's non-loopback IP address and outputs two copy-paste commands — one to start the server and one for a client on the same network to connect. Default port is `9876` and default password is `mysecret`.
+
+### P2P server
+
+| Command | Description |
+|---|---|
+| `pyre p2p server` | Start a P2P server that streams live stats to authenticated peers |
+| `pyre p2p server --p2p-host <host>` | Bind address (default: `0.0.0.0`) |
+| `pyre p2p server --p2p-port <port>` | Port number (default: `9876`) |
+| `pyre p2p server --p2p-password <password>` | Password for authentication (required) |
+| `pyre p2p server --interval <seconds>` | Data refresh interval (default: `2`) |
+| `pyre p2p server --detailed` | Include detailed sensor readings |
+| `pyre p2p server --p2p-cert <file>` | TLS certificate file (PEM) for encrypted connections |
+| `pyre p2p server --p2p-key <file>` | TLS private key file (PEM) for the server |
+| `pyre p2p server --p2p-ca <file>` | TLS CA certificate file (PEM) — required by clients using `--p2p-tls` |
+| `pyre p2p server --p2p-rate-limit <n>` | Max auth attempts per IP per minute (default: `5`) |
+| `pyre p2p server --p2p-allow <ips>` | Comma-separated list of allowed IPs (empty = all) |
+| `pyre p2p server --p2p-deny <ips>` | Comma-separated list of denied IPs |
+| `pyre p2p server --p2p-audit-log <dir>` | Directory for P2P audit logs |
+| `pyre p2p server --p2p-hmac-key <key>` | HMAC key for message signing (default: derived from password) |
+
+### P2P client
+
+| Command | Description |
+|---|---|
+| `pyre p2p connect` | Connect to a P2P server and display live stats |
+| `pyre p2p connect --p2p-host <host>` | Server address (default: `127.0.0.1`) |
+| `pyre p2p connect --p2p-port <port>` | Server port (default: `9876`) |
+| `pyre p2p connect --p2p-password <password>` | Password for authentication (required) |
+| `pyre p2p connect --p2p-tls` | Enable TLS encryption for the connection |
+| `pyre p2p connect --p2p-ca <file>` | TLS CA certificate file (PEM) — required when using `--p2p-tls` |
+| `pyre p2p connect --p2p-insecure` | Skip TLS certificate verification (client only) |
+| `pyre p2p connect --p2p-audit-log <dir>` | Directory for P2P client audit logs |
+| `pyre p2p connect --p2p-hmac-key <key>` | HMAC key for message signing (must match server) |
+
+### Options (shared)
+
+| Option | Description |
+|---|---|
+| `-j, --json` | Output as JSON |
+| `-c, --csv` | Output as CSV |
+| `-t, --tsv` | Output as TSV |
+| `--detailed` | Include detailed system info and sensor readings |
+| `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
+| `--once` | Show a single static snapshot instead of live feed |
+| `--out <file>` | Write snapshot output to a file |
+| `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
+| `--log` | Start continuous CSV logging immediately when live mode starts |
+| `--packets` | Include packet monitor panel in static output |
+
+### Live dashboard keyboard controls
+
+| Key | Action |
+|---|---|
+| `q` | Quit the dashboard |
+| `p` | Pause / resume the refresh cycle |
+| `d` | Toggle detailed sensor mode |
+| `g` | Show / hide sparkline graphs |
+| `s` | Cycle sort order (CPU → memory → PID) |
+| `f` | Cycle export format (JSON → CSV → TSV) |
+| `e` | Export a snapshot to the export directory |
+| `l` | Toggle continuous CSV logging |
+| `c` | Open the UI customizer |
+| `/` | Open process filter |
+| `k` | Open process kill (enter PID, then Enter to confirm) |
+| `+` | Increase refresh interval by 1 second |
+| `-` | Decrease refresh interval by 1 second |
+| `↑` / `k` | Navigate customizer options |
+| `↓` / `j` | Navigate customizer options |
+| `Enter` / `Space` | Toggle visibility or select theme in customizer |
+| `Esc` | Close customizer or clear filter/kill input |
+
+### P2P server controls
+
+| Command | Action |
+|---|---|
+| `status` | Print the number of currently connected peers |
+| `q` / `quit` / `exit` | Shut down the server gracefully |
+
 ## P2P Live Data Streaming
 
 Send live system stats to another system over a TCP connection with password authentication. The server streams `StatsData` snapshots to authenticated peers at the configured interval.
