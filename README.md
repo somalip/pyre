@@ -9,6 +9,8 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, pa
 
 > Note : things may not work as intended if your firewall settings do not allow inbound connections for this program
 
+> Additionally, you can skip init with enter but you may encounter some UI bugs. I am working on the issue at the moment.
+
 ## Features
 
 - **P2P live data streaming** — send live system stats to another system over TCP with password authentication, TLS encryption, rate limiting, IP allow/deny lists, audit logging, and HMAC message signing
