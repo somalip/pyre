@@ -231,6 +231,12 @@ export class P2PServer {
   private onConnection(socket: net.Socket): void {
     const ip = this.getPeerIP(socket);
 
+    if (!socket.remoteAddress) {
+      this.audit(ip, 'CONNECT', 'No remote address');
+      socket.destroy();
+      return;
+    }
+
     const allowedIPs = this.options.allowedIPs ?? [];
     const deniedIPs = this.options.deniedIPs ?? [];
 
@@ -263,9 +269,7 @@ export class P2PServer {
     };
     this.peers.set(socket, peer);
 
-    const remoteAddr = socket.remoteAddress
-      ? `${socket.remoteAddress}:${socket.remotePort}`
-      : 'unknown';
+    const remoteAddr = `${ip}:${socket.remotePort ?? '?'}`;
     this.log(chalk.cyan(`Peer connected: ${remoteAddr}`));
     this.audit(ip, 'CONNECT', remoteAddr);
     this.emitPeerEvent('connect', remoteAddr);
@@ -303,49 +307,54 @@ export class P2PServer {
       const raw = body.toString('utf-8');
       const msg = decodeMessage(body);
       if (msg.kind !== 'auth') {
-        peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Expected auth message first' }, this.hmacKey));
+        this.sendSigned(peer, signMessage('auth-fail', { ok: false, reason: 'Expected auth message first' }, this.hmacKey));
         this.disconnectPeer(peer, 'Expected auth message');
         this.emitPeerEvent('error', `Expected auth message from ${peer.ip}`);
+        this.log(chalk.red(`Auth failed from ${peer.ip}: expected auth message first`));
         return;
       }
 
       const authPayload = msg.payload as { passwordHash?: string; nonce?: string };
       if (!authPayload.passwordHash || !authPayload.nonce) {
-        peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid auth payload' }, this.hmacKey));
+        this.sendSigned(peer, signMessage('auth-fail', { ok: false, reason: 'Invalid auth payload' }, this.hmacKey));
         this.disconnectPeer(peer, 'Invalid auth payload');
         this.emitPeerEvent('error', `Invalid auth payload from ${peer.ip}`);
+        this.log(chalk.red(`Auth failed from ${peer.ip}: invalid auth payload`));
         return;
       }
 
       if (peer.pendingNonce && authPayload.nonce !== peer.pendingNonce) {
         this.audit(peer.ip, 'AUTH_FAIL', 'Nonce mismatch');
-        peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid nonce' }, this.hmacKey));
+        this.sendSigned(peer, signMessage('auth-fail', { ok: false, reason: 'Invalid nonce' }, this.hmacKey));
         this.disconnectPeer(peer, 'Invalid nonce');
         this.emitPeerEvent('error', `Invalid nonce from ${peer.ip}`);
+        this.log(chalk.red(`Auth failed from ${peer.ip}: invalid nonce`));
         return;
       }
 
       const expectedHash = hashPassword(this.options.password, authPayload.nonce);
       if (authPayload.passwordHash !== expectedHash) {
         this.audit(peer.ip, 'AUTH_FAIL', 'Invalid password hash');
-        peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid password' }, this.hmacKey));
+        this.sendSigned(peer, signMessage('auth-fail', { ok: false, reason: 'Invalid password' }, this.hmacKey));
         this.disconnectPeer(peer, 'Authentication failed');
         this.emitPeerEvent('error', `Invalid password from ${peer.ip}`);
+        this.log(chalk.red(`Auth failed from ${peer.ip}: invalid password`));
         return;
       }
 
       peer.authenticated = true;
       this.cleanupRateLimit(peer.ip);
       peer.pendingNonce = null;
-      peer.socket.write(signMessage('auth-ok', { ok: true }, this.hmacKey));
-      this.log(chalk.green(`Peer authenticated: ${peer.socket.remoteAddress}`));
+      this.sendSigned(peer, signMessage('auth-ok', { ok: true }, this.hmacKey));
+      this.log(chalk.green(`Peer authenticated: ${peer.ip}`));
       this.audit(peer.ip, 'AUTH_OK', 'Challenge-response successful');
-      this.emitPeerEvent('auth', peer.socket.remoteAddress ?? peer.ip);
+      this.emitPeerEvent('auth', peer.ip);
       this.startDataStream(peer);
       this.startPing(peer);
     } catch {
-      peer.socket.write(signMessage('auth-fail', { ok: false, reason: 'Invalid message format' }, this.hmacKey));
+      this.sendSigned(peer, signMessage('auth-fail', { ok: false, reason: 'Invalid message format' }, this.hmacKey));
       this.disconnectPeer(peer, 'Invalid message format');
+      this.log(chalk.red(`Auth failed from ${peer.ip}: invalid message format`));
     }
   }
 
@@ -384,17 +393,18 @@ export class P2PServer {
 
   private onPeerClose(peer: Peer): void {
     this.cleanupPeer(peer);
-    this.log(chalk.yellow(`Peer disconnected: ${peer.socket.remoteAddress}`));
-    this.emitPeerEvent('disconnect', peer.socket.remoteAddress ?? peer.ip);
+    this.log(chalk.yellow(`Peer disconnected: ${peer.ip}`));
+    this.emitPeerEvent('disconnect', peer.ip);
     this.audit(peer.ip, 'DISCONNECT', 'Peer closed connection');
   }
 
   private onPeerError(peer: Peer, err: Error): void {
+    const addr = peer.socket.remoteAddress ?? peer.ip;
     const code = (err as any).code;
     if (code === 'ECONNRESET') {
-      this.log(chalk.yellow(`Peer connection reset: ${peer.socket.remoteAddress}`));
+      this.log(chalk.yellow(`Peer connection reset: ${addr}`));
       this.audit(peer.ip, 'ERROR', 'Connection reset');
-      this.emitPeerEvent('error', `connection reset: ${peer.socket.remoteAddress}`);
+      this.emitPeerEvent('error', `connection reset: ${addr}`);
     } else if (code === 'EPIPE') {
       this.audit(peer.ip, 'ERROR', 'Broken pipe');
     } else {

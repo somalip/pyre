@@ -50,12 +50,14 @@ export class P2PClient {
       }
     }
 
+    const host = sanitizeHost(this.options.host);
+
     return new Promise((resolve, reject) => {
       const useTLS = !!this.options.tls;
 
       if (useTLS) {
         const tlsOptions: tls.ConnectionOptions = {
-          host: this.options.host,
+          host,
           port: this.options.port,
           rejectUnauthorized: !this.options.tlsInsecure,
         };
@@ -70,7 +72,7 @@ export class P2PClient {
       } else {
         this.socket = new net.Socket();
         this.socket.setTimeout(10000);
-        this.socket.connect(this.options.port, this.options.host, () => {
+        this.socket.connect(this.options.port, host, () => {
           this.running = true;
           this.status('Connected');
           resolve();
@@ -264,6 +266,10 @@ export class P2PClient {
     const ip = this.options.host;
     this.auditStream.write(`${ts} ${ip} ${event} ${detail}\n`);
   }
+}
+
+function sanitizeHost(host: string): string {
+  return host.trim().replace(/%$/, '');
 }
 
 function deriveHMACKey(password: string): string {

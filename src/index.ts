@@ -65,6 +65,10 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
+function sanitizeHost(host: string): string {
+  return host.trim().replace(/%$/, '');
+}
+
 async function main() {
   const cmd = program.args[0];
 
@@ -205,7 +209,7 @@ async function runP2PServer(): Promise<void> {
 }
 
 async function runP2PConnect(): Promise<void> {
-  const host = opts.p2pHost || '127.0.0.1';
+  const host = sanitizeHost(opts.p2pHost || '127.0.0.1');
   const port = parseInt(opts.p2pPort, 10) || 9876;
   const password = opts.p2pPassword || '';
   const useTLS = !!opts.p2pTls;
