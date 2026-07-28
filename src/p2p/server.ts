@@ -350,8 +350,13 @@ export class P2PServer {
   }
 
   private sendSigned(peer: Peer, message: Buffer): void {
-    if (!peer.socket.destroyed) {
+    if (peer.socket.destroyed || !peer.socket.writable) {
+      return;
+    }
+    try {
       peer.socket.write(message);
+    } catch {
+      // ignore write errors; peer likely disconnected
     }
   }
 
@@ -390,6 +395,8 @@ export class P2PServer {
       this.log(chalk.yellow(`Peer connection reset: ${peer.socket.remoteAddress}`));
       this.audit(peer.ip, 'ERROR', 'Connection reset');
       this.emitPeerEvent('error', `connection reset: ${peer.socket.remoteAddress}`);
+    } else if (code === 'EPIPE') {
+      this.audit(peer.ip, 'ERROR', 'Broken pipe');
     } else {
       this.log(chalk.red(`Peer error: ${err.message}`));
       this.audit(peer.ip, 'ERROR', err.message);

@@ -207,7 +207,11 @@ export class P2PClient {
 
   private sendSigned(message: Buffer): void {
     if (this.socket && !this.socket.destroyed) {
-      this.socket.write(message);
+      try {
+        this.socket.write(message);
+      } catch {
+        // ignore write errors; socket likely closed
+      }
     }
   }
 
