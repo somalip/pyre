@@ -7,6 +7,7 @@
  * P2P mode enables live data streaming between two systems over TCP.
  */
 import fs from 'node:fs';
+import os from 'node:os';
 import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -69,8 +70,52 @@ function sanitizeHost(host: string): string {
   return host.trim().replace(/%$/, '');
 }
 
+function detectLocalIP(): string | null {
+  const ifaces = os.networkInterfaces();
+  for (const [, addrs] of Object.entries(ifaces)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        return addr.address;
+      }
+    }
+  }
+  return null;
+}
+
+async function runServerCommand(): Promise<void> {
+  const ip = detectLocalIP();
+
+  if (!ip) {
+    console.log(chalk.red('Could not detect a non-loopback IP address. Connect to a network first.'));
+    process.exit(1);
+  }
+
+  const port = 9876;
+  const password = 'mysecret';
+
+  console.log(chalk.bold(`\n  pyre server`));
+  console.log(chalk.dim(`  Detected IP: ${ip}`));
+  console.log(chalk.dim(`  Port: ${port}`));
+  console.log(chalk.dim(`  Password: ${password}`));
+  console.log();
+
+  console.log(chalk.bold('Run this on THIS machine (server):'));
+  console.log(chalk.hex('#ff6a39')(`pyre p2p server --p2p-host 0.0.0.0 --p2p-port ${port} --p2p-password ${password}`));
+  console.log();
+
+  console.log(chalk.bold('Run this on the OTHER machine (client):'));
+  console.log(chalk.hex('#ff6a39')(`pyre p2p connect --p2p-host ${ip} --p2p-port ${port} --p2p-password ${password}`));
+  console.log();
+}
+
 async function main() {
   const cmd = program.args[0];
+
+  if (cmd === 'server') {
+    await runServerCommand();
+    return;
+  }
 
   if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
     if (cmd === 'live') {
