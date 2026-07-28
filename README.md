@@ -40,12 +40,6 @@ npm install -g pyre-cli
 curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
 ```
 
-### Homebrew
-
-```bash
-brew install pyre
-```
-
 ## Usage
 
 ### Static snapshot
