@@ -606,20 +606,19 @@ export async function collectNetwork(): Promise<NetworkData> {
 
 export async function collectProcesses(limit?: number): Promise<ProcessData[]> {
    try {
-     const isMac = process.platform === 'darwin';
-     const sortArg = isMac ? '-r' : '--sort=-pcpu';
-     const threadsArg = isMac ? 'threads' : 'nlwp';
-     const headClause = limit && limit > 0 ? ` | head -n ${limit + 1}` : '';
-     const raw = (await run(`ps -eo pid,ppid,user,pcpu,pmem,state,${threadsArg},time,comm ${sortArg}${headClause}`)).trim();
-     const lines = raw.split('\n').slice(1);
-     return lines
-       .map(line => {
-          const parts = line.match(/\s*(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(\d+)\s+([\d:.]+)\s+(.+)/);
-          if (!parts) return null;
-          const runtimeSec = parts[8].split(':').reduce((acc, val, idx) => acc + parseInt(val) * Math.pow(60, 2 - idx), 0);
-          return { pid: parseInt(parts[1]), ppid: parseInt(parts[2]), user: parts[3], cpu: parseFloat(parts[4]), mem: parseFloat(parts[5]), state: parts[6], threads: parseInt(parts[7]), runtime: runtimeSec, command: parts[9] };
-       })
-       .filter((p): p is ProcessData => p !== null && p.pid > 0);
+      const isMac = process.platform === 'darwin';
+      const sortArg = isMac ? '-r' : '--sort=-pcpu';
+      const headClause = limit && limit > 0 ? ` | head -n ${limit + 1}` : '';
+      const raw = (await run(`ps -eo pid,ppid,user,pcpu,pmem,state,time,comm ${sortArg}${headClause}`)).trim();
+      const lines = raw.split('\n').slice(1);
+      return lines
+        .map(line => {
+           const parts = line.match(/\s*(\d+)\s+(\d+)\s+(\S+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+([\d:.]+)\s+(.+)/);
+           if (!parts) return null;
+           const runtimeSec = parts[7].split(':').reduce((acc, val, idx) => acc + parseInt(val) * Math.pow(60, 2 - idx), 0);
+           return { pid: parseInt(parts[1]), ppid: parseInt(parts[2]), user: parts[3], cpu: parseFloat(parts[4]), mem: parseFloat(parts[5]), state: parts[6], threads: 0, runtime: runtimeSec, command: parts[8] };
+        })
+        .filter((p): p is ProcessData => p !== null && p.pid > 0);
   } catch {
     return [];
   }
