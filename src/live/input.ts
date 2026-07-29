@@ -10,7 +10,7 @@ import readline from 'node:readline';
 import chalk from 'chalk';
 import { collectAll, StatsData } from '../monitors/index.js';
 import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
-import { state, setStatus, getToggleKey } from './state.js';
+import { state, setStatus, getToggleKey, type SplashColorScheme, type SplashAnimation } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
 import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
@@ -51,18 +51,31 @@ function handleInputModeKey(str: string, key: readline.Key) {
          state.currentTheme = themesList[nextIdx];
        } else if (selected === 'Graph Mode') {
          state.graphMode = state.graphMode === 'spark' ? 'bar' : 'spark';
-       } else {
-         const toggleKey = getToggleKey(selected);
-         if (toggleKey) {
-           if (toggleKey === 'tree') {
-             state.treeView = !state.treeView;
-             state.visiblePanels.tree = state.treeView;
-           } else {
-             const isVisible = state.visiblePanels[toggleKey] !== false;
-             state.visiblePanels[toggleKey] = !isVisible;
-           }
-         }
-       }
+        } else if (selected === 'Splash Screen') {
+          state.splashEnabled = !state.splashEnabled;
+          setStatus(state.splashEnabled ? 'Splash screen enabled' : 'Splash screen disabled');
+        } else if (selected === 'Splash Color') {
+          const schemes: SplashColorScheme[] = ['fire', 'ocean', 'forest', 'purple', 'monochrome'];
+          const curIdx = schemes.indexOf(state.splashColorScheme);
+          state.splashColorScheme = schemes[(curIdx + 1) % schemes.length];
+          setStatus(`Splash color: ${state.splashColorScheme}`);
+        } else if (selected === 'Splash Animation') {
+          const animations: SplashAnimation[] = ['classic', 'wave', 'sparks'];
+          const curIdx = animations.indexOf(state.splashAnimation);
+          state.splashAnimation = animations[(curIdx + 1) % animations.length];
+          setStatus(`Splash animation: ${state.splashAnimation}`);
+        } else {
+          const toggleKey = getToggleKey(selected);
+          if (toggleKey) {
+            if (toggleKey === 'tree') {
+              state.treeView = !state.treeView;
+              state.visiblePanels.tree = state.treeView;
+            } else {
+              const isVisible = state.visiblePanels[toggleKey] !== false;
+              state.visiblePanels[toggleKey] = !isVisible;
+            }
+          }
+        }
        invalidateTableCache();
        invalidateFrame();
      }
@@ -491,6 +504,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           break;
         case 'tab':
           cycleTab(1);
+          break;
+        case 'escape':
+        case 'esc':
+          state.activePanel = 'grid';
+          setStatus('Grid view');
+          render();
           break;
         default:
           if (str && str.length === 1) {

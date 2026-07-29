@@ -103,21 +103,28 @@ function renderCustomizerOverlay(): string {
      chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) '),
    ];
 
-   state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
-     const isSelected = idx === state.customizerIndex;
-     const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+    state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
+      const isSelected = idx === state.customizerIndex;
+      const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
 
-      if (opt === 'Theme') {
-        lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-      } else if (opt === 'Graph Mode') {
-        lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
-      } else {
-        const toggleKey = getToggleKey(opt);
-        const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
-        const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-        lines.push(`${prefix}${opt}: ${status}`);
-      }
-   });
+       if (opt === 'Theme') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
+       } else if (opt === 'Graph Mode') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
+       } else if (opt === 'Splash Screen') {
+         const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
+         lines.push(`${prefix}${opt}: ${status}`);
+       } else if (opt === 'Splash Color') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
+       } else if (opt === 'Splash Animation') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
+       } else {
+         const toggleKey = getToggleKey(opt);
+         const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
+         const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+         lines.push(`${prefix}${opt}: ${status}`);
+       }
+    });
 
    return lines.map(l => `  ${l}`).join('\n');
  }

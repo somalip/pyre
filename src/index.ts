@@ -253,6 +253,25 @@ async function runP2PServer(): Promise<void> {
   });
 }
 
+let _prevFrameLines: string[] = [];
+
+function writeFrame(lines: string[]) {
+  if (_prevFrameLines.length === 0 || lines.length !== _prevFrameLines.length) {
+    process.stdout.write('\x1b[?25l\x1b[H' + lines.map(l => `\x1b[2K${l}`).join('\r\n') + '\x1b[0J');
+    _prevFrameLines = lines;
+    return;
+  }
+
+  let out = '';
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] !== _prevFrameLines[i]) {
+      out += `\x1b[${i + 1};1H\x1b[2K${lines[i]}`;
+    }
+  }
+  if (out) process.stdout.write(out);
+  _prevFrameLines = lines;
+}
+
 async function runP2PConnect(): Promise<void> {
   const host = sanitizeHost(opts.p2pHost || '127.0.0.1');
   const port = parseInt(opts.p2pPort, 10) || 9876;
@@ -282,16 +301,25 @@ async function runP2PConnect(): Promise<void> {
   });
 
   client.setOnData((data) => {
-    process.stdout.write('\x1b[2J\x1b[H');
-    console.log(chalk.bold(`  pyre P2P Client — ${data.header.hostname}`));
-    console.log(chalk.dim(`  ${data.timestamp}`));
-    console.log();
-    console.log(formatTable(data, {
+    const lines: string[] = [];
+    lines.push(chalk.bold(`  pyre P2P Client — ${data.header.hostname}`));
+    lines.push(chalk.dim(`  ${data.timestamp}`));
+    lines.push('');
+    lines.push(...formatTable(data, {
       width: process.stdout.columns || 80,
       sortBy: 'cpu',
       treeView: false,
       visible: { packets: true },
-    }));
+    }).split('\n'));
+
+    while (lines.length < process.stdout.rows) {
+      lines.push('');
+    }
+    if (lines.length > process.stdout.rows) {
+      lines.length = process.stdout.rows;
+    }
+
+    writeFrame(lines);
   });
 
   const protocolLabel = useTLS ? 'TLS' : 'TCP';
@@ -299,6 +327,8 @@ async function runP2PConnect(): Promise<void> {
   console.log(chalk.dim(`  Protocol: ${protocolLabel}`));
   console.log(chalk.dim(`  Connecting to ${host}:${port}...`));
   console.log(chalk.dim(`  Press Ctrl+C to disconnect\n`));
+
+  process.stdout.write('\x1b[?25l');
 
   try {
     await client.connect();
@@ -323,11 +353,14 @@ async function runP2PConnect(): Promise<void> {
       console.log(chalk.dim('  3. Check connectivity: ping ' + host));
       console.log(chalk.dim('  4. Ensure both machines are on the same LAN (ping each other first)'));
     }
+    process.stdout.write('\x1b[?25h');
     process.exit(1);
   }
 
   process.once('SIGINT', () => {
+    _prevFrameLines = [];
     client.disconnect();
+    process.stdout.write('\x1b[?25h\x1b[2J\x1b[H');
     process.exit(0);
   });
 }
