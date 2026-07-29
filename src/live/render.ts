@@ -6,8 +6,10 @@
  * alert checker.  All state variables are imported from
  * `state.ts`.
  */
+import { execFile } from 'node:child_process';
 import chalk from 'chalk';
 import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel } from '../formatters/index.js';
+import { detectAnomalies } from '../anomalies.js';
 import { state, setStatus, SIGNAL_OPTIONS, getToggleKey } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
@@ -170,26 +172,30 @@ function render() {
   const lines: string[] = [];
   const theme = THEMES[state.currentTheme] || THEMES.default;
 
-  const params = tableCacheParams();
-  const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || params !== _cachedTableParams
-    ? (() => {
-        const out = formatTable(state.lastData, {
-          width: state.termWidth,
-          sortBy: state.sortMode,
-          filter: state.processFilter || undefined,
-          processLimit: processRowBudget(),
-          theme: state.currentTheme,
-          visible: state.visiblePanels,
-          treeView: state.treeView,
-          activePanel: state.activePanel,
-        });
-        _cachedTableData = state.lastData;
-        _cachedTableParams = params;
-        _cachedTable = out;
-        _tableDataDirty = false;
-        return out;
-      })()
-    : _cachedTable;
+   const params = tableCacheParams();
+   const anomalies = detectAnomalies(state.lastData, state.history);
+   const anomalyCacheKey = anomalies.map(a => `${a.metric}:${a.zScore.toFixed(2)}`).join(',');
+   const cacheParams = params + '|' + anomalyCacheKey;
+   const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
+     ? (() => {
+         const out = formatTable(state.lastData, {
+           width: state.termWidth,
+           sortBy: state.sortMode,
+           filter: state.processFilter || undefined,
+           processLimit: processRowBudget(),
+           theme: state.currentTheme,
+           visible: state.visiblePanels,
+           treeView: state.treeView,
+           activePanel: state.activePanel,
+           anomalies,
+         });
+         _cachedTableData = state.lastData;
+         _cachedTableParams = cacheParams;
+         _cachedTable = out;
+         _tableDataDirty = false;
+         return out;
+       })()
+     : _cachedTable;
 
   const bodyLines: string[] = [];
   if (state.activePanel === 'p2p') {
@@ -286,20 +292,40 @@ function footerLine(): string {
    if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
    const badgeStr = badges.join('  ');
 
-   return badgeStr ? `${str1}\n${str2}    ${badgeStr}` : `${str1}\n${str2}`;
-  }
+return badgeStr ? `${str1}\n${str2}    ${badgeStr}` : `${str1}\n${str2}`;
+   }
+
+function sendNotification(title: string, message: string) {
+  if (!state.notificationsEnabled) return;
+  execFile('osascript', ['-e', `display notification "${message}" with title "${title}"`], (err) => {
+    if (err) {
+      // Silently ignore notification failures (e.g., terminal not in focus, no notification permission)
+    }
+  });
+}
 
 function checkAlerts(data: StatsData) {
-  const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
-  const hot = data.cpu.usage >= state.CPU_ALERT_PCT || (temp !== null && temp >= state.TEMP_ALERT_C);
-  if (hot && !state.alerted) {
-    state.alerted = true;
-    process.stdout.write('\x07');
-    const reason = data.cpu.usage >= state.CPU_ALERT_PCT ? `CPU at ${data.cpu.usage}%` : `Temp at ${temp}°C`;
-    setStatus(chalk.red(`⚠ Alert: ${reason}`), 5000);
-  } else if (!hot) {
-    state.alerted = false;
-  }
-}
+   const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
+   const hot = data.cpu.usage >= state.CPU_ALERT_PCT || (temp !== null && temp >= state.TEMP_ALERT_C);
+   const anomalies = detectAnomalies(data, state.history);
+   const hasCriticalAnomaly = anomalies.some(a => a.severity === 'critical');
+   const hasWarningAnomaly = anomalies.some(a => a.severity === 'warning');
+   const anomalyTriggered = hasCriticalAnomaly || hasWarningAnomaly;
+
+   if ((hot || anomalyTriggered) && !state.alerted) {
+     state.alerted = true;
+     process.stdout.write('\x07');
+     const reasons: string[] = [];
+     if (data.cpu.usage >= state.CPU_ALERT_PCT) reasons.push(`CPU at ${data.cpu.usage}%`);
+     if (temp !== null && temp >= state.TEMP_ALERT_C) reasons.push(`Temp at ${temp}°C`);
+     for (const a of anomalies) {
+       reasons.push(`${a.metric} anomaly (σ=${a.zScore.toFixed(1)})`);
+     }
+      setStatus(chalk.red(`⚠ Alert: ${reasons.join('; ')}`), 5000);
+      sendNotification('pyre Alert', reasons.join('; '));
+    } else if (!hot && !anomalyTriggered) {
+     state.alerted = false;
+   }
+ }
 
 export { render, footerLine, renderCustomizerOverlay, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame };

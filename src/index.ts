@@ -16,6 +16,10 @@ import { formatTable, formatJson, formatCsv, formatTsv } from './formatters/inde
 import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
+import { readConfig } from './state/config.js';
+import { CONFIG_FILE } from './state/config.js';
+
+const config = readConfig();
 
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf-8'));
 
@@ -29,14 +33,14 @@ program
     .option('-c, --csv', 'Output as CSV')
     .option('-t, --tsv', 'Output as TSV')
     .option('--detailed', 'Include detailed system info and sensor readings')
-    .option('--theme <name>', 'Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox)', 'default')
-    .option('--interval <seconds>', 'Refresh interval for live mode', '2')
+    .option('--theme <name>', 'Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox)', config.theme)
+    .option('--interval <seconds>', 'Refresh interval for live mode', String(config.interval))
     .option('--once', 'Show a single static snapshot instead of live feed')
     .option('--out <file>', 'Also write the snapshot output to a file (--once/--json/--csv/--tsv modes)')
-    .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', './pyre-exports')
+    .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', config.exportDir)
     .option('--log', 'Start continuous CSV logging immediately when live mode starts')
     .option('--tree', 'Show process tree view instead of flat list')
-    .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu')
+    .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', config.sortMode)
     .option('--packets', 'Include packet monitor panel in output')
     .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10')
     .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)')
@@ -112,6 +116,20 @@ async function runServerCommand(): Promise<void> {
 async function main() {
   const cmd = program.args[0];
 
+  if (cmd === 'config') {
+    const sub = program.args[1];
+    if (sub === 'show') {
+      const cfg = readConfig();
+      console.log(JSON.stringify(cfg, null, 2));
+    } else if (sub === 'reset') {
+      fs.rmSync(CONFIG_FILE, { force: true });
+      console.log(chalk.green('Config reset to defaults'));
+    } else {
+      console.log('Usage: pyre config <show|reset>');
+    }
+    return;
+  }
+
   if (cmd === 'server') {
     await runServerCommand();
     return;
@@ -125,10 +143,10 @@ async function main() {
     const interval = parseFloat(opts.interval) || 2;
     await startLive({
       interval,
-      detailed: opts.detailed,
-      theme: opts.theme,
-      exportDir: opts.exportDir,
-      autoLog: opts.log,
+      detailed: opts.detailed ?? config.detailed,
+      theme: opts.theme || config.theme,
+      exportDir: opts.exportDir || config.exportDir,
+      autoLog: opts.log || config.autoLog,
     }, splashPromise);
     return;
   }
@@ -158,7 +176,7 @@ async function main() {
   if (opts.json) output = formatJson(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree, visible: { packets: opts.packets ? true : undefined } });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, visible: { packets: opts.packets ? true : undefined } });
 
   console.log(output);
 

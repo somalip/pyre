@@ -42,21 +42,30 @@ export interface VisibleItems {
    tree?: boolean;
 }
 
+export interface AnomalyAlert {
+  metric: string;
+  value: number;
+  zScore: number;
+  severity: 'warning' | 'critical';
+}
+
 export interface TableOptions {
-   /** Terminal width in columns; controls layout, bar sizing, and column count. Defaults to 80. */
-   width?: number;
-   /** Process sort key. Defaults to 'cpu'. */
-   sortBy?: 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
-   /** Case-insensitive substring filter applied to the process command. */
-   filter?: string;
-   /** Max process rows to show (the live dashboard sizes this to available terminal height). */
-   processLimit?: number;
-   /** Selected visual theme. */
-   theme?: ThemeName;
-   /** Visibility toggle settings for individual cards. */
-   visible?: VisibleItems;
-   /** Show process tree view instead of flat list. */
-   treeView?: boolean;
-   /** Active panel for detail/focus view. 'grid' means show all panels. */
-   activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process';
+    /** Terminal width in columns; controls layout, bar sizing, and column count. Defaults to 80. */
+    width?: number;
+    /** Process sort key. Defaults to 'cpu'. */
+    sortBy?: 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
+    /** Case-insensitive substring filter applied to the process command. */
+    filter?: string;
+    /** Max process rows to show (the live dashboard sizes this to available terminal height). */
+    processLimit?: number;
+    /** Selected visual theme. */
+    theme?: ThemeName;
+    /** Visibility toggle settings for individual cards. */
+    visible?: VisibleItems;
+    /** Show process tree view instead of flat list. */
+    treeView?: boolean;
+    /** Active panel for detail/focus view. 'grid' means show all panels. */
+    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process';
+    /** Active anomaly alerts from the statistical detector. */
+    anomalies?: AnomalyAlert[];
 }

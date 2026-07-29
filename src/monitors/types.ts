@@ -68,6 +68,7 @@ export interface CpuData {
   usage: number;
   loadAvg: number[];
   temperature?: number;
+  coreUsage?: number[];
 }
 
 export interface MemoryData {

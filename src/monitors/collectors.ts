@@ -12,12 +12,14 @@
  * returning their best-effort values.
  */
 import chalk from 'chalk';
+import os from 'node:os';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
 import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess } from './types.js';
 
 const SP_TTL_MS = 10_000;
 const NETSTAT_TTL_MS = 1000;
+let prevCpuTimes: { total: number; idle: number }[] | null = null;
 const ROUTE_TTL_MS = 5_000;
 const SYSCTL_TTL_MS = 60_000;
 
@@ -338,7 +340,27 @@ export async function collectCpu(): Promise<CpuData> {
     // ignore
   }
 
-  return { brand, cores, physicalCores, frequency, usage, loadAvg, temperature };
+  let coreUsage: number[] = [];
+  try {
+    const cpus = os.cpus();
+    const current = cpus.map(cpu => ({
+      total: cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq,
+      idle: cpu.times.idle,
+    }));
+    if (prevCpuTimes) {
+      coreUsage = prevCpuTimes.map((prev, i) => {
+        const totalDelta = current[i].total - prev.total;
+        const idleDelta = current[i].idle - prev.idle;
+        if (totalDelta === 0) return 0;
+        return Math.round(((totalDelta - idleDelta) / totalDelta) * 100);
+      });
+    }
+    prevCpuTimes = current;
+  } catch {
+    // ignore
+  }
+
+  return { brand, cores, physicalCores, frequency, usage, loadAvg, temperature, coreUsage };
 }
 
 export async function collectMemory(): Promise<MemoryData> {

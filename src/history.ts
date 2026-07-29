@@ -47,21 +47,65 @@ export class History {
    txPacketRate: number[] = [];
 
    /** Rolling window of active TCP connections. */
-   connections: number[] = [];
+    connections: number[] = [];
 
-   private lastRxBytes = 0;
-   private lastTxBytes = 0;
-   private lastRxPackets = 0;
-   private lastTxPackets = 0;
-   private lastTs = 0;
+    private lastRxBytes = 0;
+    private lastTxBytes = 0;
+    private lastRxPackets = 0;
+    private lastTxPackets = 0;
+    private lastTs = 0;
 
-  /**
-   * Create a new History instance.
-   * @param maxLen - Maximum number of samples to retain. Defaults to 40.
-   */
-  constructor(maxLen = 40) {
-    this.maxLen = maxLen;
-  }
+   /**
+    * Create a new History instance.
+    * @param maxLen - Maximum number of samples to retain. Defaults to 40.
+    */
+   constructor(maxLen = 40) {
+     this.maxLen = maxLen;
+   }
+
+   /**
+    * Compute the arithmetic mean of a numeric array.
+    * Returns 0 if the array is empty.
+    */
+   static mean(arr: number[]): number {
+     if (!arr.length) return 0;
+     return arr.reduce((s, v) => s + v, 0) / arr.length;
+   }
+
+   /**
+    * Compute the population standard deviation of a numeric array.
+    * Returns 0 if the array has fewer than 2 elements.
+    */
+   static stdDev(arr: number[]): number {
+     if (arr.length < 2) return 0;
+     const m = History.mean(arr);
+     const variance = arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length;
+     return Math.sqrt(variance);
+   }
+
+   /**
+    * Compute the z-score of a value against a reference array.
+    * Returns 0 when the array is empty or has zero std dev.
+    */
+   static zScore(value: number, arr: number[]): number {
+     const m = History.mean(arr);
+     const sd = History.stdDev(arr);
+     if (sd === 0) return 0;
+     return (value - m) / sd;
+   }
+
+   /**
+    * Check whether a value is a statistical outlier against a
+    * reference array.
+    * @param value - The current reading
+    * @param arr - The rolling history window
+    * @param threshold - Z-score threshold (default 2.5)
+    * @returns true if the value deviates from the baseline by more than `threshold` standard deviations
+    */
+   static isAnomaly(value: number, arr: number[], threshold = 2.5): boolean {
+     if (arr.length < 5) return false;
+     return Math.abs(History.zScore(value, arr)) > threshold;
+   }
 
   /**
    * Push a new sample into the rolling window.

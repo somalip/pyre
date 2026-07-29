@@ -15,8 +15,33 @@ import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow }
 import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
 import { startP2PServer } from '../p2p/index.js';
+import { writeConfig } from '../state/config.js';
 
-function isUpKey(key: readline.Key, str?: string): boolean {
+  function persistConfig() {
+    writeConfig({
+      theme: state.currentTheme,
+      interval: state.interval,
+      exportDir: state.exportDir,
+      detailed: state.detailed,
+      sortMode: state.sortMode,
+      treeView: state.treeView,
+      graphMode: state.graphMode,
+      showGraphs: state.showGraphs,
+      autoLog: state.logging,
+      mouseEnabled: state.mouseEnabled,
+      cpuAlertPct: state.CPU_ALERT_PCT,
+      tempAlertC: state.TEMP_ALERT_C,
+      p2pPort: state.p2pPort,
+      p2pPassword: state.p2pPassword,
+      splashEnabled: state.splashEnabled,
+      splashColorScheme: state.splashColorScheme,
+       splashAnimation: state.splashAnimation,
+       visiblePanels: { ...state.visiblePanels },
+       notificationsEnabled: state.notificationsEnabled,
+    });
+  }
+
+  function isUpKey(key: readline.Key, str?: string): boolean {
   return key.name === 'up' || str === 'k' || key.sequence === '\x1b[A' || key.sequence === '\x1bOA';
 }
 function isDownKey(key: readline.Key, str?: string): boolean {
@@ -59,12 +84,15 @@ function handleInputModeKey(str: string, key: readline.Key) {
           const curIdx = schemes.indexOf(state.splashColorScheme);
           state.splashColorScheme = schemes[(curIdx + 1) % schemes.length];
           setStatus(`Splash color: ${state.splashColorScheme}`);
-        } else if (selected === 'Splash Animation') {
-          const animations: SplashAnimation[] = ['classic', 'wave', 'sparks'];
-          const curIdx = animations.indexOf(state.splashAnimation);
-          state.splashAnimation = animations[(curIdx + 1) % animations.length];
-          setStatus(`Splash animation: ${state.splashAnimation}`);
-        } else {
+         } else if (selected === 'Splash Animation') {
+           const animations: SplashAnimation[] = ['classic', 'wave', 'sparks'];
+           const curIdx = animations.indexOf(state.splashAnimation);
+           state.splashAnimation = animations[(curIdx + 1) % animations.length];
+           setStatus(`Splash animation: ${state.splashAnimation}`);
+         } else if (selected === 'Notifications') {
+           state.notificationsEnabled = !state.notificationsEnabled;
+           setStatus(`Notifications: ${state.notificationsEnabled ? 'on' : 'off'}`);
+         } else {
           const toggleKey = getToggleKey(selected);
           if (toggleKey) {
             if (toggleKey === 'tree') {
@@ -76,11 +104,12 @@ function handleInputModeKey(str: string, key: readline.Key) {
             }
           }
         }
-       invalidateTableCache();
-       invalidateFrame();
-     }
-     render();
-     return;
+        invalidateTableCache();
+        invalidateFrame();
+        persistConfig();
+      }
+      render();
+      return;
    }
 
     if (state.inputMode === 'signal') {
@@ -574,6 +603,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   }
 
   export function stopLive() {
+    persistConfig();
     if (state.intervalHandle) {
       clearInterval(state.intervalHandle);
       state.intervalHandle = null;

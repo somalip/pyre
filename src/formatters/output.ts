@@ -25,6 +25,9 @@ export function formatCsv(data: StatsData): string {
     ['cpu', 'loadAvg_1m', String(data.cpu.loadAvg[0])],
     ['cpu', 'loadAvg_5m', String(data.cpu.loadAvg[1])],
     ['cpu', 'loadAvg_15m', String(data.cpu.loadAvg[2])],
+    ['cpu', 'cores', String(data.cpu.cores)],
+    ['cpu', 'physicalCores', String(data.cpu.physicalCores)],
+    ['cpu', 'frequency', String(data.cpu.frequency)],
     ['memory', 'total', String(data.memory.total)],
     ['memory', 'used', String(data.memory.used)],
     ['memory', 'usagePercent', String(data.memory.usagePercent)],
@@ -32,11 +35,7 @@ export function formatCsv(data: StatsData): string {
     ['memory', 'swapTotal', String(data.memory.swapTotal)],
     ['thermal', 'state', data.thermal.state],
     ['thermal', 'cpuTempC', data.thermal.temperatures?.cpu_die ? String(data.thermal.temperatures.cpu_die) : ''],
-    [
-      'thermal',
-      'cpuTempF',
-      data.thermal.temperatures?.cpu_die != null ? String(celsiusToFahrenheit(data.thermal.temperatures.cpu_die)) : '',
-    ],
+    ['thermal', 'cpuTempF', data.thermal.temperatures?.cpu_die != null ? String(celsiusToFahrenheit(data.thermal.temperatures.cpu_die)) : ''],
     ['network', 'rxBytes', String(data.network.rxBytes)],
     ['network', 'txBytes', String(data.network.txBytes)],
     ['network', 'rxPackets', String(data.network.rxPackets)],
@@ -54,9 +53,12 @@ export function formatCsv(data: StatsData): string {
     ['power', 'gpuWatts', data.power?.gpuWatts !== undefined ? String(data.power.gpuWatts) : ''],
     ['power', 'combinedWatts', data.power?.combinedWatts !== undefined ? String(data.power.combinedWatts) : ''],
     ['system', 'hostname', data.header.hostname],
-     ['system', 'uptime', data.header.uptime],
-     ['system', 'timestamp', data.timestamp],
-   ];
+    ['system', 'uptime', data.header.uptime],
+    ['system', 'timestamp', data.timestamp],
+  ];
+  if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
+    data.cpu.coreUsage.forEach((u, i) => rows.push(['cpu', `coreUsage_${i}`, String(u)]));
+  }
 
   if (data.packets) {
     rows.push(['packets', 'totalPackets', String(data.packets.totalPackets)]);

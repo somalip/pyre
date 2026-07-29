@@ -11,27 +11,22 @@
 
 ## 1. Intelligence & Analytics
 
-### A. Anomaly / Spike Detector
-- **What**: Instead of static thresholds (e.g., "CPU > 90%"), detect statistically unusual behavior. Track rolling percentiles and flag when a metric deviates from its baseline by > N sigma.
-- **Use case**: Catches a process that normally uses 2% CPU but jumps to 15%, without needing manual threshold tuning.
-- **Implementation**: Extend `History` to compute rolling mean/std-dev. Add a new `anomalies` panel or overlay badges.
-
-### B. System Health Score
+### A. System Health Score
 - **What**: Aggregate thermal pressure, CPU usage, memory pressure, disk fullness, battery health, and network saturation into a single 0-100 score with a tier label (Healthy / Fair / Warning / Critical).
 - **Use case**: One-glance status for at-a-glance monitoring or scripting.
 - **Implementation**: New `SystemHealth` type in `StatsData`, rendered as a large gauge or top-right badge.
 
-### C. Bottleneck Analyzer
+### B. Bottleneck Analyzer
 - **What**: Auto-diagnose *why* the system is slow. If thermal throttling is active, say "CPU is thermally throttled". If RAM is full and swap is high, say "Memory pressure". If IO is saturated, say "Disk I/O bottleneck".
 - **Use case**: Users don't need to manually correlate four charts; the tool tells them the culprit.
 - **Implementation**: Deterministic rules engine in a new `monitors/analysis.ts` module.
 
-### D. Power / Performance Profile
+### C. Power / Performance Profile
 - **What**: Detect current power source and suggest the active profile (Low Power / High Performance). Show estimated battery life in hours at current discharge rate, and how long to full charge if plugged in.
 - **Use case**: Battery life prediction is already rough; make it actionable.
 - **Implementation**: Enrich `BatteryData` with `chargeRate` and `timeToFull`.
 
-### E. Resource Regression Timeline
+### D. Resource Regression Timeline
 - **What**: Compare current snapshot to the same time yesterday/last week across CPU, memory, and disk trends.
 - **Use case**: "Why is my Mac slower today?" — pyre answers with a trend line.
 - **Implementation**: If CSV logs exist for previous days, cross-compare averages and render a `>`/`<` directional cue.
@@ -118,47 +113,37 @@
 
 ## 4. UX & Dashboard Enhancements
 
-### A. Config File (`~/.config/pyre/config.json`)
-- **What**: Remember theme, default interval, export directory, panel visibility, alert thresholds, P2P defaults, sort mode, and tree view across sessions.
-- **Use case**: Stop typing the same flags.
-- **Implementation**: Read in `state.ts` at startup; write on customizer exit or `pyre config save`.
-
-### B. Per-Core CPU Bars
-- **What**: Render a row of tiny per-core utilization bars inside the CPU card.
-- **Use case**: Immediate visual feedback on hyper-threaded workload.
-- **Implementation**: Extend `CpuData` to include per-core usage; parse `ps -eo pcpu` split, or `sysctl hw.ncpu` + `top` per-core parsing.
-
-### C. Disk I/O Throughput
+### B. Disk I/O Throughput
 - **What**: Track `ioreg` or `diskutil` IO bytes/sec per mount. Show read/write throughput in the Disk panel.
 - **Use case**: Spot runaway Spotlight indexing, Time Machine backups, or file copies.
 - **Implementation**: Delta-based IO rate in `collectDisk` or new `collectDiskIO`.
 
-### D. Interactive Graph Zoom / History Window
+### C. Interactive Graph Zoom / History Window
 - **What**: Allow cycling through graph time windows (e.g., last 20s / 1m / 5m / 15m) instead of a fixed rolling buffer. Press `G` to cycle window sizes.
 - **Use case**: See a longer trend without changing terminal height.
 - **Implementation**: Backing `History` already supports push/pop; adapt `maxLen` dynamically.
 
-### E. App-Centric View
+### D. App-Centric View
 - **What**: Aggregate all child processes under their app bundle name (from `ps -o comm` or `lsof -Fn`). Show one row per app with combined CPU/mem/network.
 - **Use case**: "How bad is Chrome *as a whole*?" rather than 30 individual renderer rows.
 - **Implementation**: Post-process `processes[]` to group by bundle/command prefix.
 
-### F. Focus Mode / Panel Bookmarks
+### E. Focus Mode / Panel Bookmarks
 - **What**: Press `F1`..`F12` to snap to specific panels; save a "bookmark" layout of panel visibility and order.
 - **Use case**: Power users who always start by checking CPU then Network.
 - **Implementation**: Persist bookmarks in config; map F-keys to `state.activePanel` switch.
 
-### G. macOS Notifications
+### F. macOS Notifications
 - **What**: Desktop notifications (macOS `osascript` or `terminal-notifier`) when alert thresholds are crossed, even when the dashboard is not in focus.
 - **Use case**: Don't have to watch the terminal to know the system is overheating.
 - **Implementation**: Call `osascript -e 'display notification'` from `checkAlerts` when `state.alerted` flips true.
 
-### H. Compact / Mini Mode
+### G. Compact / Mini Mode
 - **What**: Single-line or two-line mode for the menu bar / status bar concept: `CPU 42% | MEM 61% | TEMP 72°C | NET ⬆12 ⬇45`.
 - **Use case**: Pipeable snippet: `pyre mini` prints the one-liner, suitable for Übersicht / SwiftBar / xbar widgets.
 - **Implementation**: New `pyre mini` subcommand; no TUI, just stdout.
 
-### I. Vim-Style Navigation
+### H. Vim-Style Navigation
 - **What**: `j`/`k` already exist in customizer; extend to process list scrolling, panel jumping (`H`/`L` for prev/next tab), `/` for filter.
 - **Use case**: Native feel for terminal power users.
 
@@ -232,8 +217,6 @@
 
 | Priority | Feature | Effort | Impact |
 |---|---|---|---|
-| **P0** | Config file (`~/.config/pyre/config.json`) | Medium | High (retention) |
-| **P0** | Per-core CPU bars | Low | High (parity with btop) |
 | **P0** | macOS notifications (`osascript`) | Low | High |
 | **P1** | Mini / one-line mode | Low | Medium (automation) |
 | **P1** | Bottleneck analyzer | Medium | High (diagnostic) |
@@ -247,5 +230,4 @@
 | **P2** | Scripting hooks (`--on-alert`) | Low | Medium |
 | **P3** | App aggregation | Medium | Medium |
 | **P3** | SMART disk health | Medium | Low |
-| **P3** | Anomaly detector | High | Medium |
 | **P3** | Swift helper binary | High | Low |

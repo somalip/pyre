@@ -13,5 +13,5 @@
  */
 export { formatTable, clampWidth, gridColumns, thermalColor, capacityColor, getTabHitboxes, TAB_BAR_ROW, TAB_DEFS, panel } from './render.js';
 export { formatJson, formatCsv, formatTsv, formatGraphs } from './output.js';
-export type { ThemeName, ThemeColors, VisibleItems, TableOptions } from './types.js';
+export type { ThemeName, ThemeColors, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 export { THEMES } from './themes.js';

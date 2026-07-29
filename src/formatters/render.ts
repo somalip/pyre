@@ -12,7 +12,7 @@
 import chalk from 'chalk';
 import { sparkline } from '../sparkline.js';
 import type { History } from '../history.js';
-import type { StatsData, VisibleItems, TableOptions } from './types.js';
+import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 import { THEMES, type ThemeName } from './themes.js';
 
 // --- low-level box drawing ---------------------------------------------------
@@ -142,6 +142,18 @@ function cpuCard(data: StatsData, contentWidth: number): string[] {
     gaugeRow('Usage', data.cpu.usage, contentWidth),
     statRow('Load', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')),
   ];
+  if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
+    const slotW = 2;
+    const maxCores = Math.max(1, Math.floor((contentWidth - 10) / (slotW + 1)));
+    const cores = data.cpu.coreUsage.slice(0, maxCores);
+    const bars = cores.map(u => {
+      const fill = Math.round((Math.min(100, u) / 100) * slotW);
+      const str = '█'.repeat(Math.max(0, fill)) + '░'.repeat(slotW - fill);
+      const color = u > 90 ? chalk.red : u > 70 ? chalk.yellow : chalk.green;
+      return color(str);
+    });
+    lines.push(statRow('Cores', bars.join(' ')));
+  }
   if (data.cpu.temperature) lines.push(statRow('Temp', formatTemp(data.cpu.temperature)));
   return lines;
 }
@@ -571,23 +583,40 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
   }
 }
 
+function anomalyPanel(anomalies: AnomalyAlert[], width: number, theme: ThemeColors): string[] {
+  const lines: string[] = [];
+  for (const a of anomalies) {
+    const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
+    const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
+    lines.push(color(` ⚠ ${a.metric}: ${a.value.toFixed(1)} (${direction}, σ=${a.zScore.toFixed(1)})`));
+  }
+  return lines;
+}
+
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
-  const width = clampWidth(opts.width);
-  const activePanel = opts.activePanel || 'grid';
-  const columns = gridColumns(width);
-  const gap = 2;
-  const cardWidth = Math.floor((width - gap * (columns - 1)) / columns);
-  const contentWidth = cardWidth - 4;
+   const width = clampWidth(opts.width);
+   const activePanel = opts.activePanel || 'grid';
+   const columns = gridColumns(width);
+   const gap = 2;
+   const cardWidth = Math.floor((width - gap * (columns - 1)) / columns);
+   const contentWidth = cardWidth - 4;
 
-  const themeName = opts.theme || 'default';
-  const theme = THEMES[themeName] || THEMES.default;
-  const vis = opts.visible ?? {};
+   const themeName = opts.theme || 'default';
+   const theme = THEMES[themeName] || THEMES.default;
+   const vis = opts.visible ?? {};
 
-  const out: string[] = [];
-  out.push(...header(data, width, [], theme.border));
-  out.push('');
-  out.push(tabBar(activePanel, width, theme));
-  out.push('');
+   const out: string[] = [];
+   out.push(...header(data, width, [], theme.border));
+   out.push('');
+
+   const anomalies = opts.anomalies ?? [];
+   if (anomalies.length && activePanel === 'grid') {
+     out.push(...anomalyPanel(anomalies, width, theme));
+     out.push('');
+   }
+
+   out.push(tabBar(activePanel, width, theme));
+   out.push('');
 
   if (activePanel !== 'grid') {
     const lines = activeDetailLines(data, activePanel, width, opts);
