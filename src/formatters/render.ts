@@ -132,6 +132,14 @@ export function formatTemp(c: number): string {
   return `${c.toFixed(1)}°C / ${celsiusToFahrenheit(c).toFixed(1)}°F`;
 }
 
+/** Render a Celsius reading in the requested unit. */
+export function formatTempUnit(c: number, unit: 'c' | 'f' = 'c'): string {
+  if (unit === 'f') {
+    return `${(c * (9 / 5) + 32).toFixed(1)}°F`;
+  }
+  return `${c.toFixed(1)}°C`;
+}
+
 // --- cards -------------------------------------------------------------------
 
 function cpuCard(data: StatsData, contentWidth: number): string[] {

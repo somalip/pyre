@@ -11,9 +11,12 @@ export interface LiveOptions {
   exportDir?: string;
   autoLog?: boolean;
   theme?: ThemeName;
+  alertCpu?: number;
+  alertTemp?: number;
+  tempUnit?: 'c' | 'f';
 }
 
-export type ExportFormat = 'json' | 'csv' | 'tsv';
+export type ExportFormat = 'json' | 'csv' | 'tsv' | 'html' | 'md';
 
 type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer' | 'p2p';
 

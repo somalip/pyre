@@ -8,11 +8,12 @@
  */
 import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { collectAll } from './monitors/index.js';
-import { formatTable, formatJson, formatCsv, formatTsv } from './formatters/index.js';
+import { formatTable, formatJson, formatCsv, formatTsv, formatHtml, formatMarkdown, formatBytes } from './formatters/index.js';
 import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
@@ -30,6 +31,8 @@ program
     .version(pkg.version)
     .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export, packet monitor, battery predictor')
     .option('-j, --json', 'Output as JSON')
+    .option('--html', 'Output as HTML')
+    .option('--md', 'Output as Markdown')
     .option('-c, --csv', 'Output as CSV')
     .option('-t, --tsv', 'Output as TSV')
     .option('--detailed', 'Include detailed system info and sensor readings')
@@ -43,6 +46,9 @@ program
     .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', config.sortMode)
     .option('--packets', 'Include packet monitor panel in output')
     .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10')
+    .option('--alert-cpu <pct>', 'CPU usage alert threshold (default: 90)', String(config.cpuAlertPct))
+    .option('--alert-temp <c>', 'CPU temperature alert threshold in Celsius (default: 95)', String(config.tempAlertC))
+    .option('--temp-unit <unit>', 'Temperature display unit: c or f (default: c)', 'c')
     .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)')
     .option('--p2p-port <port>', 'P2P port number', '9876')
     .option('--p2p-password <password>', 'Password for P2P authentication')
@@ -62,7 +68,7 @@ program.parse(process.argv);
 const opts = program.opts();
 
 function isExportMode() {
-  return opts.json || opts.csv || opts.tsv;
+  return opts.json || opts.csv || opts.tsv || opts.html || opts.md;
 }
 
 function stripAnsi(s: string): string {
@@ -116,6 +122,36 @@ async function runServerCommand(): Promise<void> {
 async function main() {
   const cmd = program.args[0];
 
+  if (cmd === 'info') {
+    await runInfoCommand();
+    return;
+  }
+
+  if (cmd === 'ssh') {
+    const host = program.args[1];
+    if (!host) {
+      console.log(chalk.red('Usage: pyre ssh <host>'));
+      process.exit(1);
+    }
+    await runSshCommand(host);
+    return;
+  }
+
+  if (cmd === 'web') {
+    await runWebCommand();
+    return;
+  }
+
+  if (cmd === 'bench') {
+    const benchCmd = program.args.slice(1).join(' ');
+    if (!benchCmd) {
+      console.log(chalk.red('Usage: pyre bench <command>'));
+      process.exit(1);
+    }
+    await runBenchCommand(benchCmd);
+    return;
+  }
+
   if (cmd === 'config') {
     const sub = program.args[1];
     if (sub === 'show') {
@@ -135,6 +171,10 @@ async function main() {
     return;
   }
 
+  const alertCpu = opts.alertCpu ? parseInt(opts.alertCpu, 10) : undefined;
+  const alertTemp = opts.alertTemp ? parseInt(opts.alertTemp, 10) : undefined;
+  const tempUnit = opts.tempUnit === 'f' ? 'f' : 'c';
+
   if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
     if (cmd === 'live') {
       program.args.shift();
@@ -147,6 +187,9 @@ async function main() {
       theme: opts.theme || config.theme,
       exportDir: opts.exportDir || config.exportDir,
       autoLog: opts.log || config.autoLog,
+      alertCpu,
+      alertTemp,
+      tempUnit,
     }, splashPromise);
     return;
   }
@@ -174,6 +217,8 @@ async function main() {
 
   let output: string;
   if (opts.json) output = formatJson(data);
+  else if (opts.html) output = formatHtml(data);
+  else if (opts.md) output = formatMarkdown(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
   else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, visible: { packets: opts.packets ? true : undefined } });
@@ -379,6 +424,136 @@ async function runP2PConnect(): Promise<void> {
     _prevFrameLines = [];
     client.disconnect();
     process.stdout.write('\x1b[?25h\x1b[2J\x1b[H');
+    process.exit(0);
+  });
+}
+
+async function runInfoCommand(): Promise<void> {
+  const data = await collectAll({ detailed: true });
+  const lines: string[] = [];
+  lines.push(chalk.bold('  pyre info'));
+  lines.push('');
+  lines.push(`  Hostname:  ${data.header.hostname}`);
+  lines.push(`  OS:        ${data.header.os}`);
+  lines.push(`  Uptime:    ${data.header.uptime}`);
+  lines.push(`  CPU:       ${data.cpu.brand}`);
+  lines.push(`  Cores:     ${data.cpu.physicalCores}/${data.cpu.cores} (phys/log)`);
+  lines.push(`  Frequency: ${data.cpu.frequency} MHz`);
+  lines.push(`  Memory:    ${formatBytes(data.memory.total)}`);
+  if (data.gpu) lines.push(`  GPU:       ${data.gpu.model} (${formatBytes(data.gpu.memory)})`);
+  if (data.battery) {
+    lines.push(`  Battery:   ${data.battery.level}% (${data.battery.state})`);
+    lines.push(`  Health:    ${data.battery.health}`);
+  }
+  lines.push(`  Thermal:   ${data.thermal.state}`);
+  console.log(lines.join('\n'));
+}
+
+async function runSshCommand(host: string): Promise<void> {
+  const password = opts.p2pPassword || 'mysecret';
+  const cmd = `ssh -o LogLevel=QUIET ${host} "pyre --json --once"`;
+  console.log(chalk.bold(`\n  pyre ssh — ${host}`));
+  console.log(chalk.dim(`  Running: ${cmd}\n`));
+
+  const { execFile } = await import('node:child_process');
+  const child = execFile('ssh', ['-o', 'LogLevel=QUIET', host, 'pyre', '--json', '--once'], (err, stdout, stderr) => {
+    if (err) {
+      console.log(chalk.red(`  SSH failed: ${err.message}`));
+      console.log(chalk.dim('  Ensure SSH keys are set up or the host is reachable.'));
+      process.exit(1);
+    }
+    if (stderr) console.log(chalk.dim(stderr));
+    try {
+      const remote = JSON.parse(stdout);
+      console.log(formatTable(remote, { width: process.stdout.columns || 80, sortBy: 'cpu', treeView: false, visible: { packets: true } }));
+    } catch {
+      console.log(stdout);
+    }
+    process.exit(0);
+  });
+  child.stdin.end();
+
+  process.once('SIGINT', () => {
+    child.kill('SIGTERM');
+    process.exit(0);
+  });
+}
+
+async function runWebCommand(): Promise<void> {
+  const http = await import('node:http');
+  const data = await collectAll({ detailed: true });
+
+  const server = http.createServer((req, res) => {
+    if (req.url === '/' || req.url === '/index.html') {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(formatHtml(data));
+    } else if (req.url === '/api') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(data, null, 2));
+    } else {
+      res.writeHead(404);
+      res.end('Not found');
+    }
+  });
+
+  server.listen(0, '127.0.0.1', async () => {
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const url = `http://127.0.0.1:${port}`;
+    console.log(chalk.bold(`\n  pyre web`));
+    console.log(chalk.dim(`  Dashboard: ${url}`));
+    console.log(chalk.dim(`  API:      ${url}/api`));
+    console.log(chalk.dim('  Press Ctrl+C to stop\n'));
+
+    process.once('SIGINT', () => {
+      server.close();
+      process.exit(0);
+    });
+  });
+}
+
+async function runBenchCommand(benchCmd: string): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  const logDir = opts.exportDir || './pyre-exports';
+  const file = path.join(logDir, `pyre-bench-${new Date().toISOString().replace(/[:.]/g, '-')}.csv`);
+
+  if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+  const stream = fs.createWriteStream(file, { flags: 'a' });
+  stream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state\n');
+
+  console.log(chalk.bold(`\n  pyre bench`));
+  console.log(chalk.dim(`  Command: ${benchCmd}`));
+  console.log(chalk.dim(`  Log: ${file}\n`));
+
+  const child = spawn('sh', ['-c', benchCmd]);
+  child.stdout.on('data', d => process.stdout.write(d));
+  child.stderr.on('data', d => process.stdout.write(d));
+
+  const interval = parseFloat(opts.interval) || 2;
+  const handle = setInterval(async () => {
+    try {
+      const data = await collectAll({ detailed: opts.detailed });
+      const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? '';
+      const rxPackets = data.network.rxPackets ?? 0;
+      const txPackets = data.network.txPackets ?? 0;
+      const connections = data.network.connections ?? 0;
+      stream.write(`${data.timestamp},${data.cpu.usage},${data.memory.usagePercent},${temp},${data.network.rxBytes},${data.network.txBytes},${rxPackets},${txPackets},${connections},${data.thermal.state}\n`);
+    } catch {
+      // skip bad tick
+    }
+  }, interval * 1000);
+
+  child.on('close', () => {
+    clearInterval(handle);
+    stream.end();
+    console.log(chalk.green(`\n  Bench complete. Log saved to ${file}`));
+    process.exit(0);
+  });
+
+  process.once('SIGINT', () => {
+    clearInterval(handle);
+    child.kill('SIGTERM');
+    stream.end();
     process.exit(0);
   });
 }

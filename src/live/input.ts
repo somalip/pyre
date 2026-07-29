@@ -89,21 +89,24 @@ function handleInputModeKey(str: string, key: readline.Key) {
            const curIdx = animations.indexOf(state.splashAnimation);
            state.splashAnimation = animations[(curIdx + 1) % animations.length];
            setStatus(`Splash animation: ${state.splashAnimation}`);
-         } else if (selected === 'Notifications') {
-           state.notificationsEnabled = !state.notificationsEnabled;
-           setStatus(`Notifications: ${state.notificationsEnabled ? 'on' : 'off'}`);
-         } else {
-          const toggleKey = getToggleKey(selected);
-          if (toggleKey) {
-            if (toggleKey === 'tree') {
-              state.treeView = !state.treeView;
-              state.visiblePanels.tree = state.treeView;
-            } else {
-              const isVisible = state.visiblePanels[toggleKey] !== false;
-              state.visiblePanels[toggleKey] = !isVisible;
+          } else if (selected === 'Notifications') {
+            state.notificationsEnabled = !state.notificationsEnabled;
+            setStatus(`Notifications: ${state.notificationsEnabled ? 'on' : 'off'}`);
+           } else if (selected === 'Temperature Unit') {
+             state.tempUnit = state.tempUnit === 'c' ? 'f' : 'c';
+             setStatus(`Temperature unit: ${state.tempUnit.toUpperCase()}`);
+           } else {
+            const toggleKey = getToggleKey(selected);
+            if (toggleKey) {
+              if (toggleKey === 'tree') {
+                state.treeView = !state.treeView;
+                state.visiblePanels.tree = state.treeView;
+              } else {
+                const isVisible = state.visiblePanels[toggleKey] !== false;
+                state.visiblePanels[toggleKey] = !isVisible;
+              }
             }
           }
-        }
         invalidateTableCache();
         invalidateFrame();
         persistConfig();
@@ -339,18 +342,21 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   * rendering interval.  Idempotent — calling while already
   * running is a no-op.
   */
-  export async function startLive(opts: LiveOptions, splashPromise?: Promise<void>) {
-    if (state.running) return;
-    state.running = true;
-    state.paused = false;
-    state.detailed = !!opts.detailed;
-    if (opts.theme) state.currentTheme = opts.theme;
-    state.interval = opts.interval;
-    if (opts.exportDir) state.exportDir = opts.exportDir;
-    state.termWidth = process.stdout.columns || 80;
-    state.termHeight = process.stdout.rows || 24;
-    state.history.reset();
-    state.history.setMaxLen(Math.max(20, Math.min(200, state.termWidth - 30)));
+   export async function startLive(opts: LiveOptions, splashPromise?: Promise<void>) {
+     if (state.running) return;
+     state.running = true;
+     state.paused = false;
+     state.detailed = !!opts.detailed;
+     if (opts.theme) state.currentTheme = opts.theme;
+     state.interval = opts.interval;
+     if (opts.exportDir) state.exportDir = opts.exportDir;
+     if (opts.alertCpu !== undefined) state.CPU_ALERT_PCT = opts.alertCpu;
+     if (opts.alertTemp !== undefined) state.TEMP_ALERT_C = opts.alertTemp;
+     if (opts.tempUnit) state.tempUnit = opts.tempUnit;
+     state.termWidth = process.stdout.columns || 80;
+     state.termHeight = process.stdout.rows || 24;
+     state.history.reset();
+     state.history.setMaxLen(Math.max(20, Math.min(200, state.termWidth - 30)));
 
     const warmupPromise = doWarmup();
 
@@ -496,6 +502,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
            state.detailed = !state.detailed;
            setStatus(`Detailed sensor mode: ${state.detailed ? 'on' : 'off'}`);
            break;
+        case 'T':
+          state.tempUnit = state.tempUnit === 'c' ? 'f' : 'c';
+          setStatus(`Temperature unit: ${state.tempUnit.toUpperCase()}`);
+          invalidateTableCache();
+          render();
+          break;
         case 's':
           const sortCycle: SortMode[] = ['cpu', 'mem', 'pid', 'user', 'command', 'state', 'threads', 'runtime'];
           const curIdx = sortCycle.indexOf(state.sortMode);
@@ -527,7 +539,9 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           render();
           break;
         case 'f':
-          state.exportFormat = state.exportFormat === 'json' ? 'csv' : state.exportFormat === 'csv' ? 'tsv' : 'json';
+          const fmtCycle: ExportFormat[] = ['json', 'csv', 'tsv', 'html', 'md'];
+          const curFmt = fmtCycle.indexOf(state.exportFormat);
+          state.exportFormat = fmtCycle[(curFmt + 1) % fmtCycle.length];
           setStatus(`Export format: ${state.exportFormat}`);
           render();
           break;

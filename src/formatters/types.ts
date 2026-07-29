@@ -65,7 +65,9 @@ export interface TableOptions {
     /** Show process tree view instead of flat list. */
     treeView?: boolean;
     /** Active panel for detail/focus view. 'grid' means show all panels. */
-    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process';
+    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p';
     /** Active anomaly alerts from the statistical detector. */
     anomalies?: AnomalyAlert[];
+    /** Temperature display unit: 'c' or 'f'. */
+    tempUnit?: 'c' | 'f';
 }

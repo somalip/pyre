@@ -1,6 +1,6 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, and P2P live data streaming.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, P2P live data streaming, web dashboard, SSH monitoring, and micro-benchmarking.
 
 ![Version](https://img.shields.io/badge/version-5.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
@@ -26,12 +26,17 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 - **Network** — RX/TX bytes and per-second rates
 - **Top processes** — sorted by CPU, memory, or PID with live filtering, tree view, and kill with signal picker
 - **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, and tab-based panel navigation
-- **Snapshot export** — JSON, CSV, or TSV output formats
-- **Continuous CSV logging** — automatic per-tick data logging to timestamped files
+- **Snapshot export** — JSON, CSV, TSV, HTML, or Markdown output formats
+- **Continuous CSV logging** — automatic per-tick data logging to timestamped files with log rotation
 - **Visual themes** — six built-in colour themes for the dashboard
-- **Alert system** — configurable CPU usage and temperature threshold alerts with terminal bell notification
+- **Alert system** — configurable CPU usage and temperature threshold alerts with terminal bell and desktop notification
 - **Graph mode toggle** — switch between sparkline and bar graph rendering in the live dashboard
 - **P2P dashboard panel** — monitor P2P server status and peer events directly from the live dashboard
+- **Temperature unit toggle** — switch between Celsius and Fahrenheit display in live mode
+- **Hardware overview** — `pyre info` prints a concise hardware summary
+- **Remote SSH monitoring** — `pyre ssh <host>` streams a remote Mac's live dashboard locally
+- **Web dashboard** — `pyre web` serves a self-contained HTML report on a local port
+- **Micro-benchmarking** — `pyre bench <cmd>` logs resource usage during any command
 
 ## Installation
 
@@ -52,12 +57,18 @@ curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
 ```bash
 pyre                           # Static snapshot, all system stats
 pyre --detailed                # Include sensor / powermetrics detail
-pyre --json                    # JSON output (also --csv, --tsv)
+pyre --json                    # JSON output (also --csv, --tsv, --html, --md)
+pyre --html --out report.html  # Self-contained HTML report
 
 pyre live                      # Interactive live dashboard
 pyre live --interval 3 --log   # Custom refresh interval + auto-logging
+pyre live --alert-cpu 80 --alert-temp 85 --temp-unit f
 
 pyre server                    # Print ready-to-paste P2P server/client commands for your LAN
+pyre info                      # Concise hardware overview
+pyre ssh build-server          # Stream remote Mac stats over SSH
+pyre web                       # Serve HTML dashboard on localhost
+pyre bench "make build"        # Log resources during a command
 ```
 
 ## Options Reference
@@ -67,6 +78,8 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | Option | Description |
 |---|---|
 | `-j, --json` | Output as JSON |
+| `--html` | Output as self-contained HTML |
+| `--md` | Output as Markdown |
 | `-c, --csv` | Output as CSV |
 | `-t, --tsv` | Output as TSV |
 | `--detailed` | Include detailed system info and sensor readings |
@@ -76,10 +89,12 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `--out <file>` | Write snapshot output to a file |
 | `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
 | `--log` | Start continuous CSV logging immediately when live mode starts |
-| `--packets` | Include packet monitor panel in static output |
 | `--tree` | Show process tree view instead of flat list |
 | `--sort <key>` | Sort processes by: `cpu`, `mem`, `pid`, `user`, `command`, `state`, `threads`, `runtime` |
 | `--limit <n>` | Max processes in snapshot (`0` = all, default: `10`) |
+| `--alert-cpu <pct>` | CPU usage alert threshold (default: `90`) |
+| `--alert-temp <c>` | CPU temperature alert threshold in Celsius (default: `95`) |
+| `--temp-unit <unit>` | Temperature display unit: `c` or `f` (default: `c`) |
 
 ## Commands
 
@@ -89,12 +104,39 @@ These options apply to both static snapshots and `pyre live`, except where noted
 |---|---|
 | `pyre` | Show all system stats in a formatted table |
 | `pyre --once` | Show a single static snapshot (same as default without live) |
+| `pyre --json` | JSON output |
+| `pyre --html` | Self-contained HTML report |
+| `pyre --md` | Markdown tables |
+
+### Hardware overview
+
+| Command | Description |
+|---|---|
+| `pyre info` | Concise hardware summary (CPU, memory, GPU, battery, thermal) |
+
+### Benchmarking
+
+| Command | Description |
+|---|---|
+| `pyre bench <cmd>` | Log CPU, memory, network, and thermal usage while running a command |
+
+### Remote monitoring
+
+| Command | Description |
+|---|---|
+| `pyre ssh <host>` | Stream live stats from a remote Mac over SSH |
 
 ### Live dashboard
 
 | Command | Description |
 |---|---|
 | `pyre live` | Start the interactive live dashboard |
+
+### Web dashboard
+
+| Command | Description |
+|---|---|
+| `pyre web` | Serve a self-contained HTML dashboard on localhost |
 
 ### P2P
 
@@ -222,7 +264,8 @@ Run with `pyre live`.
 | `g` | Show / hide sparkline graphs |
 | `b` | Cycle graph mode (sparkline ↔ bar) |
 | `s` | Cycle sort order (CPU → memory → PID → user → command → state → threads → runtime) |
-| `f` | Cycle export format (JSON → CSV → TSV) |
+| `f` | Cycle export format (JSON → CSV → TSV → HTML → Markdown) |
+| `T` | Cycle temperature unit (Celsius ↔ Fahrenheit) |
 | `e` | Export a snapshot to the export directory |
 | `l` | Toggle continuous CSV logging |
 | `c` | Open the UI customizer |
@@ -245,6 +288,8 @@ Press `c` to open the customizer overlay. From there:
 - Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes) on or off
 - Switch graph mode between sparkline and bar charts
 - Toggle process tree view
+- Toggle temperature unit between Celsius and Fahrenheit
+- Toggle notifications on or off
 
 ### Mouse support
 
@@ -306,10 +351,10 @@ The live dashboard monitors critical metrics and notifies you when thresholds ar
 
 | Metric | Default threshold | Alert behavior |
 |---|---|---|
-| CPU usage | 90% | Terminal bell (`\x07`) + red status message for 5 seconds |
-| CPU temperature | 95°C | Terminal bell + red status message for 5 seconds |
+| CPU usage | 90% | Terminal bell (`\x07`) + red status message for 5 seconds + desktop notification |
+| CPU temperature | 95°C | Terminal bell + red status message for 5 seconds + desktop notification |
 
-Alerts fire once when a threshold is first crossed and reset when conditions clear. Thresholds are configurable in source (`CPU_ALERT_PCT` and `TEMP_ALERT_C` in `src/live/state.ts`).
+Alerts fire once when a threshold is first crossed and reset when conditions clear. Thresholds are configurable via `--alert-cpu` and `--alert-temp`, or in the config file (`cpuAlertPct` and `tempAlertC` in `~/.config/pyre/config.json`).
 
 ## Themes
 
@@ -333,13 +378,15 @@ Triggered by the `e` key in live mode, or the `--out` flag. Written to the expor
 ```
 pyre-2026-07-26T10-54-47-191Z.json
 pyre-2026-07-26T10-54-52-306Z.csv
+pyre-2026-07-26T10-54-52-306Z.html
+pyre-2026-07-26T10-54-52-306Z.md
 ```
 
-Format follows the current export format — cycle with `f` in live mode, or set via `--json`, `--csv`, `--tsv` in static mode.
+Format follows the current export format — cycle with `f` in live mode, or set via `--json`, `--csv`, `--tsv`, `--html`, `--md` in static mode.
 
 ### Continuous CSV logging
 
-Triggered by the `l` key in live mode, or the `--log` flag. Each tick appends a row to a timestamped file:
+Triggered by the `l` key in live mode, or the `--log` flag. Each tick appends a row to a timestamped file. Old logs are automatically rotated (max 20 files or 50 MB, files older than 7 days are pruned):
 
 ```
 pyre-log-2026-07-26T10-54-47-191Z.csv
@@ -418,20 +465,6 @@ npm install
 | `npm start` | Run the built binary from `dist/` |
 | `npm run dev` | Run directly via `tsx` (no build step) |
 | `npm test` | Verify the built binary responds to `--help` |
-
-## Planned Features
-
-- **Configuration file** — persistent settings via `~/.config/pyre/config.json` (theme, refresh interval, export directory, panel visibility)
-- **HTML & Markdown export** — styled self-contained HTML reports; Markdown tables for docs and notes
-- **Log rotation** — automatic rotation of CSV logs with configurable max file count/size
-- **Custom alert thresholds** — e.g. `pyre live --alert-cpu 80 --alert-temp 85`
-- **Temperature unit toggle** — switch between Celsius and Fahrenheit
-- **`pyre info` command** — concise hardware overview (CPU model, cores, memory total, macOS version, uptime)
-- **Desktop notifications** — via `osascript` or `terminal-notifier` when alert thresholds are crossed, even when the dashboard isn't focused
-- **Remote SSH monitoring** — monitor a remote macOS machine over SSH without the P2P server setup
-- **Web dashboard** — browser-based monitoring served on a local port
-
----
 
 ## License
 

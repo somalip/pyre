@@ -11,7 +11,7 @@
  * - `render.ts` — dashboard layout, cards, tables, and the main `formatTable`
  * - `output.ts` — JSON/CSV/TSV export and sparkline graph rendering
  */
-export { formatTable, clampWidth, gridColumns, thermalColor, capacityColor, getTabHitboxes, TAB_BAR_ROW, TAB_DEFS, panel } from './render.js';
-export { formatJson, formatCsv, formatTsv, formatGraphs } from './output.js';
+export { formatTable, clampWidth, gridColumns, thermalColor, capacityColor, getTabHitboxes, TAB_BAR_ROW, TAB_DEFS, panel, formatBytes } from './render.js';
+export { formatJson, formatCsv, formatTsv, formatGraphs, formatHtml, formatMarkdown } from './output.js';
 export type { ThemeName, ThemeColors, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 export { THEMES } from './themes.js';

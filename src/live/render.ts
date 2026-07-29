@@ -13,6 +13,21 @@ import { detectAnomalies } from '../anomalies.js';
 import { state, setStatus, SIGNAL_OPTIONS, getToggleKey } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
+function formatTempForUnit(c: number): string {
+  if (state.tempUnit === 'f') {
+    const f = c * (9 / 5) + 32;
+    return `${f.toFixed(1)}°F`;
+  }
+  return `${c.toFixed(1)}°C`;
+}
+
+function applyTempUnit(text: string): string {
+  if (state.tempUnit === 'f') {
+    return text.replace(/([\d.]+)°C \/ ([\d.]+)°F/g, '$2°F');
+  }
+  return text.replace(/([\d.]+)°C \/ ([\d.]+)°F/g, '$1°C');
+}
+
 // --- render caching -----------------------------------------------------------
 
 let _cachedTable = '';
@@ -105,28 +120,33 @@ function renderCustomizerOverlay(): string {
      chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) '),
    ];
 
-    state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
-      const isSelected = idx === state.customizerIndex;
-      const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+     state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
+       const isSelected = idx === state.customizerIndex;
+       const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
 
-       if (opt === 'Theme') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-       } else if (opt === 'Graph Mode') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
-       } else if (opt === 'Splash Screen') {
-         const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
-         lines.push(`${prefix}${opt}: ${status}`);
-       } else if (opt === 'Splash Color') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
-       } else if (opt === 'Splash Animation') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
-       } else {
-         const toggleKey = getToggleKey(opt);
-         const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
-         const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-         lines.push(`${prefix}${opt}: ${status}`);
-       }
-    });
+        if (opt === 'Theme') {
+          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
+        } else if (opt === 'Graph Mode') {
+          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
+        } else if (opt === 'Splash Screen') {
+          const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
+          lines.push(`${prefix}${opt}: ${status}`);
+        } else if (opt === 'Splash Color') {
+          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
+        } else if (opt === 'Splash Animation') {
+          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
+        } else if (opt === 'Notifications') {
+          const status = state.notificationsEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
+          lines.push(`${prefix}${opt}: ${status}`);
+        } else if (opt === 'Temperature Unit') {
+          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.tempUnit.toUpperCase())} [C, F]`);
+        } else {
+          const toggleKey = getToggleKey(opt);
+          const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
+          const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+          lines.push(`${prefix}${opt}: ${status}`);
+        }
+     });
 
    return lines.map(l => `  ${l}`).join('\n');
  }
@@ -176,26 +196,27 @@ function render() {
    const anomalies = detectAnomalies(state.lastData, state.history);
    const anomalyCacheKey = anomalies.map(a => `${a.metric}:${a.zScore.toFixed(2)}`).join(',');
    const cacheParams = params + '|' + anomalyCacheKey;
-   const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
-     ? (() => {
-         const out = formatTable(state.lastData, {
-           width: state.termWidth,
-           sortBy: state.sortMode,
-           filter: state.processFilter || undefined,
-           processLimit: processRowBudget(),
-           theme: state.currentTheme,
-           visible: state.visiblePanels,
-           treeView: state.treeView,
-           activePanel: state.activePanel,
-           anomalies,
-         });
-         _cachedTableData = state.lastData;
-         _cachedTableParams = cacheParams;
-         _cachedTable = out;
-         _tableDataDirty = false;
-         return out;
-       })()
-     : _cachedTable;
+    const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
+      ? (() => {
+          const out = formatTable(state.lastData, {
+            width: state.termWidth,
+            sortBy: state.sortMode,
+            filter: state.processFilter || undefined,
+            processLimit: processRowBudget(),
+            theme: state.currentTheme,
+            visible: state.visiblePanels,
+            treeView: state.treeView,
+            activePanel: state.activePanel,
+            anomalies,
+            tempUnit: state.tempUnit,
+          });
+          _cachedTableData = state.lastData;
+          _cachedTableParams = cacheParams;
+          _cachedTable = applyTempUnit(out);
+          _tableDataDirty = false;
+          return _cachedTable;
+        })()
+      : _cachedTable;
 
   const bodyLines: string[] = [];
   if (state.activePanel === 'p2p') {
@@ -212,8 +233,8 @@ function render() {
           const out = formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode);
           _cachedGraphsVersion = state.history.version;
           _cachedGraphsParams = graphsParams;
-          _cachedGraphs = out;
-          return out;
+          _cachedGraphs = applyTempUnit(out);
+          return _cachedGraphs;
         })()
       : _cachedGraphs;
 
@@ -260,16 +281,17 @@ function render() {
 
 function footerLine(): string {
    const row1: [string, string][] = [
-     ['q', 'quit'],
-     ['c', 'customize UI'],
-     ['←/→', 'tab'],
-     ['1-9', 'panels'],
-     ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-     ['b', `graph:${state.graphMode}`],
-     ['t', state.treeView ? 'flat' : 'tree'],
-     ['d', state.detailed ? 'basic' : 'detailed'],
-     ['p', state.paused ? 'resume' : 'pause'],
-   ];
+      ['q', 'quit'],
+      ['c', 'customize UI'],
+      ['←/→', 'tab'],
+      ['1-9', 'panels'],
+      ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
+      ['b', `graph:${state.graphMode}`],
+      ['t', state.treeView ? 'flat' : 'tree'],
+      ['d', state.detailed ? 'basic' : 'detailed'],
+      ['T', `temp:${state.tempUnit}`],
+      ['p', state.paused ? 'resume' : 'pause'],
+    ];
    const row2: [string, string][] = [
      ['s', `sort:${state.sortMode}`],
      ['/', 'filter'],
@@ -317,7 +339,7 @@ function checkAlerts(data: StatsData) {
      process.stdout.write('\x07');
      const reasons: string[] = [];
      if (data.cpu.usage >= state.CPU_ALERT_PCT) reasons.push(`CPU at ${data.cpu.usage}%`);
-     if (temp !== null && temp >= state.TEMP_ALERT_C) reasons.push(`Temp at ${temp}°C`);
+     if (temp !== null && temp >= state.TEMP_ALERT_C) reasons.push(`Temp at ${formatTempForUnit(temp)}`);
      for (const a of anomalies) {
        reasons.push(`${a.metric} anomaly (σ=${a.zScore.toFixed(1)})`);
      }
@@ -326,6 +348,6 @@ function checkAlerts(data: StatsData) {
     } else if (!hot && !anomalyTriggered) {
      state.alerted = false;
    }
- }
+  }
 
 export { render, footerLine, renderCustomizerOverlay, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame };
