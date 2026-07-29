@@ -1,15 +1,15 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, battery predictor, process management, export, alerts, and P2P live data streaming.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, and P2P live data streaming.
 
 ![Version](https://img.shields.io/badge/version-5.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
 ![Node](https://img.shields.io/badge/node-18%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> Note : things may not work as intended if your firewall settings do not allow inbound connections for this program
-
-> Additionally, you can skip init with enter but you may encounter some UI bugs. I am working on the issue at the moment.
+> **Note:** things may not work as intended if your firewall settings do not allow inbound connections for this program.
+>
+> You can skip init with Enter, but you may encounter some UI bugs. This is being worked on.
 
 ## Features
 
@@ -47,37 +47,22 @@ npm install -g pyre-cli
 curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
 ```
 
-## Usage
-
-### Static snapshot
+## Quick Start
 
 ```bash
-pyre                      # Show all system stats in a formatted table
-pyre --detailed           # Include sensor / powermetrics detail
-pyre --json               # JSON output
-pyre --csv                # CSV export
-pyre --tsv                # TSV export
-pyre --once               # Single static snapshot (same as default without live)
-pyre --out report.json    # Also write output to a file
-pyre --packets            # Include packet monitor panel
-pyre --tree               # Show process tree view instead of flat list
-pyre --sort mem           # Sort processes by memory usage
-pyre --limit 20           # Limit processes to 20 (0 = all)
-pyre --theme dracula      # Set theme for live mode
+pyre                           # Static snapshot, all system stats
+pyre --detailed                # Include sensor / powermetrics detail
+pyre --json                    # JSON output (also --csv, --tsv)
+
+pyre live                      # Interactive live dashboard
+pyre live --interval 3 --log   # Custom refresh interval + auto-logging
+
+pyre server                    # Print ready-to-paste P2P server/client commands for your LAN
 ```
 
-### Live dashboard
+## Options Reference
 
-```bash
-pyre live                      # Start the interactive live dashboard
-pyre live --interval 3         # Refresh every 3 seconds
-pyre live --detailed           # Live mode with detailed sensor readings
-pyre live --export-dir ./my-exports   # Custom directory for snapshot exports and logs
-pyre live --log                # Start continuous CSV logging immediately
-pyre live --interval 5 --log   # Custom interval with auto-logging
-```
-
-### Options
+These options apply to both static snapshots and `pyre live`, except where noted.
 
 | Option | Description |
 |---|---|
@@ -85,7 +70,7 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `-c, --csv` | Output as CSV |
 | `-t, --tsv` | Output as TSV |
 | `--detailed` | Include detailed system info and sensor readings |
-| `--theme <name>` | Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox) |
+| `--theme <name>` | Theme for live mode (`default`, `dracula`, `cyberpunk`, `monochrome`, `nord`, `gruvbox`) |
 | `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
 | `--once` | Show a single static snapshot instead of live feed |
 | `--out <file>` | Write snapshot output to a file |
@@ -94,7 +79,7 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `--packets` | Include packet monitor panel in static output |
 | `--tree` | Show process tree view instead of flat list |
 | `--sort <key>` | Sort processes by: `cpu`, `mem`, `pid`, `user`, `command`, `state`, `threads`, `runtime` |
-| `--limit <n>` | Max processes in snapshot (0 = all, default: `10`) |
+| `--limit <n>` | Max processes in snapshot (`0` = all, default: `10`) |
 
 ## Commands
 
@@ -103,138 +88,35 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | Command | Description |
 |---|---|
 | `pyre` | Show all system stats in a formatted table |
-| `pyre --detailed` | Include detailed sensor and powermetrics readings |
-| `pyre --json` | Output stats as JSON |
-| `pyre --csv` | Output stats as CSV |
-| `pyre --tsv` | Output stats as TSV |
 | `pyre --once` | Show a single static snapshot (same as default without live) |
-| `pyre --out <file>` | Write snapshot output to a file |
-| `pyre --packets` | Include packet monitor panel in static output |
-| `pyre --tree` | Show process tree view instead of flat list |
-| `pyre --sort <key>` | Sort processes by: cpu, mem, pid, user, command, state, threads, runtime |
-| `pyre --limit <n>` | Max processes in snapshot (0 = all, default: 10) |
 
 ### Live dashboard
 
 | Command | Description |
 |---|---|
 | `pyre live` | Start the interactive live dashboard |
-| `pyre live --interval <seconds>` | Set refresh interval for live mode (default: `2`) |
-| `pyre live --detailed` | Live mode with detailed sensor readings |
-| `pyre live --export-dir <dir>` | Custom directory for snapshot exports and logs |
-| `pyre live --log` | Start continuous CSV logging immediately |
 
-### Quick P2P setup
+### P2P
 
 | Command | Description |
 |---|---|
-| `pyre server` | Detect the local IP and print ready-to-paste commands for starting a P2P server and connecting a client on the same LAN |
-
-`pyre server` automatically detects the machine's non-loopback IP address and outputs two copy-paste commands — one to start the server and one for a client on the same network to connect. Default port is `9876` and default password is `mysecret`.
-
-### P2P server
-
-| Command | Description |
-|---|---|
+| `pyre server` | Detect the local IP and print ready-to-paste commands for starting a P2P server and connecting a client on the same LAN (default port `9876`, default password `mysecret`) |
 | `pyre p2p server` | Start a P2P server that streams live stats to authenticated peers |
-| `pyre p2p server --p2p-host <host>` | Bind address (default: `0.0.0.0`) |
-| `pyre p2p server --p2p-port <port>` | Port number (default: `9876`) |
-| `pyre p2p server --p2p-password <password>` | Password for authentication (required) |
-| `pyre p2p server --interval <seconds>` | Data refresh interval (default: `2`) |
-| `pyre p2p server --detailed` | Include detailed sensor readings |
-| `pyre p2p server --p2p-cert <file>` | TLS certificate file (PEM) for encrypted connections |
-| `pyre p2p server --p2p-key <file>` | TLS private key file (PEM) for the server |
-| `pyre p2p server --p2p-ca <file>` | TLS CA certificate file (PEM) — required by clients using `--p2p-tls` |
-| `pyre p2p server --p2p-rate-limit <n>` | Max auth attempts per IP per minute (default: `5`) |
-| `pyre p2p server --p2p-allow <ips>` | Comma-separated list of allowed IPs (empty = all) |
-| `pyre p2p server --p2p-deny <ips>` | Comma-separated list of denied IPs |
-| `pyre p2p server --p2p-audit-log <dir>` | Directory for P2P audit logs |
-| `pyre p2p server --p2p-hmac-key <key>` | HMAC key for message signing (default: derived from password) |
-
-### P2P client
-
-| Command | Description |
-|---|---|
 | `pyre p2p connect` | Connect to a P2P server and display live stats |
-| `pyre p2p connect --p2p-host <host>` | Server address (default: `127.0.0.1`) |
-| `pyre p2p connect --p2p-port <port>` | Server port (default: `9876`) |
-| `pyre p2p connect --p2p-password <password>` | Password for authentication (required) |
-| `pyre p2p connect --p2p-tls` | Enable TLS encryption for the connection |
-| `pyre p2p connect --p2p-ca <file>` | TLS CA certificate file (PEM) — required when using `--p2p-tls` |
-| `pyre p2p connect --p2p-insecure` | Skip TLS certificate verification (client only) |
-| `pyre p2p connect --p2p-audit-log <dir>` | Directory for P2P client audit logs |
-| `pyre p2p connect --p2p-hmac-key <key>` | HMAC key for message signing (must match server) |
 
-### Options (shared)
+See [P2P Live Data Streaming](#p2p-live-data-streaming) below for the full option set.
 
-| Option | Description |
-|---|---|
-| `-j, --json` | Output as JSON |
-| `-c, --csv` | Output as CSV |
-| `-t, --tsv` | Output as TSV |
-| `--detailed` | Include detailed system info and sensor readings |
-| `--theme <name>` | Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox) |
-| `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
-| `--once` | Show a single static snapshot instead of live feed |
-| `--out <file>` | Write snapshot output to a file |
-| `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
-| `--log` | Start continuous CSV logging immediately when live mode starts |
-| `--packets` | Include packet monitor panel in static output |
-| `--tree` | Show process tree view instead of flat list |
-| `--sort <key>` | Sort processes by: `cpu`, `mem`, `pid`, `user`, `command`, `state`, `threads`, `runtime` |
-| `--limit <n>` | Max processes in snapshot (0 = all, default: `10`) |
-
-### Live dashboard keyboard controls
-
-| Key | Action |
-|---|---|
-| `q` | Quit the dashboard |
-| `p` | Pause / resume the refresh cycle |
-| `d` | Toggle detailed sensor mode |
-| `g` | Show / hide sparkline graphs |
-| `b` | Cycle graph mode (sparkline ↔ bar) |
-| `s` | Cycle sort order (CPU → memory → PID → user → command → state → threads → runtime) |
-| `f` | Cycle export format (JSON → CSV → TSV) |
-| `e` | Export a snapshot to the export directory |
-| `l` | Toggle continuous CSV logging |
-| `c` | Open the UI customizer |
-| `/` | Open process filter |
-| `k` | Open process kill (enter PID, then Enter to confirm) |
-| `S` | Open signal picker for kill (cycle SIGTERM → SIGKILL → SIGINT → SIGHUP → SIGSTOP → SIGCONT) |
-| `t` | Toggle process tree view |
-| `r` | Toggle P2P server (or enter P2P password input) |
-| `+` | Increase refresh interval by 1 second |
-| `-` | Decrease refresh interval by 1 second |
-| `←` / `→` / `tab` | Cycle to next / previous panel tab |
-| `1`–`9`, `0` | Jump to panel by number (cpu, mem, gpu, power, battery, thermal, network, packets, tasks, disk) |
-| `P` | Toggle process panel |
-| `↑` / `k` | Navigate customizer options |
-| `↓` / `j` | Navigate customizer options |
-| `Enter` / `Space` | Toggle visibility or select theme in customizer |
-| `Esc` | Close customizer or clear filter/kill input |
-
-### P2P server controls
-
-| Command | Action |
-|---|---|
-| `status` | Print the number of currently connected peers |
-| `q` / `quit` / `exit` | Shut down the server gracefully |
+---
 
 ## P2P Live Data Streaming
 
-Send live system stats to another system over a TCP connection with password authentication. The server streams `StatsData` snapshots to authenticated peers at the configured interval.
+Send live system stats to another system over a TCP connection with password authentication. The server streams `StatsData` snapshots to authenticated peers at the configured interval. You can also start or stop the P2P server from the live dashboard by pressing `r`.
 
-You can also start or stop the P2P server from the live dashboard by pressing `r`.
-
-### Start a P2P server (host)
-
-On the machine that will send data:
+### Server options
 
 ```bash
 pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret
 ```
-
-The server binds to the specified host and port, and streams live system stats to any authenticated peer.
 
 | Option | Description |
 |---|---|
@@ -243,85 +125,20 @@ The server binds to the specified host and port, and streams live system stats t
 | `--p2p-password <password>` | Password for authentication (required) |
 | `--interval <seconds>` | Data refresh interval (default: `2`) |
 | `--detailed` | Include detailed sensor readings |
-
-### Server-Side Security Features
-
-#### TLS Encryption
-
-Enable TLS for encrypted connections between the server and clients:
-
-```bash
-pyre p2p server --p2p-cert /path/to/cert.pem --p2p-key /path/to/key.pem --p2p-password mysecret
-```
-
-| Option | Description |
-|---|---|
-| `--p2p-cert <file>` | TLS certificate file (PEM) for the server |
+| `--p2p-cert <file>` | TLS certificate file (PEM) for encrypted connections |
 | `--p2p-key <file>` | TLS private key file (PEM) for the server |
 | `--p2p-ca <file>` | TLS CA certificate file (PEM) — required by clients using `--p2p-tls` |
-
-#### Rate Limiting
-
-Prevent brute-force password attacks by limiting authentication attempts per IP:
-
-```bash
-pyre p2p server --p2p-rate-limit 10 --p2p-password mysecret
-```
-
-| Option | Description |
-|---|---|
 | `--p2p-rate-limit <n>` | Max auth attempts per IP per minute (default: `5`) |
-
-#### IP Allow/Deny Lists
-
-Restrict connections to specific IPs or block known bad actors:
-
-```bash
-# Allow only specific IPs
-pyre p2p server --p2p-allow 192.168.1.100,192.168.1.101 --p2p-password mysecret
-
-# Deny specific IPs (all others allowed)
-pyre p2p server --p2p-deny 10.0.0.99 --p2p-password mysecret
-```
-
-| Option | Description |
-|---|---|
 | `--p2p-allow <ips>` | Comma-separated list of allowed IPs (empty = all) |
 | `--p2p-deny <ips>` | Comma-separated list of denied IPs |
-
-#### Audit Logging
-
-Log all connection events (connects, auth successes/failures, disconnects, rate limit hits, IP blocks) to a directory:
-
-```bash
-pyre p2p server --p2p-audit-log /var/log/pyre --p2p-password mysecret
-```
-
-| Option | Description |
-|---|---|
 | `--p2p-audit-log <dir>` | Directory for P2P audit logs |
-
-#### HMAC Message Signing
-
-All P2P messages are signed with HMAC-SHA256 to ensure integrity and authenticity. The HMAC key is derived from the password by default, but can be overridden for rotation or interoperability:
-
-```bash
-pyre p2p server --p2p-hmac-key my-custom-key --p2p-password mysecret
-```
-
-| Option | Description |
-|---|---|
 | `--p2p-hmac-key <key>` | HMAC key for message signing (default: derived from password) |
 
-### Connect a P2P client (peer)
-
-On the machine that will receive data:
+### Client options
 
 ```bash
 pyre p2p connect --p2p-host <server-ip> --p2p-port 9876 --p2p-password mysecret
 ```
-
-The client connects to the server, authenticates with the password, and displays live system stats.
 
 | Option | Description |
 |---|---|
@@ -334,9 +151,17 @@ The client connects to the server, authenticates with the password, and displays
 | `--p2p-audit-log <dir>` | Directory for P2P client audit logs |
 | `--p2p-hmac-key <key>` | HMAC key for message signing (must match server) |
 
-### Same local network (LAN)
+### Security features
 
-Both machines must be connected to the same local network (same WiFi or wired subnet). The server listens on `0.0.0.0` (all interfaces) by default, so any device on the LAN can reach it as long as the port is reachable.
+- **TLS encryption** — pass `--p2p-cert`/`--p2p-key`/`--p2p-ca` on the server and `--p2p-tls --p2p-ca` on the client for encrypted connections.
+- **Rate limiting** — `--p2p-rate-limit <n>` caps authentication attempts per IP per minute to deter brute-force attacks.
+- **IP allow/deny lists** — `--p2p-allow` restricts connections to specific IPs; `--p2p-deny` blocks specific IPs while allowing all others.
+- **Audit logging** — `--p2p-audit-log <dir>` logs connects, auth successes/failures, disconnects, rate-limit hits, and IP blocks.
+- **HMAC message signing** — every message is signed with HMAC-SHA256. The key derives from the password by default, or set `--p2p-hmac-key` explicitly for rotation or interoperability (must match on both sides).
+
+### Same local network (LAN) setup
+
+Both machines must be on the same local network (same Wi-Fi or wired subnet). The server listens on `0.0.0.0` (all interfaces) by default, so any device on the LAN can reach it as long as the port is open.
 
 On the **server machine**, find its local IP address:
 
@@ -346,7 +171,7 @@ hostname -I
 ifconfig | grep "inet " | grep -v 127.0.0
 ```
 
-Use the server's local IP (for example `192.168.1.25`) in the client command:
+Use that IP (e.g. `192.168.1.25`) in the client command:
 
 ```bash
 pyre p2p connect --p2p-host 192.168.1.25 --p2p-port 9876 --p2p-password mysecret
@@ -354,44 +179,40 @@ pyre p2p connect --p2p-host 192.168.1.25 --p2p-port 9876 --p2p-password mysecret
 
 **Troubleshooting**
 
-- If the client cannot reach the server, confirm both machines are on the same subnet (ping the server IP from the client).
+- If the client can't reach the server, confirm both machines are on the same subnet (ping the server IP from the client).
 - Verify the port is open (no local firewall blocking TCP `9876`).
-- Never expose the server directly to the public internet; it is designed for LAN use only.
+- Never expose the server directly to the public internet; it's designed for LAN use only.
 
-### P2P Protocol
+### Protocol
 
-The P2P connection uses a length-prefixed JSON protocol over TCP with HMAC-SHA256 message signing:
+Length-prefixed JSON over TCP, with HMAC-SHA256 signing on every message:
 
-1. Client connects to the server
-2. Server sends a `challenge` message with a random nonce
-3. Client responds with an `auth` message containing the SHA-256 hash of `password:nonce`
-4. Server validates the hash and responds with `auth-ok` or `auth-fail`
-5. Once authenticated, the server streams `data` messages containing `StatsData` snapshots at the configured interval
-6. Both sides exchange `ping`/`pong` keepalive messages every 15 seconds
-7. Either side can send a `disconnect` message to close gracefully
+1. Client connects to the server.
+2. Server sends a `challenge` message with a random nonce.
+3. Client responds with an `auth` message containing the SHA-256 hash of `password:nonce`.
+4. Server validates the hash and responds with `auth-ok` or `auth-fail`.
+5. Once authenticated, the server streams `data` messages containing `StatsData` snapshots at the configured interval.
+6. Both sides exchange `ping`/`pong` keepalives every 15 seconds.
+7. Either side can send a `disconnect` message to close gracefully.
 
-All messages are signed with HMAC-SHA256 using a key derived from the password, ensuring message integrity and authenticity.
+### Server controls
 
-### Server Controls
-
-While the P2P server is running, type these commands on the server's stdin:
+While the server is running, type these on its stdin (or press `Ctrl+C`):
 
 | Command | Action |
 |---|---|
 | `status` | Print the number of currently connected peers |
 | `q` / `quit` / `exit` | Shut down the server gracefully |
 
-Press `Ctrl+C` to shut down the server as well.
+### Client controls
 
-You can also toggle the P2P server on and off from the live dashboard by pressing `r`. When the server is already running, `r` stops it; when it is not running, `r` prompts for a password and starts it.
+While connected, the client displays live stats in a formatted table. Press `Ctrl+C` to disconnect. It reconnects automatically after 3 seconds if the connection drops.
 
-### P2P Client Controls
+---
 
-While connected, the client displays live system stats in a formatted table. Press `Ctrl+C` to disconnect. The client will attempt to reconnect automatically after 3 seconds if the connection is lost.
+## Live Dashboard
 
-## Live Dashboard Controls
-
-When running `pyre live`, use these keyboard shortcuts:
+Run with `pyre live`.
 
 | Key | Action |
 |---|---|
@@ -410,36 +231,38 @@ When running `pyre live`, use these keyboard shortcuts:
 | `S` | Open signal picker for kill (cycle SIGTERM → SIGKILL → SIGINT → SIGHUP → SIGSTOP → SIGCONT) |
 | `t` | Toggle process tree view |
 | `r` | Toggle P2P server (or enter P2P password input) |
-| `+` | Increase refresh interval by 1 second |
-| `-` | Decrease refresh interval by 1 second |
-| `←` / `→` / `tab` | Cycle to next / previous panel tab |
+| `+` / `-` | Increase / decrease refresh interval by 1 second |
+| `←` / `→` / `Tab` | Cycle to previous / next panel tab |
 | `1`–`9`, `0` | Jump to panel by number (cpu, mem, gpu, power, battery, thermal, network, packets, tasks, disk) |
 | `P` | Toggle process panel |
-| `↑` / `k` | Navigate customizer options |
-| `↓` / `j` | Navigate customizer options |
-| `Enter` / `Space` | Toggle visibility or select theme in customizer |
 | `Esc` | Close customizer or clear filter/kill input |
 
 ### UI Customizer
 
-Press `c` to open the customizer overlay. From there you can:
+Press `c` to open the customizer overlay. From there:
 
-- Cycle through six built-in themes (Default, Dracula, Cyberpunk, Monochrome, Nord, Gruvbox)
+- Cycle through six built-in themes (Default, Dracula, Cyberpunk, Monochrome, Nord, Gruvbox) — `↑`/`↓` or `j`/`k` to navigate, `Enter`/`Space` to select
 - Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes) on or off
 - Switch graph mode between sparkline and bar charts
 - Toggle process tree view
+
+### Mouse support
+
+- **Click tab bar** — click a panel tab (row 4) to jump directly to that panel
+- **Scroll** — scroll through process lists in panels with many entries
+- Enabled by default; disable with `mouseEnabled = false` in the customizer
 
 ---
 
 ## Process Management
 
-The live dashboard provides full process management capabilities:
+Available in the live dashboard (and partially in static snapshots via flags).
 
 ### Sorting
 
-Processes can be sorted by eight criteria. In the dashboard, press `s` to cycle through sort modes:
+Press `s` to cycle through sort modes, or use `--sort <key>` in static snapshot mode (default: `cpu`):
 
-| Sort Key | Description |
+| Sort key | Description |
 |---|---|
 | `cpu` | Sort by CPU usage (descending) |
 | `mem` | Sort by memory usage (descending) |
@@ -450,26 +273,21 @@ Processes can be sorted by eight criteria. In the dashboard, press `s` to cycle 
 | `threads` | Sort by thread count |
 | `runtime` | Sort by total runtime |
 
-In static snapshot mode, use `--sort <key>` to set the sort order (default: `cpu`).
-
 ### Filtering
 
-Press `/` in the live dashboard to open a process filter. Type a substring to narrow the process list to matching entries. Press `Esc` to clear the filter.
+Press `/` to open a process filter and type a substring to narrow the list. Press `Esc` to clear it.
 
-### Tree View
+### Tree view
 
-Press `t` in the live dashboard to toggle between flat process list and a tree view showing parent/child process relationships. In static snapshot mode, use `--tree` to enable tree view.
+Press `t` to toggle between a flat process list and a tree view showing parent/child relationships. In static snapshot mode, use `--tree`.
 
-### Killing Processes
+### Killing processes
 
-Press `k` in the live dashboard to enter kill mode:
-1. Type the PID of the process you want to terminate
-2. Press `Enter` to send `SIGTERM` (default)
-3. Press `Esc` to cancel
+Press `k` to enter kill mode: type the PID, then press `Enter` to send `SIGTERM` (default), or `Esc` to cancel.
 
-### Signal Picker
+### Signal picker
 
-Press `S` in the live dashboard to open the signal picker. Cycle through available signals with `↑`/`↓` or `j`/`k`, then press `Enter` to send the selected signal to the PID entered in kill mode:
+Press `S` to open the signal picker. Cycle with `↑`/`↓` or `j`/`k`, then `Enter` to send the selected signal to the PID entered in kill mode:
 
 | Signal | Description |
 |---|---|
@@ -482,30 +300,18 @@ Press `S` in the live dashboard to open the signal picker. Cycle through availab
 
 ---
 
-## Mouse Support
-
-The live dashboard supports mouse interaction in addition to keyboard controls:
-
-- **Click tab bar** — click on a panel tab in the tab bar (row 4) to jump directly to that panel
-- **Scroll** — scroll through process lists in panels with many entries
-- Mouse input is enabled by default; disable with `mouseEnabled = false` in the customizer
-
----
-
 ## Alerts & Notifications
 
-The live dashboard includes a built-in alert system that monitors critical system metrics and notifies you when thresholds are exceeded:
+The live dashboard monitors critical metrics and notifies you when thresholds are exceeded:
 
-| Metric | Default Threshold | Alert Behavior |
+| Metric | Default threshold | Alert behavior |
 |---|---|---|
 | CPU usage | 90% | Terminal bell (`\x07`) + red status message for 5 seconds |
 | CPU temperature | 95°C | Terminal bell + red status message for 5 seconds |
 
-Alerts fire once when a threshold is first crossed and reset when conditions clear. The alert thresholds are configurable in the source code (`CPU_ALERT_PCT` and `TEMP_ALERT_C` in `src/live/state.ts`).
+Alerts fire once when a threshold is first crossed and reset when conditions clear. Thresholds are configurable in source (`CPU_ALERT_PCT` and `TEMP_ALERT_C` in `src/live/state.ts`).
 
 ## Themes
-
-Six built-in visual themes are available in the live dashboard:
 
 | Theme | Description |
 |---|---|
@@ -516,30 +322,30 @@ Six built-in visual themes are available in the live dashboard:
 | **nord** | Arctic-inspired cool tones |
 | **gruvbox** | Retro warm palette |
 
-Themes are cycled with `c` in the customizer overlay.
+Cycle themes with `c` in the customizer overlay, or set a default with `--theme <name>`.
 
 ## Export Formats
 
-### Snapshot export (`e` key in live mode, or `--out` flag)
+### Snapshot export
 
-Snapshots are written to the export directory (`./pyre-exports` by default) with filenames like:
+Triggered by the `e` key in live mode, or the `--out` flag. Written to the export directory (`./pyre-exports` by default):
 
 ```
 pyre-2026-07-26T10-54-47-191Z.json
 pyre-2026-07-26T10-54-52-306Z.csv
 ```
 
-The format is determined by the current export format (cycle with `f` in live mode, or set via `--json`, `--csv`, `--tsv` in static mode).
+Format follows the current export format — cycle with `f` in live mode, or set via `--json`, `--csv`, `--tsv` in static mode.
 
-### Continuous CSV logging (`l` key in live mode, or `--log` flag)
+### Continuous CSV logging
 
-When logging is active, each tick appends a row to a timestamped CSV file:
+Triggered by the `l` key in live mode, or the `--log` flag. Each tick appends a row to a timestamped file:
 
 ```
 pyre-log-2026-07-26T10-54-47-191Z.csv
 ```
 
-Each row contains:
+Row format:
 
 ```
 timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state
@@ -568,8 +374,7 @@ pyre/
 │   │   ├── output.ts       # JSON/CSV/TSV serialisation and sparkline graphs
 │   │   ├── render.ts       # Dashboard table layout, cards, and panels
 │   │   ├── themes.ts       # Six built-in colour themes
-│   │   ├── types.ts        # TableOptions, VisibleItems, ThemeName
-│   │   └── types.ts        # Public-facing type definitions
+│   │   └── types.ts        # TableOptions, VisibleItems, ThemeName, and other public-facing type definitions
 │   ├── live/               # Interactive live dashboard
 │   │   ├── index.ts        # Public API: startLive, stopLive
 │   │   ├── state.ts        # Shared mutable session state
@@ -605,88 +410,26 @@ cd pyre
 npm install
 ```
 
-### Build
-
-```bash
-npm run build
-```
-
-This uses `tsup` to compile TypeScript to ESM in `dist/`.
-
-### Run in dev mode
-
-```bash
-npm run dev
-```
-
-Runs the CLI directly via `tsx` without a build step.
-
-### Test
-
-```bash
-npm test
-```
-
-Verifies the built binary runs and responds to `--help`.
-
 ### Scripts
 
 | Script | Description |
 |---|---|
-| `build` | Compile TypeScript to ESM via tsup |
-| `start` | Run the built binary from `dist/` |
-| `dev` | Run directly via tsx (no build step) |
-| `test` | Verify the built binary responds to `--help` |
+| `npm run build` | Compile TypeScript to ESM via tsup, output to `dist/` |
+| `npm start` | Run the built binary from `dist/` |
+| `npm run dev` | Run directly via `tsx` (no build step) |
+| `npm test` | Verify the built binary responds to `--help` |
 
 ## Planned Features
 
-The following features are proposed for future releases:
-
-### Configuration File
-
-Persistent settings via `~/.config/pyre/config.json` to remember your preferred theme, refresh interval, export directory, and panel visibility across sessions.
-
-### Export Formats
-
-- **HTML export** — styled, self-contained HTML reports for sharing
-- **Markdown export** — Markdown tables suitable for documentation and notes
-
-### Log Rotation
-
-Automatic rotation of CSV log files to prevent disk exhaustion — configurable max file count and size.
-
-### Custom Alert Thresholds
-
-CLI flags to set CPU and temperature alert thresholds per-session:
-
-```bash
-pyre live --alert-cpu 80 --alert-temp 85
-```
-
-### Temperature Unit Toggle
-
-Switch between Celsius and Fahrenheit in the dashboard and export output.
-
-### System Information Command
-
-A dedicated `pyre info` command that prints a concise hardware overview:
-
-```bash
-pyre info
-# Output: CPU model, cores, memory total, macOS version, uptime
-```
-
-### Notification System
-
-Desktop notifications (macOS `osascript` or `terminal-notifier`) when alert thresholds are crossed, even when the dashboard is not in focus.
-
-### Remote SSH Monitoring
-
-Monitor a remote macOS machine over SSH without requiring the P2P server setup.
-
-### Web Dashboard
-
-Serve a web-based dashboard on a local port for browser-based monitoring.
+- **Configuration file** — persistent settings via `~/.config/pyre/config.json` (theme, refresh interval, export directory, panel visibility)
+- **HTML & Markdown export** — styled self-contained HTML reports; Markdown tables for docs and notes
+- **Log rotation** — automatic rotation of CSV logs with configurable max file count/size
+- **Custom alert thresholds** — e.g. `pyre live --alert-cpu 80 --alert-temp 85`
+- **Temperature unit toggle** — switch between Celsius and Fahrenheit
+- **`pyre info` command** — concise hardware overview (CPU model, cores, memory total, macOS version, uptime)
+- **Desktop notifications** — via `osascript` or `terminal-notifier` when alert thresholds are crossed, even when the dashboard isn't focused
+- **Remote SSH monitoring** — monitor a remote macOS machine over SSH without the P2P server setup
+- **Web dashboard** — browser-based monitoring served on a local port
 
 ---
 
