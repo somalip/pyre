@@ -6,224 +6,259 @@
 <title>pyre — setup</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* ---- token system -------------------------------------------------
+     bg     #0a0908  base char
+     coal   #141210  raised surface, one step up from bg
+     line   #211d18  hairline division, never a boxed border
+     ember  #ff6a39  primary signal / accent
+     flame  #ffb130  secondary warm highlight
+     paper  #efe9dc  primary text
+     ash    #746b5e  quiet / secondary text
+     signature: the fire simulation reads as a live ember bed under the
+     wordmark, not a screenshot inside a fake window chrome.
+  ---------------------------------------------------------------------*/
   :root{
-    --bg: #0b0a09;
-    --bg-raised: #141110;
-    --bg-panel: #17130f;
-    --border: #2b2620;
-    --border-soft: #211c17;
+    --bg: #0a0908;
+    --coal: #141210;
+    --coal-2: #18150f;
+    --line: #211d18;
+    --line-soft: #1a1712;
     --ember: #ff6a39;
-    --ember-dim: #a8482b;
-    --flame: #ffb627;
-    --deep-red: #b3261e;
-    --ash: #8b8377;
-    --ash-dim: #4a453e;
-    --paper: #f2ede1;
-    --paper-dim: #b8b0a1;
-    --ok: #8bd17c;
+    --ember-dim: #8a4025;
+    --flame: #ffb130;
+    --paper: #efe9dc;
+    --paper-dim: #9c9384;
+    --ash: #746b5e;
+    --ash-dim: #423c33;
+    --ok: #82c774;
     --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    --display: 'Space Grotesk', 'JetBrains Mono', sans-serif;
   }
   *{ box-sizing:border-box; margin:0; padding:0; }
+  html{ scroll-behavior:smooth; }
   body{
     background: var(--bg); color: var(--paper); font-family: var(--mono);
-    line-height: 1.5; -webkit-font-smoothing: antialiased;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
     min-height: 100vh; overflow-x: hidden;
+    display:flex; flex-direction:column;
   }
   a{ color: inherit; }
-  .wrap{ max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  .wrap{ max-width: 720px; margin: 0 auto; padding: 0 28px; width:100%; }
+  ::selection{ background: var(--ember); color:#0a0908; }
 
+  /* ---------------------------- splash --------------------------- */
   #splash{
     position: fixed; inset: 0; z-index: 50;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; flex-direction:column;
     background: var(--bg);
-    transition: opacity .6s ease, visibility .6s ease;
+    transition: opacity .7s ease, visibility .7s ease;
   }
   #splash.hide{ opacity:0; visibility:hidden; pointer-events:none; }
 
-  .splash-term{
-    width: min(720px, 92vw);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--bg-raised);
-    overflow: hidden;
-    box-shadow: 0 0 0 1px rgba(0,0,0,0.4), 0 30px 90px -30px rgba(255,106,57,0.4), 0 8px 30px rgba(0,0,0,0.5);
+  .splash-top{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:18px; padding: 40px 24px 0;
   }
-  .term-bar{
-    height: 42px; display:flex; align-items:center; padding: 0 16px;
-    border-bottom: 1px solid var(--border); position:relative;
-    background: linear-gradient(180deg, #171310, #141110);
+  .splash-mark{
+    font-family: var(--display); font-weight:700; font-size: clamp(2.4rem, 8vw, 3.6rem);
+    letter-spacing:-0.03em; display:flex; align-items:baseline; gap:14px;
   }
-  .term-dots{ display:flex; gap:8px; }
-  .term-dots span{ width:11px; height:11px; border-radius:50%; display:inline-block; }
-  .term-dots .r{ background:#ff5f56; } .term-dots .y{ background:#ffbd2e; } .term-dots .g{ background:#27c93f; }
-  .term-title{ position:absolute; left:0; right:0; text-align:center; font-size:0.78rem; color:var(--ash); }
-  #fire{ display:block; width:100%; height:260px; background:#0d0a08; }
-  .splash-foot{
-    padding: 18px 20px 22px; text-align:center; border-top: 1px solid var(--border-soft);
+  .splash-mark small{
+    font-family: var(--mono); font-weight:400; font-size:0.9rem; color: var(--ash); letter-spacing:0.04em;
   }
-  .splash-foot .brand{ font-weight:800; font-size:1.3rem; letter-spacing:-0.02em; margin-bottom:6px; }
-  .splash-foot .status{ color: var(--paper-dim); font-size:0.85rem; margin-bottom: 18px; }
-  .splash-foot .status .dots::after{
+  .splash-status{ color: var(--paper-dim); font-size:0.8rem; letter-spacing:0.02em; }
+  .splash-status .dots::after{
     content:''; display:inline-block; width:1em; text-align:left;
     animation: dots 1.2s steps(4) infinite;
   }
   @keyframes dots{ 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
-  .enter-btn{
-    background: transparent; border:1px solid var(--ember-dim); color: var(--flame);
-    font-family: var(--mono); font-size:0.85rem; padding:10px 22px; border-radius:7px;
-    cursor:pointer; transition: all .15s;
+
+  #fire{ display:block; width:100%; height:34vh; min-height:200px; max-height:340px; background: var(--bg); }
+
+  .splash-bottom{
+    display:flex; flex-direction:column; align-items:center; gap:12px;
+    padding: 22px 24px 34px; border-top: 1px solid var(--line-soft);
   }
-  .enter-btn:hover{ border-color: var(--ember); background: rgba(255,106,57,0.08); }
-  .skip-link{ display:block; margin-top:14px; font-size:0.75rem; color: var(--ash); text-decoration:none; }
+  .enter-btn{
+    background: var(--ember); border:1px solid var(--ember); color:#180b06;
+    font-family: var(--mono); font-weight:700; font-size:0.85rem; padding:12px 30px; border-radius:2px;
+    cursor:pointer; transition: transform .15s ease, background .15s ease; letter-spacing:0.02em;
+  }
+  .enter-btn:hover{ background: var(--flame); border-color: var(--flame); transform: translateY(-1px); }
+  .skip-link{ font-size:0.74rem; color: var(--ash); text-decoration:none; letter-spacing:0.02em; }
   .skip-link:hover{ color: var(--ember); }
 
-  #wizard{ opacity:0; transition: opacity .5s ease .1s; }
+  /* ---------------------------- wizard shell ---------------------- */
+  #wizard{ opacity:0; transition: opacity .5s ease .1s; flex:1; display:flex; flex-direction:column; }
   #wizard.show{ opacity:1; }
 
-  nav.top{
-    border-bottom: 1px solid var(--border-soft); padding: 18px 0;
+  nav.top{ padding: 26px 0 0; }
+  nav.top .wrap{ display:flex; align-items:baseline; justify-content:space-between; }
+  .logo{
+    font-family: var(--display); font-weight:700; font-size:1.05rem; letter-spacing:-0.01em;
+    display:flex; gap:9px; align-items:baseline;
   }
-  nav.top .wrap{ display:flex; align-items:center; justify-content:space-between; }
-  .logo{ font-weight:700; font-size:1rem; display:flex; gap:8px; align-items:center; }
+  .logo span{ font-family: var(--mono); font-weight:400; font-size:0.72rem; color: var(--ash); letter-spacing:0.04em; }
 
-  .steps{ display:flex; padding: 28px 0 0; gap: 8px; }
-  .step-pip{
-    flex:1; display:flex; flex-direction:column; gap:8px; font-size:0.72rem; color: var(--ash-dim);
-  }
-  .step-pip .bar{ height:3px; border-radius:2px; background: var(--border); }
-  .step-pip.done .bar{ background: var(--ember-dim); }
-  .step-pip.active .bar{ background: var(--ember); }
+  /* progress: a single hairline with an ember marker — no boxed pips */
+  .steps{ position:relative; margin: 34px 0 0; }
+  .steps .track{ height:1px; background: var(--line); position:relative; }
+  .steps .fill{ position:absolute; top:0; left:0; height:1px; background: var(--ember); transition: width .35s ease; }
+  .steps .labels{ display:flex; justify-content:space-between; margin-top:10px; }
+  .step-pip{ font-size:0.66rem; color: var(--ash-dim); letter-spacing:0.02em; cursor:pointer; transition: color .2s; }
+  .step-pip .bar{ display:none; }
   .step-pip.active{ color: var(--flame); }
   .step-pip.done{ color: var(--paper-dim); }
 
-  main{ padding: 40px 0 90px; }
+  main{ flex:1; padding: 44px 0 70px; }
   .panel{ display:none; }
-  .panel.active{ display:block; animation: fadeUp .35s ease; }
-  @keyframes fadeUp{ from{ opacity:0; transform: translateY(8px);} to{opacity:1; transform:none;} }
+  .panel.active{ display:block; animation: fadeUp .4s ease; }
+  @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px);} to{opacity:1; transform:none;} }
 
-  .eyebrow{ font-size:0.78rem; color: var(--ember); margin-bottom:10px; }
-  .eyebrow::before{ content:'// '; color: var(--ash-dim); }
-  h2{ font-size:1.7rem; font-weight:800; letter-spacing:-0.02em; margin-bottom:12px; }
-  .lead{ color: var(--paper-dim); font-size:0.92rem; max-width: 560px; margin-bottom: 28px; }
+  .eyebrow{ font-size:0.72rem; color: var(--ember); margin-bottom:12px; letter-spacing:0.06em; text-transform:uppercase; }
+  h2{ font-family: var(--display); font-size:1.9rem; font-weight:600; letter-spacing:-0.02em; margin-bottom:14px; }
+  .lead{ color: var(--paper-dim); font-size:0.92rem; max-width: 540px; margin-bottom: 30px; }
 
   .card{
-    border:1px solid var(--border); background: var(--bg-panel); border-radius:10px; padding:20px; margin-bottom:18px;
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    background: transparent; padding:22px 0; margin-bottom:22px;
   }
-  .card h3{ font-size:0.85rem; color: var(--ash); margin-bottom:14px; letter-spacing:0.02em; }
+  .card h3{
+    font-size:0.7rem; color: var(--ash); margin-bottom:16px; letter-spacing:0.08em; text-transform:uppercase;
+    font-weight:500;
+  }
 
   .code-box{
-    background:#0d0a08; border:1px solid var(--border); border-radius:8px;
-    padding:14px 16px; position:relative; margin-bottom: 6px;
+    background: var(--coal); border-left:2px solid var(--ember-dim);
+    padding:14px 16px; position:relative; margin-bottom: 6px; border-radius:0 3px 3px 0;
   }
   .code-box pre{ font-size:0.82rem; color: var(--flame); overflow-x:auto; white-space:pre; }
   .code-box pre .dim{ color: var(--ash); }
   .copy-btn{
     position:absolute; top:10px; right:10px;
-    background: transparent; border:1px solid var(--border); color: var(--paper-dim);
-    font-family: var(--mono); font-size:0.72rem; padding:5px 9px; border-radius:5px; cursor:pointer;
-    transition: all .15s;
+    background: transparent; border:none; color: var(--ash);
+    font-family: var(--mono); font-size:0.68rem; padding:5px 8px; cursor:pointer;
+    transition: color .15s; letter-spacing:0.03em;
   }
-  .copy-btn:hover{ border-color: var(--ember); color: var(--ember); }
+  .copy-btn:hover{ color: var(--ember); }
   .note{ font-size:0.78rem; color: var(--ash); margin-top:10px; }
-  .note b{ color: var(--paper-dim); }
+  .note b{ color: var(--paper-dim); font-weight:500; }
 
-  label.field{ display:block; margin-bottom:18px; }
-  label.field .lbl{ display:flex; justify-content:space-between; font-size:0.82rem; color: var(--paper-dim); margin-bottom:8px; }
+  label.field{ display:block; margin-bottom:20px; }
+  label.field .lbl{ display:flex; justify-content:space-between; font-size:0.8rem; color: var(--paper-dim); margin-bottom:9px; }
   label.field .lbl b{ color: var(--flame); font-weight:700; }
-  input[type="text"]{
-    width:100%; background:#0d0a08; border:1px solid var(--border); color: var(--paper);
-    font-family: var(--mono); font-size:0.85rem; padding:10px 12px; border-radius:7px;
+  input[type="text"], input[type="password"], input[type="number"]{
+    width:100%; background:transparent; border:none; border-bottom:1px solid var(--line); color: var(--paper);
+    font-family: var(--mono); font-size:0.88rem; padding:9px 2px; border-radius:0;
   }
-  input[type="text"]:focus{ outline:none; border-color: var(--ember); }
+  input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus{
+    outline:none; border-color: var(--ember);
+  }
   input[type="range"]{ width:100%; accent-color: var(--ember); }
 
   .toggle-row{
     display:flex; align-items:center; justify-content:space-between;
-    padding: 12px 0; border-bottom: 1px solid var(--border-soft);
+    padding: 14px 0; border-bottom: 1px solid var(--line-soft);
   }
+  .toggle-row:last-child{ border-bottom:none; }
   .tls-fields{ display:none; }
-   .tls-fields.visible{ display:block; }
+  .tls-fields.visible{ display:block; }
   .toggle-row .t-label{ font-size:0.85rem; }
-  .toggle-row .t-desc{ font-size:0.75rem; color: var(--ash); margin-top:2px; }
+  .toggle-row .t-desc{ font-size:0.75rem; color: var(--ash); margin-top:3px; }
   .switch{
-    position:relative; width:42px; height:24px; border-radius:12px; background: var(--border);
-    border:1px solid var(--border-soft); cursor:pointer; flex-shrink:0; transition: background .2s;
+    position:relative; width:38px; height:20px; border-radius:10px; background: var(--line);
+    border:none; cursor:pointer; flex-shrink:0; transition: background .2s;
   }
   .switch::after{
-    content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
     background: var(--ash); transition: all .2s;
   }
-  .switch.on{ background: rgba(255,106,57,0.25); border-color: var(--ember-dim); }
+  .switch.on{ background: rgba(255,106,57,0.22); }
   .switch.on::after{ left:20px; background: var(--ember); }
 
-  .theme-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:12px; }
+  .theme-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:1px; background: var(--line); }
   .theme-swatch{
-    border:1px solid var(--border); border-radius:8px; padding:12px; cursor:pointer; transition: border-color .15s;
-    background: #0d0a08;
+    padding:14px 12px; cursor:pointer; transition: background .15s;
+    background: var(--bg);
   }
-  .theme-swatch.selected{ border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember) inset; }
-  .theme-swatch .swname{ font-size:0.78rem; margin-bottom:8px; color: var(--paper-dim); }
+  .theme-swatch:hover{ background: var(--coal); }
+  .theme-swatch.selected{ background: var(--coal); box-shadow: inset 0 2px 0 var(--ember); }
+  .theme-swatch .swname{ font-size:0.75rem; margin-bottom:10px; color: var(--paper-dim); }
   .theme-swatch .dotsrow{ display:flex; gap:5px; }
-  .theme-swatch .dotsrow span{ width:12px; height:12px; border-radius:3px; display:inline-block; }
+  .theme-swatch .dotsrow span{ width:10px; height:10px; border-radius:2px; display:inline-block; }
 
   .checklist{ font-size:0.85rem; color: var(--paper-dim); }
-  .checklist div{ display:flex; gap:10px; margin-bottom:10px; }
+  .checklist div{ display:flex; gap:12px; margin-bottom:12px; }
   .checklist .ok{ color: var(--ok); }
 
-  .actions{ display:flex; justify-content:space-between; margin-top:36px; }
+  .actions{ display:flex; justify-content:space-between; margin-top:40px; }
   .btn{
-    font-family: var(--mono); font-size:0.85rem; padding:11px 22px; border-radius:8px; cursor:pointer;
-    border:1px solid var(--border); background:transparent; color: var(--paper-dim); transition: all .15s;
+    font-family: var(--mono); font-size:0.82rem; padding:12px 24px; border-radius:2px; cursor:pointer;
+    border:1px solid var(--line); background:transparent; color: var(--paper-dim); transition: all .15s;
+    letter-spacing:0.02em;
   }
-  .btn.primary{ border-color: var(--ember-dim); color: var(--flame); }
-  .btn.primary:hover{ border-color: var(--ember); background: rgba(255,106,57,0.08); }
+  .btn.primary{ border-color: var(--ember); color:#180b06; background: var(--ember); font-weight:700; }
+  .btn.primary:hover{ background: var(--flame); border-color: var(--flame); }
   .btn.ghost:hover{ color: var(--paper); border-color: var(--ash); }
-  .btn:disabled{ opacity:0.35; cursor:default; }
+  .btn:disabled{ opacity:0.3; cursor:default; }
+
+  /* ---------------------------- footer ----------------------------- */
+  footer{ border-top:1px solid var(--line-soft); margin-top:auto; }
+  footer .wrap{
+    padding: 26px 28px; display:flex; flex-wrap:wrap; gap:14px 28px;
+    align-items:center; justify-content:space-between;
+  }
+  footer .f-brand{ display:flex; align-items:baseline; gap:9px; font-family: var(--display); font-weight:600; font-size:0.9rem; }
+  footer .f-brand span{ font-family: var(--mono); font-weight:400; font-size:0.68rem; color: var(--ash); }
+  footer nav{ display:flex; gap:22px; }
+  footer nav a{ font-size:0.76rem; color: var(--ash); text-decoration:none; transition: color .15s; }
+  footer nav a:hover{ color: var(--ember); }
+  footer .f-meta{ font-size:0.72rem; color: var(--ash-dim); letter-spacing:0.02em; }
 
   @media (max-width: 620px){
     .theme-grid{ grid-template-columns: repeat(2,1fr); }
-    .steps{ flex-wrap:wrap; }
-    #fire{ height:190px; }
+    .steps .labels{ flex-wrap:wrap; gap:6px 14px; }
+    #fire{ height:26vh; min-height:150px; }
+    footer .wrap{ flex-direction:column; align-items:flex-start; }
   }
   @media (prefers-reduced-motion: reduce){
-    .splash-foot .status .dots::after{ animation:none; content:'...'; }
+    .splash-status .dots::after{ animation:none; content:'...'; }
   }
 </style>
 </head>
 <body>
 
 <div id="splash">
-  <div class="splash-term">
-    <div class="term-bar">
-      <div class="term-dots"><span class="r"></span><span class="y"></span><span class="g"></span></div>
-      <div class="term-title">🔥 pyre — setup</div>
-    </div>
-    <canvas id="fire"></canvas>
-    <div class="splash-foot">
-      <div class="brand">pyre setup</div>
-      <div class="status">warming up sensors<span class="dots"></span></div>
-      <button class="enter-btn" id="enterBtn">continue →</button>
-      <a href="#" class="skip-link" id="skipLink">skip animation</a>
-    </div>
+  <div class="splash-top">
+    <div class="splash-mark">pyre<small>setup</small></div>
+    <div class="splash-status">warming up sensors<span class="dots"></span></div>
+  </div>
+  <canvas id="fire"></canvas>
+  <div class="splash-bottom">
+    <button class="enter-btn" id="enterBtn">continue →</button>
+    <a href="#" class="skip-link" id="skipLink">skip animation</a>
   </div>
 </div>
 
 <div id="wizard">
   <nav class="top">
     <div class="wrap">
-      <div class="logo">🔥 pyre <span style="color:var(--ash); font-weight:400;">setup</span></div>
+      <div class="logo">pyre<span>setup</span></div>
     </div>
   </nav>
 
   <div class="wrap">
 <div class="steps" id="steps">
-      <div class="step-pip" data-step="0"><span>01 · sensor</span><div class="bar"></div></div>
-      <div class="step-pip" data-step="1"><span>02 · appearance</span><div class="bar"></div></div>
-      <div class="step-pip" data-step="2"><span>03 · behavior</span><div class="bar"></div></div>
-      <div class="step-pip" data-step="3"><span>04 · p2p server</span><div class="bar"></div></div>
-      <div class="step-pip" data-step="4"><span>05 · review</span><div class="bar"></div></div>
+      <div class="track"><div class="fill" id="stepsFill"></div></div>
+      <div class="labels">
+        <div class="step-pip" data-step="0">sensor</div>
+        <div class="step-pip" data-step="1">appearance</div>
+        <div class="step-pip" data-step="2">behavior</div>
+        <div class="step-pip" data-step="3">p2p server</div>
+        <div class="step-pip" data-step="4">review</div>
+      </div>
       </div>
 
     <main>
@@ -431,6 +466,18 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       </div>
     </main>
   </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="f-brand">pyre<span>local-first thermal monitor</span></div>
+      <nav>
+        <a href="#" onclick="return false;">docs</a>
+        <a href="#" onclick="return false;">github</a>
+        <a href="#" onclick="return false;">changelog</a>
+      </nav>
+      <div class="f-meta">setup wizard · runs entirely on your machine</div>
+    </div>
+  </footer>
 </div>
 
 <script>
@@ -568,6 +615,8 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
         p.classList.toggle('active', s === state.step);
         p.classList.toggle('done', s < state.step);
       });
+      const fillEl = document.getElementById('stepsFill');
+      if(fillEl) fillEl.style.width = (state.step/(TOTAL-1))*100 + '%';
       prevBtn.disabled = state.step === 0;
       nextBtn.textContent = state.step === TOTAL - 1 ? 'finish' : 'continue →';
       if(state.step === TOTAL - 1) updateReview();
