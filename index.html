@@ -118,6 +118,11 @@
   @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px);} to{opacity:1; transform:none;} }
 
   .eyebrow{ font-size:0.72rem; color: var(--ember); margin-bottom:12px; letter-spacing:0.06em; text-transform:uppercase; }
+  .ascii-art{
+    font-family: var(--mono); font-size:0.72rem; line-height:1.35; color: var(--ash-dim);
+    white-space:pre; margin: 2px 0 20px; user-select:none;
+  }
+  .ascii-art .hot{ color: var(--ember-dim); }
   h2{ font-family: var(--display); font-size:1.9rem; font-weight:600; letter-spacing:-0.02em; margin-bottom:14px; }
   .lead{ color: var(--paper-dim); font-size:0.92rem; max-width: 540px; margin-bottom: 30px; }
 
@@ -264,6 +269,11 @@
     <main>
       <section class="panel" data-panel="0">
         <div class="eyebrow">why this step exists</div>
+        <pre class="ascii-art" id="anim-sensor">  ┌──────────┐
+  │ <span class="hot">▓▓▓▓▓▓</span>   │  62°C
+  └────┬─────┘
+       │ sudo
+   ────┴────</pre>
         <h2>Give pyre read access to temperature sensors</h2>
         <p class="lead">Real CPU/GPU die temperatures on macOS only come from <code>powermetrics</code>,
           which requires root. Without this, pyre still runs — it just shows thermal state without a
@@ -292,6 +302,9 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
 
       <section class="panel" data-panel="1">
         <div class="eyebrow">visuals</div>
+        <pre class="ascii-art" id="anim-theme">  ◆ ◇ <span class="hot">◆</span> ◇
+  ◇ <span class="hot">◆</span> ◇ ◆
+  ◆ ◇ ◆ <span class="hot">◇</span></pre>
         <h2>Pick a default theme</h2>
         <p class="lead">Applied the first time pyre opens. You can always change it live with the
           <b style="color:var(--flame)">c</b> key inside the dashboard.</p>
@@ -344,6 +357,10 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
 
       <section class="panel" data-panel="2">
         <div class="eyebrow">defaults</div>
+        <pre class="ascii-art" id="anim-gauge">      ╱|
+    ╱  │
+  ╱ <span class="hot">2s</span> │
+ ●────┴────</pre>
         <h2>Set behavior for live mode</h2>
         <p class="lead">These map straight to pyre's CLI flags. You'll get the exact command to launch
           with on the next screen.</p>
@@ -378,6 +395,10 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
 
 <section class="panel" data-panel="3">
         <div class="eyebrow">p2p server</div>
+        <pre class="ascii-art" id="anim-p2p"> [A]<span class="hot">──────</span>[B]
+   \          /
+    \        /
+     [ LAN  ]</pre>
         <h2>Set up the P2P server</h2>
         <p class="lead">Configure the server, then connect from another machine using the command shown below.</p>
 
@@ -418,6 +439,10 @@ sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
 
       <section class="panel" data-panel="4">
         <div class="eyebrow">all set</div>
+        <pre class="ascii-art" id="anim-launch">     <span class="hot">▲</span>
+    ╱ ╲
+   ╱ <span class="hot">▓</span> ╲
+  ▔▔▔▔▔▔▔  ready</pre>
         <h2>Your setup, ready to launch</h2>
         <p class="lead">Copy the commands below to start pyre with everything you just configured.</p>
 
@@ -469,10 +494,11 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
   <footer>
     <div class="wrap">
-      <div class="f-brand">pyre<span>local-first mac system monitor</span></div>
+      <div class="f-brand">pyre<span>local-first thermal monitor</span></div>
       <nav>
-        <a href="https://github.com/somalip/pyre/blob/main/README.md" onclick="return false;">docs</a>
-        <a href="https://github.com/somalip/pyre" onclick="return false;">github</a>
+        <a href="#" onclick="return false;">docs</a>
+        <a href="#" onclick="return false;">github</a>
+        <a href="#" onclick="return false;">changelog</a>
       </nav>
       <div class="f-meta">setup wizard · runs entirely on your machine</div>
     </div>
@@ -561,6 +587,69 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     document.getElementById('skipLink').addEventListener('click', (e)=>{ e.preventDefault(); enter(); });
     setTimeout(enter, 4200);
     window.addEventListener('keydown', (e)=>{ if(!splash.classList.contains('hide') && (e.key==='Enter'||e.key===' ')) enter(); });
+  })();
+
+  (function(){
+    // ---- animated ascii art on each wizard panel: small looping frame sequences ----
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const H = s => `<span class="hot">${s}</span>`;
+
+    const anims = {
+      'anim-sensor': {
+        interval: 420,
+        frames: [3,4,5,6,5,4].map((n,i)=>{
+          const bar = H('▓'.repeat(n)) + ' '.repeat(6-n);
+          const temp = [60,61,62,63,62,61][i];
+          const cursor = i%2===0 ? '_' : ' ';
+          return `  ┌──────────┐\n  │ ${bar}   │  ${temp}°C\n  └────┬─────┘\n       │ sudo${cursor}\n   ────┴────`;
+        })
+      },
+      'anim-theme': {
+        interval: 260,
+        frames: (()=>{
+          const base = [['◆','◇','◆','◇'],['◇','◆','◇','◆'],['◆','◇','◆','◇']];
+          const order = [0,1,2,3,7,11,10,9,8,4]; // chase path around the grid
+          return order.map(hotIdx=>{
+            return base.map((row,ri)=>row.map((ch,ci)=>{
+              const idx = ri*4+ci;
+              return idx===hotIdx ? H(ch) : ch;
+            }).join(' ')).join('\n');
+          }).map(s=>'  '+s.split('\n').join('\n  '));
+        })()
+      },
+      'anim-gauge': {
+        interval: 500,
+        frames: [
+          `      ${H('╱')}|\n    ╱  │\n  ╱ 2s │\n ●────┴────`,
+          `      │${H('|')}\n    │  │\n  │ 2s │\n ●────┴────`,
+          `      |${H('╲')}\n    │  ╲\n  │ 2s ╲\n ●────┴────`,
+          `      │${H('|')}\n    │  │\n  │ 2s │\n ●────┴────`,
+        ]
+      },
+      'anim-p2p': {
+        interval: 260,
+        frames: [0,1,2,3,4,5].map(pos=>{
+          const dash = '─'.repeat(6);
+          const withDot = dash.slice(0,pos) + '●' + dash.slice(pos+1);
+          return ` [A]${H(withDot)}[B]\n   \\          /\n    \\        /\n     [ LAN  ]`;
+        })
+      },
+      'anim-launch': {
+        interval: 380,
+        frames: ['▓','▒','░','▒'].map((f,i)=>{
+          const dots = '.'.repeat(i%4);
+          return `     ${H('▲')}\n    ╱ ╲\n   ╱ ${H(f)} ╲\n  ▔▔▔▔▔▔▔  ready${dots}`;
+        })
+      }
+    };
+
+    Object.entries(anims).forEach(([id, cfg])=>{
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(reduceMotion) return; // leave first frame static
+      let i = 0;
+      setInterval(()=>{ i = (i+1) % cfg.frames.length; el.innerHTML = cfg.frames[i]; }, cfg.interval);
+    });
   })();
 
   (function(){

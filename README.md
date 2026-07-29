@@ -1,8 +1,8 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, packet monitor, battery predictor, export, and P2P live data streaming.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, battery predictor, process management, export, alerts, and P2P live data streaming.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-5.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
 ![Node](https://img.shields.io/badge/node-18%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -15,6 +15,8 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, pa
 
 - **P2P live data streaming** — send live system stats to another system over TCP with password authentication, TLS encryption, rate limiting, IP allow/deny lists, audit logging, and HMAC message signing
 - **Real-time system stats** — CPU brand, cores, frequency, load, and usage
+- **GPU monitoring** — GPU model, VRAM, utilization, temperature, and process count (detailed mode)
+- **Power draw monitoring** — CPU watts, GPU watts, and combined power draw via SMC/ioreg
 - **Memory monitoring** — usage, swap, and total/available
 - **Disk space** — mounted volume usage
 - **Battery & power** — level, power source, condition, charge cycles, max capacity, estimated time to empty, discharge rate, power draw in watts
@@ -22,11 +24,14 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, live dashboard, pa
 - **Task list** — running tasks/applications sorted by CPU with PID, user, memory, state, and runtime
 - **Thermal state** — CPU temperature via `pmset` and `powermetrics` (sudo for detailed readings)
 - **Network** — RX/TX bytes and per-second rates
-- **Top processes** — sorted by CPU, memory, or PID with live filtering
-- **Interactive live dashboard** — full-screen TUI with keyboard-driven controls
+- **Top processes** — sorted by CPU, memory, or PID with live filtering, tree view, and kill with signal picker
+- **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, and tab-based panel navigation
 - **Snapshot export** — JSON, CSV, or TSV output formats
 - **Continuous CSV logging** — automatic per-tick data logging to timestamped files
-- **Visual themes** — four built-in colour themes for the dashboard
+- **Visual themes** — six built-in colour themes for the dashboard
+- **Alert system** — configurable CPU usage and temperature threshold alerts with terminal bell notification
+- **Graph mode toggle** — switch between sparkline and bar graph rendering in the live dashboard
+- **P2P dashboard panel** — monitor P2P server status and peer events directly from the live dashboard
 
 ## Installation
 
@@ -55,6 +60,10 @@ pyre --tsv                # TSV export
 pyre --once               # Single static snapshot (same as default without live)
 pyre --out report.json    # Also write output to a file
 pyre --packets            # Include packet monitor panel
+pyre --tree               # Show process tree view instead of flat list
+pyre --sort mem           # Sort processes by memory usage
+pyre --limit 20           # Limit processes to 20 (0 = all)
+pyre --theme dracula      # Set theme for live mode
 ```
 
 ### Live dashboard
@@ -76,12 +85,16 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `-c, --csv` | Output as CSV |
 | `-t, --tsv` | Output as TSV |
 | `--detailed` | Include detailed system info and sensor readings |
+| `--theme <name>` | Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox) |
 | `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
 | `--once` | Show a single static snapshot instead of live feed |
 | `--out <file>` | Write snapshot output to a file |
 | `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
 | `--log` | Start continuous CSV logging immediately when live mode starts |
 | `--packets` | Include packet monitor panel in static output |
+| `--tree` | Show process tree view instead of flat list |
+| `--sort <key>` | Sort processes by: `cpu`, `mem`, `pid`, `user`, `command`, `state`, `threads`, `runtime` |
+| `--limit <n>` | Max processes in snapshot (0 = all, default: `10`) |
 
 ## Commands
 
@@ -97,6 +110,9 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `pyre --once` | Show a single static snapshot (same as default without live) |
 | `pyre --out <file>` | Write snapshot output to a file |
 | `pyre --packets` | Include packet monitor panel in static output |
+| `pyre --tree` | Show process tree view instead of flat list |
+| `pyre --sort <key>` | Sort processes by: cpu, mem, pid, user, command, state, threads, runtime |
+| `pyre --limit <n>` | Max processes in snapshot (0 = all, default: 10) |
 
 ### Live dashboard
 
@@ -157,12 +173,16 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `-c, --csv` | Output as CSV |
 | `-t, --tsv` | Output as TSV |
 | `--detailed` | Include detailed system info and sensor readings |
+| `--theme <name>` | Default theme for live mode (default, dracula, cyberpunk, monochrome, nord, gruvbox) |
 | `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
 | `--once` | Show a single static snapshot instead of live feed |
 | `--out <file>` | Write snapshot output to a file |
 | `--export-dir <dir>` | Directory for live-mode snapshot exports and logs (default: `./pyre-exports`) |
 | `--log` | Start continuous CSV logging immediately when live mode starts |
 | `--packets` | Include packet monitor panel in static output |
+| `--tree` | Show process tree view instead of flat list |
+| `--sort <key>` | Sort processes by: `cpu`, `mem`, `pid`, `user`, `command`, `state`, `threads`, `runtime` |
+| `--limit <n>` | Max processes in snapshot (0 = all, default: `10`) |
 
 ### Live dashboard keyboard controls
 
@@ -172,15 +192,22 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 | `p` | Pause / resume the refresh cycle |
 | `d` | Toggle detailed sensor mode |
 | `g` | Show / hide sparkline graphs |
-| `s` | Cycle sort order (CPU → memory → PID) |
+| `b` | Cycle graph mode (sparkline ↔ bar) |
+| `s` | Cycle sort order (CPU → memory → PID → user → command → state → threads → runtime) |
 | `f` | Cycle export format (JSON → CSV → TSV) |
 | `e` | Export a snapshot to the export directory |
 | `l` | Toggle continuous CSV logging |
 | `c` | Open the UI customizer |
 | `/` | Open process filter |
 | `k` | Open process kill (enter PID, then Enter to confirm) |
+| `S` | Open signal picker for kill (cycle SIGTERM → SIGKILL → SIGINT → SIGHUP → SIGSTOP → SIGCONT) |
+| `t` | Toggle process tree view |
+| `r` | Toggle P2P server (or enter P2P password input) |
 | `+` | Increase refresh interval by 1 second |
 | `-` | Decrease refresh interval by 1 second |
+| `←` / `→` / `tab` | Cycle to next / previous panel tab |
+| `1`–`9`, `0` | Jump to panel by number (cpu, mem, gpu, power, battery, thermal, network, packets, tasks, disk) |
+| `P` | Toggle process panel |
 | `↑` / `k` | Navigate customizer options |
 | `↓` / `j` | Navigate customizer options |
 | `Enter` / `Space` | Toggle visibility or select theme in customizer |
@@ -196,6 +223,8 @@ pyre live --interval 5 --log   # Custom interval with auto-logging
 ## P2P Live Data Streaming
 
 Send live system stats to another system over a TCP connection with password authentication. The server streams `StatsData` snapshots to authenticated peers at the configured interval.
+
+You can also start or stop the P2P server from the live dashboard by pressing `r`.
 
 ### Start a P2P server (host)
 
@@ -354,6 +383,8 @@ While the P2P server is running, type these commands on the server's stdin:
 
 Press `Ctrl+C` to shut down the server as well.
 
+You can also toggle the P2P server on and off from the live dashboard by pressing `r`. When the server is already running, `r` stops it; when it is not running, `r` prompts for a password and starts it.
+
 ### P2P Client Controls
 
 While connected, the client displays live system stats in a formatted table. Press `Ctrl+C` to disconnect. The client will attempt to reconnect automatically after 3 seconds if the connection is lost.
@@ -368,15 +399,22 @@ When running `pyre live`, use these keyboard shortcuts:
 | `p` | Pause / resume the refresh cycle |
 | `d` | Toggle detailed sensor mode |
 | `g` | Show / hide sparkline graphs |
-| `s` | Cycle sort order (CPU → memory → PID) |
+| `b` | Cycle graph mode (sparkline ↔ bar) |
+| `s` | Cycle sort order (CPU → memory → PID → user → command → state → threads → runtime) |
 | `f` | Cycle export format (JSON → CSV → TSV) |
 | `e` | Export a snapshot to the export directory |
 | `l` | Toggle continuous CSV logging |
 | `c` | Open the UI customizer |
 | `/` | Open process filter |
 | `k` | Open process kill (enter PID, then Enter to confirm) |
+| `S` | Open signal picker for kill (cycle SIGTERM → SIGKILL → SIGINT → SIGHUP → SIGSTOP → SIGCONT) |
+| `t` | Toggle process tree view |
+| `r` | Toggle P2P server (or enter P2P password input) |
 | `+` | Increase refresh interval by 1 second |
 | `-` | Decrease refresh interval by 1 second |
+| `←` / `→` / `tab` | Cycle to next / previous panel tab |
+| `1`–`9`, `0` | Jump to panel by number (cpu, mem, gpu, power, battery, thermal, network, packets, tasks, disk) |
+| `P` | Toggle process panel |
 | `↑` / `k` | Navigate customizer options |
 | `↓` / `j` | Navigate customizer options |
 | `Enter` / `Space` | Toggle visibility or select theme in customizer |
@@ -388,6 +426,82 @@ Press `c` to open the customizer overlay. From there you can:
 
 - Cycle through six built-in themes (Default, Dracula, Cyberpunk, Monochrome, Nord, Gruvbox)
 - Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes) on or off
+- Switch graph mode between sparkline and bar charts
+- Toggle process tree view
+
+---
+
+## Process Management
+
+The live dashboard provides full process management capabilities:
+
+### Sorting
+
+Processes can be sorted by eight criteria. In the dashboard, press `s` to cycle through sort modes:
+
+| Sort Key | Description |
+|---|---|
+| `cpu` | Sort by CPU usage (descending) |
+| `mem` | Sort by memory usage (descending) |
+| `pid` | Sort by process ID |
+| `user` | Sort by username |
+| `command` | Sort by command name |
+| `state` | Sort by process state |
+| `threads` | Sort by thread count |
+| `runtime` | Sort by total runtime |
+
+In static snapshot mode, use `--sort <key>` to set the sort order (default: `cpu`).
+
+### Filtering
+
+Press `/` in the live dashboard to open a process filter. Type a substring to narrow the process list to matching entries. Press `Esc` to clear the filter.
+
+### Tree View
+
+Press `t` in the live dashboard to toggle between flat process list and a tree view showing parent/child process relationships. In static snapshot mode, use `--tree` to enable tree view.
+
+### Killing Processes
+
+Press `k` in the live dashboard to enter kill mode:
+1. Type the PID of the process you want to terminate
+2. Press `Enter` to send `SIGTERM` (default)
+3. Press `Esc` to cancel
+
+### Signal Picker
+
+Press `S` in the live dashboard to open the signal picker. Cycle through available signals with `↑`/`↓` or `j`/`k`, then press `Enter` to send the selected signal to the PID entered in kill mode:
+
+| Signal | Description |
+|---|---|
+| `SIGTERM` | Graceful termination (default) |
+| `SIGKILL` | Force kill |
+| `SIGINT` | Interrupt (Ctrl+C equivalent) |
+| `SIGHUP` | Hangup |
+| `SIGSTOP` | Stop (pause) the process |
+| `SIGCONT` | Continue a stopped process |
+
+---
+
+## Mouse Support
+
+The live dashboard supports mouse interaction in addition to keyboard controls:
+
+- **Click tab bar** — click on a panel tab in the tab bar (row 4) to jump directly to that panel
+- **Scroll** — scroll through process lists in panels with many entries
+- Mouse input is enabled by default; disable with `mouseEnabled = false` in the customizer
+
+---
+
+## Alerts & Notifications
+
+The live dashboard includes a built-in alert system that monitors critical system metrics and notifies you when thresholds are exceeded:
+
+| Metric | Default Threshold | Alert Behavior |
+|---|---|---|
+| CPU usage | 90% | Terminal bell (`\x07`) + red status message for 5 seconds |
+| CPU temperature | 95°C | Terminal bell + red status message for 5 seconds |
+
+Alerts fire once when a threshold is first crossed and reset when conditions clear. The alert thresholds are configurable in the source code (`CPU_ALERT_PCT` and `TEMP_ALERT_C` in `src/live/state.ts`).
 
 ## Themes
 
@@ -523,6 +637,58 @@ Verifies the built binary runs and responds to `--help`.
 | `start` | Run the built binary from `dist/` |
 | `dev` | Run directly via tsx (no build step) |
 | `test` | Verify the built binary responds to `--help` |
+
+## Planned Features
+
+The following features are proposed for future releases:
+
+### Configuration File
+
+Persistent settings via `~/.config/pyre/config.json` to remember your preferred theme, refresh interval, export directory, and panel visibility across sessions.
+
+### Export Formats
+
+- **HTML export** — styled, self-contained HTML reports for sharing
+- **Markdown export** — Markdown tables suitable for documentation and notes
+
+### Log Rotation
+
+Automatic rotation of CSV log files to prevent disk exhaustion — configurable max file count and size.
+
+### Custom Alert Thresholds
+
+CLI flags to set CPU and temperature alert thresholds per-session:
+
+```bash
+pyre live --alert-cpu 80 --alert-temp 85
+```
+
+### Temperature Unit Toggle
+
+Switch between Celsius and Fahrenheit in the dashboard and export output.
+
+### System Information Command
+
+A dedicated `pyre info` command that prints a concise hardware overview:
+
+```bash
+pyre info
+# Output: CPU model, cores, memory total, macOS version, uptime
+```
+
+### Notification System
+
+Desktop notifications (macOS `osascript` or `terminal-notifier`) when alert thresholds are crossed, even when the dashboard is not in focus.
+
+### Remote SSH Monitoring
+
+Monitor a remote macOS machine over SSH without requiring the P2P server setup.
+
+### Web Dashboard
+
+Serve a web-based dashboard on a local port for browser-based monitoring.
+
+---
 
 ## License
 
