@@ -159,21 +159,118 @@ export function formatHtml(data: StatsData): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>pyre — ${data.header.hostname}</title>
 <style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 24px; }
-  h1 { color: #ff6a39; margin-bottom: 4px; }
-  .meta { color: #a6adc8; margin-bottom: 24px; }
-  h2 { color: #89b4fa; margin-top: 28px; border-bottom: 1px solid #313244; padding-bottom: 6px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  td { padding: 6px 10px; border-bottom: 1px solid #313244; vertical-align: top; }
-  td.label { color: #a6adc8; width: 22%; font-weight: 500; }
-  td.value { color: #cdd6f4; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0908; color: #efe9dc; margin: 0; padding: 24px; }
+  h1 { color: #ff6a39; margin-bottom: 4px; font-weight: 800; letter-spacing: -0.02em; }
+  .meta { color: #9c9384; margin-bottom: 24px; font-size: 0.9rem; }
+  h2 { color: #ffb130; margin-top: 28px; border-bottom: 1px solid #211d18; padding-bottom: 6px; font-size: 1.1rem; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; font-family: monospace; }
+  td { padding: 8px 12px; border-bottom: 1px solid #1a1712; vertical-align: top; font-size: 0.9rem; }
+  td.label { color: #9c9384; width: 22%; font-weight: 600; }
+  td.value { color: #efe9dc; }
   tr:last-child td { border-bottom: none; }
 </style>
 </head>
 <body>
-  <h1>PYRE</h1>
-  <div class="meta">${escapeHtml(data.header.hostname)} · ${escapeHtml(data.header.os)} · up ${escapeHtml(data.header.uptime)} · ${escapeHtml(data.timestamp)}</div>
+  <h1>PYRE <span style="font-size:0.5em; color:#82c774; font-weight:normal;">● LIVE PORTAL</span></h1>
+  <div class="meta" id="header-meta">${escapeHtml(data.header.hostname)} · ${escapeHtml(data.header.os)} · up ${escapeHtml(data.header.uptime)} · <span id="timestamp-val">${escapeHtml(data.timestamp)}</span></div>
+  <div id="portal-content">
   ${sections.join('\n  ')}
+  </div>
+
+  <script>
+    function renderStats(data) {
+      if (!data) return;
+      const tsEl = document.getElementById('timestamp-val');
+      if (tsEl && data.timestamp) tsEl.textContent = data.timestamp;
+
+      function formatBytes(bytes) {
+        if (!bytes || bytes < 0) return '0 B';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+      }
+
+      function row(label, val) {
+        return '<tr><td class="label">' + label + '</td><td class="value">' + val + '</td></tr>';
+      }
+
+      let html = '';
+
+      // CPU & Memory
+      html += '<h2>CPU & Memory</h2><table>';
+      if (data.cpu) {
+        html += row('Brand', data.cpu.brand || 'Unknown');
+        html += row('Cores', (data.cpu.physicalCores || '') + '/' + (data.cpu.cores || '') + ' (phys/log)');
+        html += row('Usage', (data.cpu.usage || 0) + '%');
+        if (data.cpu.loadAvg) html += row('Load Avg', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' '));
+        if (data.cpu.temperature) html += row('Temperature', data.cpu.temperature.toFixed(1) + '°C');
+      }
+      if (data.memory) {
+        html += row('Memory Usage', data.memory.usagePercent + '% (' + formatBytes(data.memory.used) + ' / ' + formatBytes(data.memory.total) + ')');
+        html += row('Swap Used', formatBytes(data.memory.swapUsed) + ' / ' + formatBytes(data.memory.swapTotal));
+      }
+      html += '</table>';
+
+      // GPU
+      if (data.gpu) {
+        html += '<h2>GPU</h2><table>';
+        html += row('Model', data.gpu.model || '');
+        html += row('Utilization', (data.gpu.utilization || 0) + '%');
+        html += row('Memory', formatBytes(data.gpu.memory));
+        if (data.gpu.temperature) html += row('Temperature', data.gpu.temperature.toFixed(1) + '°C');
+        html += '</table>';
+      }
+
+      // Network
+      if (data.network) {
+        html += '<h2>Network</h2><table>';
+        html += row('Interface', (data.network.interface || '') + ' (' + (data.network.ip || '') + ')');
+        html += row('RX', formatBytes(data.network.rxBytes) + ' / ' + (data.network.rxPackets || 0) + ' pkt');
+        html += row('TX', formatBytes(data.network.txBytes) + ' / ' + (data.network.txPackets || 0) + ' pkt');
+        html += '</table>';
+      }
+
+      // Disk
+      if (data.disk && data.disk.length) {
+        html += '<h2>Disk</h2><table>';
+        data.disk.forEach(d => {
+          let io = '';
+          if (d.readBytesSec !== undefined || d.writeBytesSec !== undefined) {
+            io = ' | R: ' + formatBytes(d.readBytesSec || 0) + '/s W: ' + formatBytes(d.writeBytesSec || 0) + '/s';
+          }
+          html += row(d.mountpoint, d.used + ' / ' + d.size + ' (' + d.capacity + ')' + io);
+        });
+        html += '</table>';
+      }
+
+      // Processes
+      if (data.processes && data.processes.length) {
+        html += '<h2>Processes (Top ' + Math.min(50, data.processes.length) + ')</h2><table>';
+        data.processes.slice(0, 50).forEach(p => {
+          html += row(String(p.pid), p.user + ' &nbsp; CPU: ' + p.cpu.toFixed(1) + '% &nbsp; MEM: ' + p.mem.toFixed(1) + '% &nbsp; ' + p.command);
+        });
+        html += '</table>';
+      }
+
+      const contentEl = document.getElementById('portal-content');
+      if (contentEl) contentEl.innerHTML = html;
+    }
+
+    if (window.EventSource) {
+      const evtSource = new EventSource('/api/stream');
+      evtSource.onmessage = function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          renderStats(data);
+        } catch(e) {}
+      };
+    } else {
+      setInterval(function() {
+        fetch('/api').then(r => r.json()).then(renderStats).catch(function(){});
+      }, 2000);
+    }
+  </script>
 </body>
 </html>`;
 }

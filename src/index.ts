@@ -65,10 +65,7 @@ program
     .option('--p2p-deny <ips>', 'Comma-separated list of denied IPs')
     .option('--p2p-audit-log <dir>', 'Directory for P2P audit logs')
     .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)')
-    .option('--port <port>', 'Port number for web server mode', '3000')
-    .option('--web-auth', 'Enable Basic Authentication for web server')
-    .option('--web-user <user>', 'Username for web server authentication', 'admin')
-    .option('--web-pass <pass>', 'Password for web server authentication', 'pyre');
+    .option('--port <port>', 'Port number for web server mode', '3000');
 
 program.parse(process.argv);
 
@@ -89,6 +86,21 @@ function sanitizeHost(host: string): string {
 
 function detectLocalIP(): string | null {
   const ifaces = os.networkInterfaces();
+  const prioritizedNames = ['en0', 'en1', 'wlan0', 'eth0'];
+  
+  // 1. Try prioritized active interfaces
+  for (const name of prioritizedNames) {
+    const addrs = ifaces[name];
+    if (addrs) {
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          return addr.address;
+        }
+      }
+    }
+  }
+
+  // 2. Fallback to any non-internal IPv4
   for (const [, addrs] of Object.entries(ifaces)) {
     if (!addrs) continue;
     for (const addr of addrs) {
@@ -510,37 +522,11 @@ async function runSshCommand(host: string): Promise<void> {
 async function runWebCommand(): Promise<void> {
   const http = await import('node:http');
   const port = parseInt(opts.port || process.env.PORT || '3000', 10) || 3000;
-  const authEnabled = !!opts.webAuth;
-  const authUser = opts.webUser || 'admin';
-  const authPass = opts.webPass || 'pyre';
 
   const server = http.createServer(async (req, res) => {
-    // 1. Basic Authentication Check
-    if (authEnabled) {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Basic ')) {
-        res.writeHead(401, {
-          'WWW-Authenticate': 'Basic realm="pyre Web Dashboard"',
-          'Content-Type': 'text/plain',
-        });
-        res.end('401 Unauthorized');
-        return;
-      }
-      const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf-8');
-      const [user, pass] = credentials.split(':');
-      if (user !== authUser || pass !== authPass) {
-        res.writeHead(401, {
-          'WWW-Authenticate': 'Basic realm="pyre Web Dashboard"',
-          'Content-Type': 'text/plain',
-        });
-        res.end('401 Unauthorized');
-        return;
-      }
-    }
-
     const url = req.url || '/';
 
-    // 2. Health check endpoint
+    // 1. Health check endpoint
     if (url === '/health' || url === '/api/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
@@ -574,18 +560,21 @@ async function runWebCommand(): Promise<void> {
       return;
     }
 
-    // 4. Static HTML dashboard & API snapshot endpoints
+    // 4. Static/Dynamic HTML live dashboard & API snapshot endpoints
     if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
+      const data = await collectAll({ detailed: true });
+      const htmlContent = formatHtml(data);
+      res.end(htmlContent);
+    } else if (url === '/setup') {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
       const indexPath = path.join(process.cwd(), 'index.html');
-      let htmlContent = '';
       if (fs.existsSync(indexPath)) {
-        htmlContent = fs.readFileSync(indexPath, 'utf-8');
+        res.end(fs.readFileSync(indexPath, 'utf-8'));
       } else {
         const data = await collectAll({ detailed: true });
-        htmlContent = formatHtml(data);
+        res.end(formatHtml(data));
       }
-      res.end(htmlContent);
     } else if (url === '/api' || url === '/api/stats' || url === '/data') {
       const data = await collectAll({ detailed: true });
       res.writeHead(200, {
@@ -600,15 +589,30 @@ async function runWebCommand(): Promise<void> {
     }
   });
 
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(chalk.red(`\nError: Port ${port} is already in use.`));
+      console.log(chalk.yellow(`  Try specifying a different port using --port <port>, e.g.:`));
+      console.log(chalk.dim(`  npx tsx src/index.ts web --port ${port + 1}\n`));
+      process.exit(1);
+    } else {
+      console.log(chalk.red(`Server error: ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+  const ip = detectLocalIP() || 'localhost';
+
   server.listen(port, '0.0.0.0', () => {
     console.log(chalk.bold(`\n  pyre web server running on port ${port}`));
-    console.log(chalk.dim(`  Dashboard: http://0.0.0.0:${port}/`));
-    console.log(chalk.dim(`  API:       http://0.0.0.0:${port}/api`));
-    console.log(chalk.dim(`  SSE Stream: http://0.0.0.0:${port}/api/stream`));
-    if (authEnabled) {
-      console.log(chalk.yellow(`  Authentication: Enabled (${authUser}:${authPass})`));
-    }
-    console.log(chalk.dim('  Press Ctrl+C to stop\n'));
+    console.log(chalk.dim(`  Local URL:   http://localhost:${port}/`));
+    console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${port}/  (Accessible on same Wi-Fi / LAN)`));
+    console.log(chalk.dim(`  API:         http://${ip}:${port}/api`));
+    console.log(chalk.dim(`  SSE Stream:  http://${ip}:${port}/api/stream`));
+    console.log(chalk.yellow(`\n  Troubleshooting connection from phone/other devices:`));
+    console.log(chalk.dim(`  1. macOS Firewall: System Settings -> Network -> Firewall -> Allow incoming node/pyre connections`));
+    console.log(chalk.dim(`  2. Wi-Fi Router: Ensure "AP Isolation" / "Guest Mode" is OFF on your Wi-Fi router`));
+    console.log(chalk.dim(`  3. Verify phone is connected to the exact same Wi-Fi network\n`));
   });
 
   process.once('SIGINT', () => {
