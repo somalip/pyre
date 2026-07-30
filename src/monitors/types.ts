@@ -112,6 +112,8 @@ export interface DiskData {
   available: string;
   capacity: string;
   mountpoint: string;
+  readBytesSec?: number;
+  writeBytesSec?: number;
 }
 
 export interface NetworkData {

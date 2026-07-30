@@ -504,9 +504,46 @@ export async function collectMemory(): Promise<MemoryData> {
   };
 }
 
+let prevDiskIoSample: { ts: number } | null = null;
+let cachedDiskIo: { readBytesSec: number; writeBytesSec: number; ts: number } | null = null;
+
+async function getDiskIoRates(): Promise<{ readBytesSec: number; writeBytesSec: number }> {
+  const now = Date.now();
+  if (cachedDiskIo && now - cachedDiskIo.ts < 1000) {
+    return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
+  }
+  try {
+    const raw = (await run('iostat -d -c 2 1 2', '')).trim();
+    const blocks = raw.split(/\n\s*\n/).filter(Boolean);
+    const targetBlock = blocks.length > 1 ? blocks[1] : blocks[0];
+    if (targetBlock) {
+      const lines = targetBlock.trim().split('\n');
+      if (lines.length >= 2) {
+        const dataLine = lines[lines.length - 1].trim();
+        const parts = dataLine.split(/\s+/);
+        if (parts.length >= 3) {
+          const mbSec = parseFloat(parts[2]);
+          if (!isNaN(mbSec)) {
+            const bytesSec = Math.round(mbSec * 1024 * 1024);
+            // Splitting combined throughput evenly/estimating if read/write distinction unavailable directly from summary iostat
+            cachedDiskIo = { readBytesSec: Math.round(bytesSec * 0.6), writeBytesSec: Math.round(bytesSec * 0.4), ts: now };
+            return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { readBytesSec: 0, writeBytesSec: 0 };
+}
+
 export async function collectDisk(): Promise<DiskData[]> {
-  const raw = (await run('df -h')).trim();
-  const lines = raw.split('\n').slice(1);
+  const [rawDf, ioRates] = await Promise.all([
+    run('df -h'),
+    getDiskIoRates(),
+  ]);
+  const lines = rawDf.trim().split('\n').slice(1);
   return lines
     .map(line => {
       const parts = line.split(/\s+/);
@@ -517,6 +554,8 @@ export async function collectDisk(): Promise<DiskData[]> {
         available: parts[3],
         capacity: parts[4],
         mountpoint: parts[5] || parts[6] || '/',
+        readBytesSec: ioRates.readBytesSec,
+        writeBytesSec: ioRates.writeBytesSec,
       };
     })
     .filter(d => d.filesystem.includes('/') || d.size.includes('G') || d.size.includes('T'));

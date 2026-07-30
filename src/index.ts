@@ -17,8 +17,11 @@ import { formatTable, formatJson, formatCsv, formatTsv, formatHtml, formatMarkdo
 import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
-import { readConfig } from './state/config.js';
-import { CONFIG_FILE } from './state/config.js';
+import { runDoctor, printDoctorReport } from './doctor.js';
+import { generateZshCompletions, generateBashCompletions, generateFishCompletions } from './completions.js';
+import { runHistoryCommand } from './historyCmd.js';
+import { runDiffCommand } from './diffCmd.js';
+import { readConfig, CONFIG_FILE } from './state/config.js';
 
 const config = readConfig();
 
@@ -62,7 +65,10 @@ program
     .option('--p2p-deny <ips>', 'Comma-separated list of denied IPs')
     .option('--p2p-audit-log <dir>', 'Directory for P2P audit logs')
     .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)')
-    .option('--port <port>', 'Port number for web server mode', '3000');
+    .option('--port <port>', 'Port number for web server mode', '3000')
+    .option('--web-auth', 'Enable Basic Authentication for web server')
+    .option('--web-user <user>', 'Username for web server authentication', 'admin')
+    .option('--web-pass <pass>', 'Password for web server authentication', 'pyre');
 
 program.parse(process.argv);
 
@@ -123,8 +129,21 @@ async function runServerCommand(): Promise<void> {
 async function main() {
   const cmd = program.args[0];
 
-  if (cmd === 'info') {
-    await runInfoCommand();
+  if (cmd === 'history') {
+    const daysIdx = program.args.indexOf('--days');
+    const days = daysIdx !== -1 ? parseInt(program.args[daysIdx + 1], 10) || 7 : 7;
+    runHistoryCommand({ days });
+    return;
+  }
+
+  if (cmd === 'diff') {
+    const file1 = program.args[1];
+    const file2 = program.args[2];
+    if (!file1 || !file2) {
+      console.log(chalk.red('Usage: pyre diff <snapshot1.json> <snapshot2.json>'));
+      process.exit(1);
+    }
+    runDiffCommand(file1, file2);
     return;
   }
 
@@ -491,9 +510,71 @@ async function runSshCommand(host: string): Promise<void> {
 async function runWebCommand(): Promise<void> {
   const http = await import('node:http');
   const port = parseInt(opts.port || process.env.PORT || '3000', 10) || 3000;
+  const authEnabled = !!opts.webAuth;
+  const authUser = opts.webUser || 'admin';
+  const authPass = opts.webPass || 'pyre';
 
   const server = http.createServer(async (req, res) => {
+    // 1. Basic Authentication Check
+    if (authEnabled) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Basic ')) {
+        res.writeHead(401, {
+          'WWW-Authenticate': 'Basic realm="pyre Web Dashboard"',
+          'Content-Type': 'text/plain',
+        });
+        res.end('401 Unauthorized');
+        return;
+      }
+      const credentials = Buffer.from(authHeader.split(' ')[1], 'base64').toString('utf-8');
+      const [user, pass] = credentials.split(':');
+      if (user !== authUser || pass !== authPass) {
+        res.writeHead(401, {
+          'WWW-Authenticate': 'Basic realm="pyre Web Dashboard"',
+          'Content-Type': 'text/plain',
+        });
+        res.end('401 Unauthorized');
+        return;
+      }
+    }
+
     const url = req.url || '/';
+
+    // 2. Health check endpoint
+    if (url === '/health' || url === '/api/health') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+      return;
+    }
+
+    // 3. Real-time Server-Sent Events (SSE) stream endpoint
+    if (url === '/api/stream') {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      const sendStats = async () => {
+        try {
+          const data = await collectAll({ detailed: true });
+          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        } catch {
+          // ignore stream collect error
+        }
+      };
+
+      sendStats();
+      const intervalId = setInterval(sendStats, 2000);
+
+      req.on('close', () => {
+        clearInterval(intervalId);
+      });
+      return;
+    }
+
+    // 4. Static HTML dashboard & API snapshot endpoints
     if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       const indexPath = path.join(process.cwd(), 'index.html');
@@ -523,6 +604,10 @@ async function runWebCommand(): Promise<void> {
     console.log(chalk.bold(`\n  pyre web server running on port ${port}`));
     console.log(chalk.dim(`  Dashboard: http://0.0.0.0:${port}/`));
     console.log(chalk.dim(`  API:       http://0.0.0.0:${port}/api`));
+    console.log(chalk.dim(`  SSE Stream: http://0.0.0.0:${port}/api/stream`));
+    if (authEnabled) {
+      console.log(chalk.yellow(`  Authentication: Enabled (${authUser}:${authPass})`));
+    }
     console.log(chalk.dim('  Press Ctrl+C to stop\n'));
   });
 

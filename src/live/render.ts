@@ -355,20 +355,33 @@ function checkAlerts(data: StatsData) {
    const anomalies = detectAnomalies(data, state.history);
    const hasCriticalAnomaly = anomalies.some(a => a.severity === 'critical');
    const hasWarningAnomaly = anomalies.some(a => a.severity === 'warning');
+   // Process watchdog check
+   let watchdogTriggered = false;
+   if (state.watchdogProcess) {
+     const matches = data.processes.filter(p => p.command.toLowerCase().includes(state.watchdogProcess.toLowerCase()));
+     for (const p of matches) {
+       if (p.cpu >= state.watchdogCpu || p.mem >= state.watchdogMem) {
+         watchdogTriggered = true;
+         break;
+       }
+     }
+   }
+
    const anomalyTriggered = hasCriticalAnomaly || hasWarningAnomaly;
 
-   if ((hot || anomalyTriggered) && !state.alerted) {
+   if ((hot || anomalyTriggered || watchdogTriggered) && !state.alerted) {
      state.alerted = true;
      process.stdout.write('\x07');
      const reasons: string[] = [];
      if (data.cpu.usage >= state.CPU_ALERT_PCT) reasons.push(`CPU at ${data.cpu.usage}%`);
      if (temp !== null && temp >= state.TEMP_ALERT_C) reasons.push(`Temp at ${formatTempForUnit(temp)}`);
+     if (watchdogTriggered) reasons.push(`Watchdog process "${state.watchdogProcess}" crossed threshold`);
      for (const a of anomalies) {
        reasons.push(`${a.metric} anomaly (σ=${a.zScore.toFixed(1)})`);
      }
       setStatus(chalk.red(`⚠ Alert: ${reasons.join('; ')}`), 5000);
       sendNotification('pyre Alert', reasons.join('; '));
-    } else if (!hot && !anomalyTriggered) {
+    } else if (!hot && !anomalyTriggered && !watchdogTriggered) {
      state.alerted = false;
    }
   }

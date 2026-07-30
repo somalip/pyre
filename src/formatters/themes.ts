@@ -8,7 +8,11 @@
  */
 import chalk from 'chalk';
 
-export type ThemeName = 'default' | 'dracula' | 'cyberpunk' | 'monochrome' | 'nord' | 'gruvbox';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+export type ThemeName = string;
 
 export interface ThemeColors {
    border: (s: string) => string;
@@ -24,16 +28,7 @@ export interface ThemeColors {
    process: (s: string) => string;
 }
 
-/**
- * Built-in colour themes.
- *
- * - **default** — muted greys and cyan accents, safe for any terminal.
- * - **dracula**  — the popular Dracula dark palette.
- * - **cyberpunk** — high-contrast neon on black.
- * - **monochrome** — white-only, useful for colour-blind users or
- *   terminals without 256-colour support.
- */
-export const THEMES: Record<ThemeName, ThemeColors> = {
+export const BUILTIN_THEMES: Record<string, ThemeColors> = {
    default: {
      border: chalk.hex('#4b5563'),
      cpu: chalk.hex('#22d3ee'),
@@ -113,3 +108,43 @@ export const THEMES: Record<ThemeName, ThemeColors> = {
       process: chalk.hex('#ebdbb2'),
     },
   };
+
+export function loadCustomThemes(): Record<string, ThemeColors> {
+  const themes = { ...BUILTIN_THEMES };
+  const themesDir = path.join(os.homedir(), '.config', 'pyre', 'themes');
+  try {
+    if (fs.existsSync(themesDir)) {
+      const files = fs.readdirSync(themesDir);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const name = path.basename(file, '.json');
+          try {
+            const raw = fs.readFileSync(path.join(themesDir, file), 'utf-8');
+            const data = JSON.parse(raw);
+            const buildColor = (val?: string) => (val ? (val.startsWith('#') ? chalk.hex(val) : (chalk as any)[val] || chalk.white) : chalk.white);
+            themes[name] = {
+              border: buildColor(data.border),
+              cpu: buildColor(data.cpu),
+              mem: buildColor(data.mem),
+              gpu: buildColor(data.gpu),
+              power: buildColor(data.power),
+              battery: buildColor(data.battery),
+              thermal: buildColor(data.thermal),
+              network: buildColor(data.network),
+              disk: buildColor(data.disk),
+              graphs: buildColor(data.graphs),
+              process: buildColor(data.process),
+            };
+          } catch {
+            // ignore bad theme file
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore directory read error
+  }
+  return themes;
+}
+
+export const THEMES: Record<string, ThemeColors> = loadCustomThemes();

@@ -34,7 +34,9 @@ export interface PyreConfig {
   p2pPassword?: string;
   splashEnabled?: boolean;
   splashColorScheme?: string;
-  splashAnimation?: string;
+  watchdogProcess?: string;
+  watchdogCpu?: number;
+  watchdogMem?: number;
   visiblePanels?: {
     cpu?: boolean;
     mem?: boolean;
@@ -64,6 +66,9 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   mouseEnabled: true,
   cpuAlertPct: 90,
   tempAlertC: 95,
+  watchdogProcess: '',
+  watchdogCpu: 80,
+  watchdogMem: 80,
   notificationsEnabled: true,
   p2pPort: 9876,
   p2pPassword: 'pyre',

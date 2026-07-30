@@ -189,12 +189,20 @@ function handleInputModeKey(str: string, key: readline.Key) {
 
    if (key.name === 'backspace') {
      state.inputBuffer = state.inputBuffer.slice(0, -1);
+     if (state.inputMode === 'filter') {
+       state.processFilter = state.inputBuffer;
+       invalidateTableCache();
+     }
      render();
      return;
    }
 
    if (str && str.length === 1 && !key.ctrl && !key.meta) {
      state.inputBuffer += str;
+     if (state.inputMode === 'filter') {
+       state.processFilter = state.inputBuffer;
+       invalidateTableCache();
+     }
      render();
    }
  }

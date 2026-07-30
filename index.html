@@ -841,6 +841,40 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? 'âœ“' : 'â
     });
 
     render();
+
+    // Auto-refresh stats via Server-Sent Events (SSE) stream with polling fallback
+    function updateDashboardUI(stats) {
+      if (!stats) return;
+      const cpuEl = document.getElementById('live-cpu-val');
+      const memEl = document.getElementById('live-mem-val');
+      if (cpuEl && stats.cpu) cpuEl.textContent = `${stats.cpu.usage}%`;
+      if (memEl && stats.memory) memEl.textContent = `${stats.memory.usagePercent}%`;
+    }
+
+    if (window.EventSource) {
+      const evtSource = new EventSource('/api/stream');
+      evtSource.onmessage = function(event) {
+        try {
+          const stats = JSON.parse(event.data);
+          updateDashboardUI(stats);
+        } catch {
+          // ignore parse error
+        }
+      };
+      evtSource.onerror = function() {
+        // Fallback polling on SSE stream error
+        fetch('/api').then(r => r.json()).then(updateDashboardUI).catch(() => {});
+      };
+    } else {
+      setInterval(async () => {
+        try {
+          const res = await fetch('/api');
+          if (res.ok) updateDashboardUI(await res.json());
+        } catch {
+          // ignore network error
+        }
+      }, 2000);
+    }
   })();
 </script>
 

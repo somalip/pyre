@@ -136,7 +136,7 @@ These options apply to both static snapshots and `pyre live`, except where noted
 
 | Command | Description |
 |---|---|
-| `pyre web` | Serve a self-contained HTML dashboard on localhost |
+| `pyre web` | Serve an auto-refreshing live HTML dashboard and SSE stream on localhost (`--port <port>`, `--web-auth`, `--web-user <user>`, `--web-pass <pass>`) |
 
 ### P2P
 

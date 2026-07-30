@@ -714,7 +714,7 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
     if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
       const coreColW = Math.floor((rightW - 1) / 2);
       const half = Math.ceil(data.cpu.coreUsage.length / 2);
-      for (let i = 0; i < Math.min(2, half); i++) {
+      for (let i = 0; i < half; i++) {
         const u1 = data.cpu.coreUsage[i];
         const u2 = data.cpu.coreUsage[i + half];
         const c1BarW = Math.max(3, coreColW - 8);
@@ -763,9 +763,18 @@ function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts
     for (const d of data.disk.slice(0, 2)) {
       const capNum = parseInt(d.capacity, 10) || 0;
       const mountShort = truncatePlain(d.mountpoint, 8);
-      diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18))}] ${d.capacity}`);
+      let ioStr = '';
+      if (d.readBytesSec !== undefined || d.writeBytesSec !== undefined) {
+        const rStr = formatBytes(d.readBytesSec || 0);
+        const wStr = formatBytes(d.writeBytesSec || 0);
+        ioStr = ` R:${rStr}/s W:${wStr}/s`;
+      }
+      diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18 - ioStr.length))}] ${d.capacity}${ioStr}`);
     }
-    out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length));
+    const totalRead = data.disk.reduce((acc, d) => acc + (d.readBytesSec || 0), 0);
+    const totalWrite = data.disk.reduce((acc, d) => acc + (d.writeBytesSec || 0), 0);
+    const diskHeaderRight = `R:${formatBytes(totalRead)}/s W:${formatBytes(totalWrite)}/s`;
+    out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length, diskHeaderRight));
   }
 
   // --- Box 3: 7 net ---
