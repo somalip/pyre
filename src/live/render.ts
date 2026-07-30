@@ -81,7 +81,7 @@ function graphsCacheParams(): string {
     }
 
     const columns = gridColumns(state.termWidth);
-    const visibleCards = Object.values(state.visiblePanels).filter(v => v !== false).length;
+    const visibleCards = state.activePanel === 'grid' ? 9 : Object.values(state.visiblePanels).filter(v => v !== false).length;
     const cardRows = Math.ceil(visibleCards / columns);
     const reserved = 4 + cardRows * 8 + 8 + (state.showGraphs ? 11 : 0) + 5 + overlayRows;
     return Math.max(5, state.termHeight - reserved);
@@ -189,6 +189,18 @@ function writeFrame(lines: string[]) {
 
 function render() {
   if (!state.lastData) return;
+  const rows = state.termHeight || 24;
+  const cols = state.termWidth || 80;
+  if (cols < 50 || rows < 15) {
+    const msg = chalk.yellow(`pyre ${rows}x${cols} too small. Resize terminal to >= 50x20.`);
+    const centered = Math.max(0, Math.floor((rows - 2) / 2));
+    const out: string[] = [];
+    for (let i = 0; i < centered; i++) out.push('');
+    out.push(msg.padEnd(cols));
+    while (out.length < rows) out.push('');
+    writeFrame(out);
+    return;
+  }
   const lines: string[] = [];
   const theme = THEMES[state.currentTheme] || THEMES.default;
 
@@ -243,43 +255,44 @@ function render() {
     bodyLines.push(...graphsStr.split('\n'));
   }
 
-  const footerLines: string[] = [];
-  footerLines.push('');
-  footerLines.push(...footerLine().split('\n'));
+  const footerLine1 = footerLine()[0] || '';
+  const footerLine2 = footerLine()[1] || '';
+  const footerLine3 = footerLine()[2] || ' ';
+  const footerLines = [footerLine1, footerLine2, footerLine3];
 
   if (state.inputMode === 'customizer') {
-      footerLines.push(...renderCustomizerOverlay().split('\n'));
-    } else if (state.inputMode === 'filter') {
-      footerLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
-    } else if (state.inputMode === 'kill') {
-      footerLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
-     } else if (state.inputMode === 'signal') {
-       const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
-       const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
-       footerLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
-       footerLines.push(chalk.dim(`  ${sigList}`));
-       footerLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
-     } else if (state.inputMode === 'p2p') {
-       footerLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
-     } else if (state.statusMessage) {
-       footerLines.push(`  ${state.statusMessage}`);
-     } else {
-       footerLines.push('');
-     }
+     bodyLines.push('');
+     bodyLines.push(...renderCustomizerOverlay().split('\n'));
+   } else if (state.inputMode === 'filter') {
+     bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
+   } else if (state.inputMode === 'kill') {
+     bodyLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
+   } else if (state.inputMode === 'signal') {
+     const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
+     const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
+     bodyLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
+     bodyLines.push(chalk.dim(`  ${sigList}`));
+     bodyLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+   } else if (state.inputMode === 'p2p') {
+     bodyLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
+   } else if (state.statusMessage) {
+     bodyLines.push(`  ${state.statusMessage}`);
+   }
 
-  const maxBodyLines = Math.max(1, state.termHeight - footerLines.length);
-  if (bodyLines.length > maxBodyLines) {
-    bodyLines.length = maxBodyLines;
+  const footerHeight = 3;
+  const targetBodyHeight = Math.max(1, state.termHeight - footerHeight);
+  if (bodyLines.length > targetBodyHeight) {
+    bodyLines.length = targetBodyHeight;
   }
-
-  const frameLines = [...bodyLines, ...footerLines];
-  if (frameLines.length > state.termHeight) {
-    frameLines.length = state.termHeight;
+  const frameLines = [...bodyLines];
+  const rest = state.termHeight - frameLines.length;
+  for (let i = 0; i < rest; i++) {
+    frameLines.push('');
   }
   writeFrame(frameLines);
 }
 
-function footerLine(): string {
+function footerLine(): string[] {
    const row1: [string, string][] = [
       ['q', 'quit'],
       ['c', 'customize UI'],
@@ -312,10 +325,10 @@ function footerLine(): string {
    if (state.logging) badges.push(chalk.red.bold('● REC'));
    if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
    if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
-   const badgeStr = badges.join('  ');
+   const badgeStr = badges.join('  ') || ' ';
 
-return badgeStr ? `${str1}\n${str2}    ${badgeStr}` : `${str1}\n${str2}`;
-   }
+   return [str1, str2, badgeStr];
+  }
 
 function sendNotification(title: string, message: string) {
   if (!state.notificationsEnabled) return;

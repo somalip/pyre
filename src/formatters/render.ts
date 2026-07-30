@@ -13,16 +13,16 @@ import chalk from 'chalk';
 import { sparkline } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
-import { THEMES, type ThemeName } from './themes.js';
+import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
 
 // --- low-level box drawing ---------------------------------------------------
 
-function visLen(s: string): number {
+export function visLen(s: string): number {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*m/g, '').length;
 }
 
-function padVisible(s: string, width: number): string {
+export function padVisible(s: string, width: number): string {
   const len = visLen(s);
   if (len >= width) return s;
   return s + ' '.repeat(width - len);
@@ -342,9 +342,27 @@ function tabBar(activePanel: string, width: number, theme: ThemeColors): string 
     return `${keyHint}${label}`;
   });
 
-  const joined = rendered.join(chalk.dim(' │ '));
-  const padded = visLen(joined) < width ? joined + ' '.repeat(width - visLen(joined)) : joined;
-  return chalk.dim('  ') + padded;
+  const separator = chalk.dim(' │ ');
+  const joined = rendered.join(separator);
+  const indent = '  ';
+  const available = width - visLen(indent);
+  let result = joined;
+  if (visLen(joined) > available) {
+    let used = 0;
+    const kept: string[] = [];
+    for (let i = 0; i < rendered.length; i++) {
+      const tabW = visLen(rendered[i]) + (kept.length > 0 ? visLen(separator) : 0);
+      if (used + tabW > available && kept.length > 0) break;
+      kept.push(rendered[i]);
+      used += tabW;
+    }
+    if (kept.length < rendered.length) {
+      result = kept.join(separator) + chalk.dim('⋯');
+    }
+  }
+
+  const pad = Math.max(0, available - visLen(result));
+  return chalk.dim(indent) + result + ' '.repeat(pad);
 }
 
 // --- process / disk tables ---------------------------------------------------
@@ -634,48 +652,39 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     return out.join('\n');
   }
 
-  type Card = { title: string; accent: (s: string) => string; lines: string[] };
-  const cards: Card[] = [];
+  type GridSlot = { title: string; accent: (s: string) => string; lines: string[]; visible: boolean };
+  const allSlots: GridSlot[] = [
+    { title: 'CPU', accent: theme.cpu, visible: vis.cpu !== false, lines: cpuCard(data, contentWidth) },
+    { title: 'Memory', accent: theme.mem, visible: vis.mem !== false, lines: memCard(data, contentWidth) },
+    { title: 'GPU', accent: theme.gpu, visible: vis.gpu !== false, lines: gpuCard(data, contentWidth) || ['No GPU data available'] },
+    { title: 'Power', accent: theme.power, visible: vis.power !== false, lines: powerCard(data) || ['No power data available'] },
+    { title: 'Battery', accent: theme.battery, visible: vis.battery !== false, lines: batteryCard(data, contentWidth) || ['No battery data available'] },
+    { title: 'Thermal', accent: theme.thermal, visible: vis.thermal !== false, lines: thermalCard(data, contentWidth) },
+    { title: 'Network', accent: theme.network, visible: vis.network !== false, lines: networkCard(data, contentWidth) },
+    { title: 'Packets', accent: theme.network, visible: vis.packets !== false, lines: packetCard(data, contentWidth) || ['No packet data available'] },
+    { title: 'Tasks', accent: theme.process, visible: vis.tasks !== false, lines: tasksCard(data, contentWidth) || ['No task data available'] },
+  ];
 
-   if (vis.cpu !== false) {
-     cards.push({ title: 'CPU', accent: theme.cpu, lines: cpuCard(data, contentWidth) });
-   }
-   if (vis.mem !== false) {
-     cards.push({ title: 'Memory', accent: theme.mem, lines: memCard(data, contentWidth) });
-   }
-   if (vis.gpu !== false) {
-     const gpu = gpuCard(data, contentWidth);
-     if (gpu) cards.push({ title: 'GPU', accent: theme.gpu, lines: gpu });
-   }
-   if (vis.power !== false) {
-     const power = powerCard(data);
-     if (power) cards.push({ title: 'Power', accent: theme.power, lines: power });
-   }
-  if (vis.battery !== false) {
-    const battery = batteryCard(data, contentWidth);
-    if (battery) cards.push({ title: 'Battery', accent: theme.battery, lines: battery });
-  }
-  if (vis.thermal !== false) {
-    cards.push({ title: 'Thermal', accent: theme.thermal, lines: thermalCard(data, contentWidth) });
-  }
-  if (vis.network !== false) {
-    cards.push({ title: 'Network', accent: theme.network, lines: networkCard(data, contentWidth) });
-  }
-  if (vis.packets !== false) {
-    const packets = packetCard(data, contentWidth);
-    if (packets) cards.push({ title: 'Packets', accent: theme.network, lines: packets });
-  }
-  if (vis.tasks !== false) {
-    const tasks = tasksCard(data, contentWidth);
-    if (tasks) cards.push({ title: 'Tasks', accent: theme.process, lines: tasks });
+  const slotCount = Math.ceil(allSlots.length / columns) * columns;
+  while (allSlots.length < slotCount) {
+    allSlots.push({ title: '', accent: theme.border, lines: [''], visible: false });
   }
 
-   for (let i = 0; i < cards.length; i += columns) {
-     const row = cards.slice(i, i + columns);
-     const rowHeight = Math.max(...row.map(c => c.lines.length));
-     const blocks = row.map(c => panel(c.title, c.lines, cardWidth, c.accent, theme.border, rowHeight));
+   for (let i = 0; i < allSlots.length; i += columns) {
+     const row = allSlots.slice(i, i + columns);
+     const rowHeight = Math.max(...row.map(c => c.lines.length), 1);
+     const blocks = row.map(c => {
+       if (!c.visible) {
+        return Array.from({ length: rowHeight + 2 }, () => ' '.repeat(cardWidth));
+       }
+       return panel(c.title, c.lines, cardWidth, c.accent, theme.border, rowHeight);
+     });
      out.push(...hstack(blocks, gap, width));
-     out.push('');
+     if (i + columns < allSlots.length) {
+       out.push(theme.border('─'.repeat(width)));
+     } else if (i + columns === allSlots.length) {
+       out.push('');
+     }
    }
 
   if (vis.disk !== false && data.disk.length) {
@@ -715,7 +724,7 @@ if (vis.process !== false) {
 /** Clamp/normalize a terminal width to a sane range, defaulting to 80 cols. */
 export function clampWidth(width?: number): number {
   if (!width || Number.isNaN(width)) return 80;
-  return Math.max(60, Math.min(width, 240));
+  return Math.max(40, Math.min(width, 240));
 }
 
 /**

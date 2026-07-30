@@ -179,7 +179,11 @@ async function main() {
     if (cmd === 'live') {
       program.args.shift();
     }
-    const splashPromise = showSplash();
+    const splashPromise = showSplash({
+      enabled: config.splashEnabled,
+      colorScheme: config.splashColorScheme,
+      animation: config.splashAnimation,
+    });
     const interval = parseFloat(opts.interval) || 2;
     await startLive({
       interval,
