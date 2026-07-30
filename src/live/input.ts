@@ -13,7 +13,7 @@ import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW 
 import { state, setStatus, getToggleKey, type SplashColorScheme, type SplashAnimation } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
 import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
-import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
+import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode, ActivePanel } from './types.js';
 import { startP2PServer } from '../p2p/index.js';
 import { writeConfig } from '../state/config.js';
 
@@ -404,8 +404,9 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         return;
       }
 
-      if (key.mouse) {
-        handleMouseClick(key.mouse);
+      const mouse = (key as { mouse?: { x: number; y: number } }).mouse;
+      if (mouse) {
+        handleMouseClick(mouse.y, mouse.x);
         return;
       }
 
@@ -437,7 +438,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           return;
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9': {
-          const tabMap: Record<string, string> = {
+          const tabMap: Record<string, ActivePanel> = {
             '0': 'disk', '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power',
             '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks'
           };
@@ -558,7 +559,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           if (str && str.length === 1) {
             const tabId = tabKeyToId(str);
             if (tabId) {
-              state.activePanel = tabId;
+              state.activePanel = tabId as ActivePanel;
               setStatus(`Panel: ${tabId.toUpperCase()}`);
               render();
             }

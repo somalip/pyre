@@ -5,6 +5,8 @@
  * export format enum, and the input-mode union used
  * throughout the interactive session.
  */
+import type { ThemeName } from '../formatters/themes.js';
+
 export interface LiveOptions {
   interval: number;
   detailed?: boolean;
@@ -24,4 +26,7 @@ type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads'
 
 type GraphMode = 'spark' | 'bar';
 
-export type { InputMode, SortMode, GraphMode };
+type ActivePanel = 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p';
+
+export type { InputMode, SortMode, GraphMode, ActivePanel, ThemeName };
+

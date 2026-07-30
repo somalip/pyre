@@ -10,10 +10,11 @@
  * all layout-related code is co-located.
  */
 import chalk from 'chalk';
-import { sparkline } from '../sparkline.js';
+import { sparkline, multiRowSparkline } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
+
 
 // --- low-level box drawing ---------------------------------------------------
 
@@ -22,10 +23,45 @@ export function visLen(s: string): number {
   return s.replace(/\x1b\[[0-9;]*m/g, '').length;
 }
 
-export function padVisible(s: string, width: number): string {
+export function fitVisible(s: string, width: number): string {
+  const w = Math.max(0, width);
   const len = visLen(s);
-  if (len >= width) return s;
-  return s + ' '.repeat(width - len);
+  if (len === w) return s;
+  if (len < w) return s + ' '.repeat(w - len);
+
+  let visibleCount = 0;
+  let out = '';
+  let inAnsi = false;
+
+  for (let i = 0; i < s.length; i++) {
+    const char = s[i];
+    if (char === '\x1b') {
+      inAnsi = true;
+      out += char;
+    } else if (inAnsi) {
+      out += char;
+      if ((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+        inAnsi = false;
+      }
+    } else {
+      if (visibleCount < w) {
+        out += char;
+        visibleCount++;
+      } else {
+        break;
+      }
+    }
+  }
+  out += '\x1b[0m';
+  const resLen = visLen(out);
+  if (resLen < w) {
+    out += ' '.repeat(w - resLen);
+  }
+  return out;
+}
+
+export function padVisible(s: string, width: number): string {
+  return fitVisible(s, width);
 }
 
 function truncatePlain(s: string, width: number): string {
@@ -40,29 +76,50 @@ export function panel(
   width: number,
   accent: (s: string) => string,
   borderAccent: (s: string) => string,
-  height?: number
+  height?: number,
+  rightTitle?: string
 ): string[] {
   const h = height ?? lines.length;
   const contentWidth = Math.max(1, width - 4);
-  const label = ` ${title} `;
-  const top = borderAccent('┌' + label + '─'.repeat(width - label.length - 2) + '┐');
-  const bottom = borderAccent('└' + '─'.repeat(width - 2) + '┘');
+  const leftLabel = title ? ` ${title} ` : '';
+  const rightLabel = rightTitle ? ` ${rightTitle} ` : '';
+  const innerW = Math.max(0, width - 2);
+  let topInner = leftLabel + '─'.repeat(Math.max(0, innerW - visLen(leftLabel) - visLen(rightLabel))) + rightLabel;
+  if (visLen(topInner) > innerW) {
+    topInner = fitVisible(topInner, innerW);
+  } else if (visLen(topInner) < innerW) {
+    topInner = topInner + '─'.repeat(innerW - visLen(topInner));
+  }
+  const top = borderAccent('┌' + topInner + '┐');
+  const bottom = borderAccent('└' + '─'.repeat(innerW) + '┘');
   const body: string[] = [];
   for (let i = 0; i < h; i++) {
     const line = lines[i] ?? '';
-    body.push(`${borderAccent('│')} ${padVisible(line, contentWidth)} ${borderAccent('│')}`);
+    body.push(`${borderAccent('│')} ${fitVisible(line, contentWidth)} ${borderAccent('│')}`);
   }
   return [top, ...body, bottom];
+}
+
+export function gaugeBar(percent: number, width = 12): string {
+  const w = Math.max(1, width);
+  const pct = Math.min(100, Math.max(0, percent));
+  const filled = Math.round((pct / 100) * w);
+  const empty = w - filled;
+  const filledStr = '█'.repeat(filled);
+  const emptyStr = '░'.repeat(empty);
+  const color = pct > 85 ? chalk.red : pct > 65 ? chalk.yellow : chalk.cyan;
+  return color(filledStr) + chalk.dim(emptyStr);
 }
 
 /** Join equal-or-uneven-height panel blocks side by side with a gap. */
 function hstack(blocks: string[][], gap = 2, targetWidth?: number): string[] {
   if (!blocks.length) return [];
   const height = Math.max(...blocks.map(b => b.length));
-  const widths = blocks.map(b => visLen(b[0] ?? ''));
+  const widths = blocks.map(b => Math.max(0, ...b.map(l => visLen(l))));
   const padded = blocks.map((b, i) => {
-    const filler = ' '.repeat(widths[i]);
-    const arr = [...b];
+    const w = widths[i];
+    const filler = ' '.repeat(w);
+    const arr = b.map(line => fitVisible(line, w));
     while (arr.length < height) arr.push(filler);
     return arr;
   });
@@ -70,13 +127,13 @@ function hstack(blocks: string[][], gap = 2, targetWidth?: number): string[] {
   for (let row = 0; row < height; row++) {
     let line = padded.map(a => a[row]).join(' '.repeat(gap));
     if (targetWidth !== undefined) {
-      const pad = Math.max(0, targetWidth - visLen(line));
-      line += ' '.repeat(pad);
+      line = fitVisible(line, targetWidth);
     }
     out.push(line);
   }
   return out;
 }
+
 
 function statRow(label: string, value: string, width = 9): string {
   const w = Math.max(width, label.length + 1);
@@ -117,7 +174,8 @@ export function capacityColor(percent: number) {
 }
 
 export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (isNaN(bytes) || bytes < 0) return '0 B';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
@@ -280,7 +338,7 @@ function header(data: StatsData, width: number, badges: string[] = [], borderAcc
   const left = `${chalk.hex('#ff5500').bold(' PYRE ')} ${chalk.bold(data.header.hostname)}  ${chalk.dim(data.header.os)}  ${chalk.dim('up ' + data.header.uptime)}`;
   const right = `${chalk.dim(now)}  ${badges.join('  ')}`;
   const gap = Math.max(1, width - visLen(left) - visLen(right));
-  const line = left + ' '.repeat(gap) + right;
+  const line = fitVisible(left + ' '.repeat(gap) + right, width);
   return [line, borderAccent('─'.repeat(width))];
 }
 
@@ -362,7 +420,7 @@ function tabBar(activePanel: string, width: number, theme: ThemeColors): string 
   }
 
   const pad = Math.max(0, available - visLen(result));
-  return chalk.dim(indent) + result + ' '.repeat(pad);
+  return fitVisible(chalk.dim(indent) + result + ' '.repeat(pad), width);
 }
 
 // --- process / disk tables ---------------------------------------------------
@@ -614,35 +672,193 @@ function anomalyPanel(anomalies: AnomalyAlert[], width: number, theme: ThemeColo
   for (const a of anomalies) {
     const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
     const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
-    lines.push(color(` ⚠ ${a.metric}: ${a.value.toFixed(1)} (${direction}, σ=${a.zScore.toFixed(1)})`));
+    const valStr = a.metric.toLowerCase().includes('net') ? `${formatBytes(a.value)}/s` : `${a.value.toFixed(1)}%`;
+    lines.push(color(` ⚠ ${a.metric}: ${valStr} (${direction}, σ=${a.zScore.toFixed(1)})`));
   }
   return lines;
 }
 
+function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
+  const contentWidth = width - 4;
+  const rightTitle = `${data.header.hostname} · up ${data.header.uptime} · ${data.cpu.usage.toFixed(0)}%`;
+
+  if (contentWidth >= 65) {
+    const leftW = Math.floor(contentWidth * 0.48);
+    const rightW = contentWidth - leftW - 2;
+
+    const leftLines: string[] = [];
+    leftLines.push(fitVisible(theme.cpu('CPU Usage History'), leftW));
+
+    const cpuHistory = opts.history?.cpuUsage || [];
+    if (cpuHistory.length > 1) {
+      const graphRows = multiRowSparkline(cpuHistory, 3, { min: 0, max: 100 });
+      for (const gr of graphRows) {
+        leftLines.push(theme.cpu(fitVisible(gr, leftW)));
+      }
+    } else {
+      leftLines.push(theme.cpu(fitVisible(gaugeBar(data.cpu.usage, leftW), leftW)));
+      leftLines.push(' '.repeat(leftW));
+      leftLines.push(' '.repeat(leftW));
+    }
+
+    const rightLines: string[] = [];
+    rightLines.push(fitVisible(chalk.bold(truncatePlain(data.cpu.brand, rightW)), rightW));
+
+    const cpuBarW = Math.max(6, rightW - 18);
+    const tempStr = data.cpu.temperature ? formatTempUnit(data.cpu.temperature, opts.tempUnit) : '';
+    rightLines.push(fitVisible(`CPU ${gaugeBar(data.cpu.usage, cpuBarW)} ${data.cpu.usage.toFixed(0).padStart(3)}% ${tempStr}`, rightW));
+
+    const loadStr = data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ');
+    rightLines.push(fitVisible(`${chalk.dim('Load:')} ${loadStr}`, rightW));
+
+    if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
+      const coreColW = Math.floor((rightW - 1) / 2);
+      const half = Math.ceil(data.cpu.coreUsage.length / 2);
+      for (let i = 0; i < Math.min(2, half); i++) {
+        const u1 = data.cpu.coreUsage[i];
+        const u2 = data.cpu.coreUsage[i + half];
+        const c1BarW = Math.max(3, coreColW - 8);
+        const c1Str = `C${i} ${gaugeBar(u1, c1BarW)} ${Math.round(u1)}%`;
+        const c2Str = u2 !== undefined ? `C${i + half} ${gaugeBar(u2, c1BarW)} ${Math.round(u2)}%` : '';
+        rightLines.push(fitVisible(fitVisible(c1Str, coreColW) + ' ' + fitVisible(c2Str, coreColW), rightW));
+      }
+    }
+
+    if (data.gpu) {
+      rightLines.push(fitVisible(`GPU ${gaugeBar(data.gpu.utilization, cpuBarW)} ${data.gpu.utilization}% ${formatBytes(data.gpu.memory)}`, rightW));
+    }
+
+    const combinedBody = hstack([leftLines, rightLines], 2, contentWidth);
+    return panel('1 cpu', combinedBody, width, theme.cpu, theme.border, combinedBody.length, rightTitle);
+  } else {
+    const lines: string[] = [];
+    lines.push(chalk.bold(truncatePlain(data.cpu.brand, contentWidth)));
+    lines.push(`CPU ${gaugeBar(data.cpu.usage, Math.max(4, contentWidth - 12))} ${data.cpu.usage.toFixed(0)}%`);
+    if (opts.history?.cpuUsage.length) {
+      lines.push(theme.cpu(sparkline(opts.history.cpuUsage, { min: 0, max: 100 })));
+    }
+    lines.push(`Load: ${data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')}`);
+    return panel('1 cpu', lines, width, theme.cpu, theme.border, lines.length, rightTitle);
+  }
+}
+
+function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
+  const contentWidth = width - 4;
+  const out: string[] = [];
+
+  // --- Box 1: 2 mem ---
+  const memLines: string[] = [];
+  memLines.push(`RAM [${gaugeBar(data.memory.usagePercent, Math.max(4, contentWidth - 12))}] ${data.memory.usagePercent}%`);
+  memLines.push(`Used: ${formatBytes(data.memory.used)} / ${formatBytes(data.memory.total)}`);
+  memLines.push(`Free: ${formatBytes(data.memory.free)} · Cache: ${formatBytes(data.memory.total - data.memory.free - data.memory.used)}`);
+  if (data.memory.swapTotal > 0) {
+    const swapPct = Math.round((data.memory.swapUsed / data.memory.swapTotal) * 100);
+    memLines.push(`Swap [${gaugeBar(swapPct, Math.max(4, contentWidth - 12))}] ${swapPct}%`);
+  }
+  out.push(...panel('2 mem', memLines, width, theme.mem, theme.border, memLines.length, `${formatBytes(data.memory.used)}`));
+
+  // --- Box 2: 0 disk ---
+  if (data.disk.length) {
+    const diskLines: string[] = [];
+    for (const d of data.disk.slice(0, 2)) {
+      const capNum = parseInt(d.capacity, 10) || 0;
+      const mountShort = truncatePlain(d.mountpoint, 8);
+      diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18))}] ${d.capacity}`);
+    }
+    out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length));
+  }
+
+  // --- Box 3: 7 net ---
+  const netLines: string[] = [];
+  const rxRate = opts.history?.netRxRate.length ? opts.history.netRxRate[opts.history.netRxRate.length - 1] : 0;
+  const txRate = opts.history?.netTxRate.length ? opts.history.netTxRate[opts.history.netTxRate.length - 1] : 0;
+
+  netLines.push(`down ▼ ${formatBytes(rxRate)}/s (${formatBytes(data.network.rxBytes)})`);
+  if (opts.history?.netRxRate.length) {
+    netLines.push(chalk.cyan(fitVisible(sparkline(opts.history.netRxRate, {}), contentWidth)));
+  }
+
+  netLines.push(`up   ▲ ${formatBytes(txRate)}/s (${formatBytes(data.network.txBytes)})`);
+  if (opts.history?.netTxRate.length) {
+    netLines.push(theme.network(fitVisible(sparkline(opts.history.netTxRate, {}), contentWidth)));
+  }
+
+  out.push(...panel('7 net', netLines, width, theme.network, theme.border, netLines.length, `${data.network.interface}`));
+
+  return out;
+}
+
+function btopProcBox(data: StatsData, width: number, targetHeight: number, theme: ThemeColors, opts: TableOptions): string[] {
+  const contentWidth = width - 4;
+  const filtered = opts.filter
+    ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
+    : data.processes;
+  const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
+
+  const headerRowOverhead = 2; // top & bottom border
+  const tableHeaderOverhead = 2; // header + separator line
+  const availableRows = Math.max(1, targetHeight - headerRowOverhead - tableHeaderOverhead);
+
+  const limited = sorted.slice(0, availableRows);
+
+  const pidW = 6, userW = 7, thrW = 3, memW = 6, cpuW = 6;
+  const fixedW = pidW + userW + thrW + memW + cpuW + 5;
+  const cmdW = Math.max(8, contentWidth - fixedW);
+
+  const head =
+    chalk.bold('PID'.padEnd(pidW)) + ' ' +
+    chalk.bold('PROGRAM'.padEnd(cmdW)) + ' ' +
+    chalk.bold('USER'.padEnd(userW)) + ' ' +
+    chalk.bold('THR'.padStart(thrW)) + ' ' +
+    chalk.bold('MEM%'.padStart(memW)) + ' ' +
+    chalk.bold('CPU%'.padStart(cpuW));
+
+  if (opts.treeView) {
+    const treeLines = buildProcessTree(limited);
+    const rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · sort: ${opts.sortBy || 'cpu'}`;
+    return panel('P proc', [head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, targetHeight - 2, rightTitle);
+  }
+
+  const rows = limited.map(p => {
+    const cpuVal = p.cpu.toFixed(1) + '%';
+    const cpuStr = p.cpu > 50 ? chalk.red.bold(cpuVal.padStart(cpuW)) : p.cpu > 20 ? chalk.yellow(cpuVal.padStart(cpuW)) : chalk.green(cpuVal.padStart(cpuW));
+    const memStr = (p.mem.toFixed(1) + '%').padStart(memW);
+    const userStr = truncatePlain(p.user, userW).padEnd(userW);
+    const thrStr = String(p.threads).padStart(thrW);
+    const pidStr = String(p.pid).padEnd(pidW);
+    const cmdStr = truncatePlain(p.command, cmdW).padEnd(cmdW);
+
+    return `${pidStr} ${cmdStr} ${userStr} ${thrStr} ${memStr} ${cpuStr}`;
+  });
+
+  const lines = [head, theme.border('─'.repeat(contentWidth)), ...rows];
+  if (rows.length === 0) {
+    lines.push(chalk.dim(`No processes match "${opts.filter || ''}"`));
+  }
+
+  const rightTitle = opts.filter ? `filter: "${opts.filter}"` : `sort: ${opts.sortBy || 'cpu'}`;
+  return panel('P proc', lines, width, theme.process, theme.border, targetHeight - 2, rightTitle);
+}
+
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
-   const width = clampWidth(opts.width);
-   const activePanel = opts.activePanel || 'grid';
-   const columns = gridColumns(width);
-   const gap = 2;
-   const cardWidth = Math.floor((width - gap * (columns - 1)) / columns);
-   const contentWidth = cardWidth - 4;
+  const width = clampWidth(opts.width);
+  const activePanel = opts.activePanel || 'grid';
 
-   const themeName = opts.theme || 'default';
-   const theme = THEMES[themeName] || THEMES.default;
-   const vis = opts.visible ?? {};
+  const themeName = opts.theme || 'default';
+  const theme = THEMES[themeName] || THEMES.default;
 
-   const out: string[] = [];
-   out.push(...header(data, width, [], theme.border));
-   out.push('');
+  const out: string[] = [];
+  out.push(...header(data, width, [], theme.border));
+  out.push('');
 
-   const anomalies = opts.anomalies ?? [];
-   if (anomalies.length && activePanel === 'grid') {
-     out.push(...anomalyPanel(anomalies, width, theme));
-     out.push('');
-   }
+  const anomalies = opts.anomalies ?? [];
+  if (anomalies.length && activePanel === 'grid') {
+    out.push(...anomalyPanel(anomalies, width, theme));
+    out.push('');
+  }
 
-   out.push(tabBar(activePanel, width, theme));
-   out.push('');
+  out.push(tabBar(activePanel, width, theme));
+  out.push('');
 
   if (activePanel !== 'grid') {
     const lines = activeDetailLines(data, activePanel, width, opts);
@@ -652,74 +868,31 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     return out.join('\n');
   }
 
-  type GridSlot = { title: string; accent: (s: string) => string; lines: string[]; visible: boolean };
-  const allSlots: GridSlot[] = [
-    { title: 'CPU', accent: theme.cpu, visible: vis.cpu !== false, lines: cpuCard(data, contentWidth) },
-    { title: 'Memory', accent: theme.mem, visible: vis.mem !== false, lines: memCard(data, contentWidth) },
-    { title: 'GPU', accent: theme.gpu, visible: vis.gpu !== false, lines: gpuCard(data, contentWidth) || ['No GPU data available'] },
-    { title: 'Power', accent: theme.power, visible: vis.power !== false, lines: powerCard(data) || ['No power data available'] },
-    { title: 'Battery', accent: theme.battery, visible: vis.battery !== false, lines: batteryCard(data, contentWidth) || ['No battery data available'] },
-    { title: 'Thermal', accent: theme.thermal, visible: vis.thermal !== false, lines: thermalCard(data, contentWidth) },
-    { title: 'Network', accent: theme.network, visible: vis.network !== false, lines: networkCard(data, contentWidth) },
-    { title: 'Packets', accent: theme.network, visible: vis.packets !== false, lines: packetCard(data, contentWidth) || ['No packet data available'] },
-    { title: 'Tasks', accent: theme.process, visible: vis.tasks !== false, lines: tasksCard(data, contentWidth) || ['No task data available'] },
-  ];
+  // --- btop Dashboard Grid ---
+  // 1. Top CPU & System Overview Box
+  out.push(...btopCpuBox(data, width, theme, opts));
+  out.push('');
 
-  const slotCount = Math.ceil(allSlots.length / columns) * columns;
-  while (allSlots.length < slotCount) {
-    allSlots.push({ title: '', accent: theme.border, lines: [''], visible: false });
-  }
+  // 2. Bottom Split Section
+  if (width >= 85) {
+    const leftColW = Math.max(32, Math.floor(width * 0.38));
+    const rightColW = width - leftColW - 2;
 
-   for (let i = 0; i < allSlots.length; i += columns) {
-     const row = allSlots.slice(i, i + columns);
-     const rowHeight = Math.max(...row.map(c => c.lines.length), 1);
-     const blocks = row.map(c => {
-       if (!c.visible) {
-        return Array.from({ length: rowHeight + 2 }, () => ' '.repeat(cardWidth));
-       }
-       return panel(c.title, c.lines, cardWidth, c.accent, theme.border, rowHeight);
-     });
-     out.push(...hstack(blocks, gap, width));
-     if (i + columns < allSlots.length) {
-       out.push(theme.border('─'.repeat(width)));
-     } else if (i + columns === allSlots.length) {
-       out.push('');
-     }
-   }
+    const leftLines = btopLeftColumn(data, leftColW, theme, opts);
+    const procLines = btopProcBox(data, rightColW, leftLines.length, theme, opts);
 
-  if (vis.disk !== false && data.disk.length) {
-    const dw = width - 4;
-    out.push(...panel('Disk', diskTableLines(data.disk, dw, theme.border), width, theme.disk, theme.border));
+    out.push(...hstack([leftLines, procLines], 2, width));
+  } else {
+    const leftLines = btopLeftColumn(data, width, theme, opts);
+    out.push(...leftLines);
     out.push('');
+    const procLines = btopProcBox(data, width, 12, theme, opts);
+    out.push(...procLines);
   }
-
-if (vis.process !== false) {
-     const filteredProcesses = opts.filter
-       ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
-       : data.processes;
-     const sortedProcesses = sortProcesses(filteredProcesses, opts.sortBy ?? 'cpu');
-     const limited = opts.processLimit ? sortedProcesses.slice(0, opts.processLimit) : sortedProcesses;
-
-     const procTitle = opts.filter
-       ? `Processes · filter "${opts.filter}" · sort ${opts.sortBy ?? 'cpu'}`
-       : `Processes · sort ${opts.sortBy ?? 'cpu'}`;
-
-     if (opts.treeView) {
-       const treeLines = buildProcessTree(limited);
-       if (treeLines.length) {
-         out.push(...panel(procTitle + ' · tree', treeLines, width, theme.process, theme.border));
-       } else if (opts.filter) {
-         out.push(...panel(procTitle, [chalk.dim(`No processes match "${opts.filter}"`)], width, theme.process, theme.border));
-       }
-     } else if (limited.length) {
-       out.push(...panel(procTitle, processTableLines(limited, width - 4, theme.border), width, theme.process, theme.border));
-     } else if (opts.filter) {
-       out.push(...panel(procTitle, [chalk.dim(`No processes match "${opts.filter}"`)], width, theme.process, theme.border));
-     }
-   }
 
   return out.join('\n');
 }
+
 
 /** Clamp/normalize a terminal width to a sane range, defaulting to 80 cols. */
 export function clampWidth(width?: number): number {

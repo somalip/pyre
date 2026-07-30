@@ -10,8 +10,7 @@ import { sparkline } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData } from './types.js';
 import { THEMES, type ThemeName } from './themes.js';
-import { formatBytes, celsiusToFahrenheit, formatTemp } from './render.js';
-import { panel } from './render.js';
+import { formatBytes, celsiusToFahrenheit, formatTemp, panel, fitVisible } from './render.js';
 
 export function formatJson(data: StatsData): string {
   return JSON.stringify(data, null, 2);
@@ -434,24 +433,24 @@ export function formatGraphs(history: History, width = 80, themeName: ThemeName 
   const theme = THEMES[themeName] || THEMES.default;
   const contentWidth = width - 4;
   const sampleCount = history.cpuUsage.length;
-  const sparkWidth = Math.max(10, contentWidth - 28);
+  const sparkWidth = Math.max(10, contentWidth - 24);
 
   const lines: string[] = [];
-  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode));
-  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode));
+  lines.push(graphRow('CPU %', history.cpuUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode, contentWidth));
+  lines.push(graphRow('Mem %', history.memUsage, { min: 0, max: 100 }, v => `${v.toFixed(0)}%`, sparkWidth, 'collecting data...', graphMode, contentWidth));
   lines.push(
-    graphRow('Temp', history.temp, {}, formatTemp, sparkWidth, 'no sensor access (needs sudo powermetrics)', graphMode)
+    graphRow('Temp', history.temp, {}, v => `${v.toFixed(1)}°C`, sparkWidth, 'no sensor access', graphMode, contentWidth)
   );
-  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode));
-  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode));
+  lines.push(graphRow('Net RX/s', history.netRxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode, contentWidth));
+  lines.push(graphRow('Net TX/s', history.netTxRate, {}, v => `${formatBytes(v)}/s`, sparkWidth, 'collecting data...', graphMode, contentWidth));
   if (history.powerWatts.length) {
-    lines.push(graphRow('Power W', history.powerWatts, {}, v => `${v.toFixed(1)} W`, sparkWidth, 'collecting data...', graphMode));
+    lines.push(graphRow('Power W', history.powerWatts, {}, v => `${v.toFixed(1)} W`, sparkWidth, 'collecting data...', graphMode, contentWidth));
   }
   if (history.rxPacketRate.length) {
-    lines.push(graphRow('RX pkt/s', history.rxPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode));
+    lines.push(graphRow('RX pkt/s', history.rxPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode, contentWidth));
   }
   if (history.txPacketRate.length) {
-    lines.push(graphRow('TX pkt/s', history.txPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode));
+    lines.push(graphRow('TX pkt/s', history.txPacketRate, {}, v => `${v.toFixed(0)} pkt/s`, sparkWidth, 'collecting data...', graphMode, contentWidth));
   }
 
   const title = `Graphs · mode:${graphMode} · last ${sampleCount} sample${sampleCount === 1 ? '' : 's'}`;
@@ -465,7 +464,8 @@ function graphRow(
   fmt: (v: number) => string,
   sparkWidth = 40,
   emptyMessage = 'collecting data...',
-  mode: 'spark' | 'bar' = 'spark'
+  mode: 'spark' | 'bar' = 'spark',
+  contentWidth = 76
 ): string {
   if (!values.length) {
     return `${chalk.dim(label.padEnd(10))} ${chalk.dim(emptyMessage)}`;
@@ -480,7 +480,8 @@ function graphRow(
     color = pct > 90 ? chalk.red : pct > 70 ? chalk.yellow : chalk.green;
   }
 
-  return `${chalk.dim(label.padEnd(10))}${color(spark)}  ${chalk.bold(fmt(current))}`;
+  const raw = `${chalk.dim(label.padEnd(10))}${color(spark)}  ${chalk.bold(fmt(current))}`;
+  return fitVisible(raw, contentWidth);
 }
 
 function barGraph(values: number[], bounds: { min?: number; max?: number }, width: number): string {

@@ -8,6 +8,7 @@
  */
 import type { ThemeName } from './themes.js';
 import type { StatsData } from '../monitors/types.js';
+import type { History } from '../history.js';
 
 export type { ThemeName };
 
@@ -70,4 +71,8 @@ export interface TableOptions {
     anomalies?: AnomalyAlert[];
     /** Temperature display unit: 'c' or 'f'. */
     tempUnit?: 'c' | 'f';
+    /** Rolling history instance for live graphs. */
+    history?: History;
+    /** Graph mode: 'spark' or 'bar'. */
+    graphMode?: 'spark' | 'bar';
 }

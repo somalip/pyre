@@ -8,7 +8,7 @@
  */
 import { execFile } from 'node:child_process';
 import chalk from 'chalk';
-import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel } from '../formatters/index.js';
+import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible } from '../formatters/index.js';
 import { detectAnomalies } from '../anomalies.js';
 import { state, setStatus, SIGNAL_OPTIONS, getToggleKey } from './state.js';
 import type { StatsData } from '../monitors/index.js';
@@ -52,6 +52,7 @@ function tableCacheParams(): string {
     state.currentTheme,
     state.activePanel,
     state.treeView ? '1' : '0',
+    state.history.version,
     JSON.stringify(state.visiblePanels),
   ].join('|');
 }
@@ -64,28 +65,20 @@ function graphsCacheParams(): string {
   ].join('|');
 }
 
-/**
- * How many process rows we can realistically fit given
- * current terminal height.  Computed from the number of
- * card columns and the reserved space for the header,
- * cards, graphs, and footer.
- */
-  function processRowBudget(): number {
-    let overlayRows = 0;
-    if (state.inputMode === 'customizer') overlayRows = state.CUSTOMIZER_OPTIONS.length + 3;
-    else if (state.inputMode === 'signal') overlayRows = 6;
-    else if (state.inputMode === 'filter' || state.inputMode === 'kill' || state.inputMode === 'p2p') overlayRows = 3;
+function processRowBudget(): number {
+  let overlayRows = 0;
+  if (state.inputMode === 'customizer') overlayRows = state.CUSTOMIZER_OPTIONS.length + 3;
+  else if (state.inputMode === 'signal') overlayRows = 6;
+  else if (state.inputMode === 'filter' || state.inputMode === 'kill' || state.inputMode === 'p2p') overlayRows = 3;
 
-    if (state.activePanel === 'process') {
-      return Math.max(10, state.termHeight - 12 - overlayRows);
-    }
-
-    const columns = gridColumns(state.termWidth);
-    const visibleCards = state.activePanel === 'grid' ? 9 : Object.values(state.visiblePanels).filter(v => v !== false).length;
-    const cardRows = Math.ceil(visibleCards / columns);
-    const reserved = 4 + cardRows * 8 + 8 + (state.showGraphs ? 11 : 0) + 5 + overlayRows;
-    return Math.max(5, state.termHeight - reserved);
+  if (state.activePanel === 'process') {
+    return Math.max(10, state.termHeight - 12 - overlayRows);
   }
+
+  const reserved = 16 + overlayRows;
+  return Math.max(4, state.termHeight - reserved);
+}
+
 
 function p2pPanelLines(): { title: string; body: string[] } {
   const events = state.p2pServer ? state.p2pServer.peerEventHistory : state.p2pEvents;
@@ -221,6 +214,8 @@ function render() {
             activePanel: state.activePanel,
             anomalies,
             tempUnit: state.tempUnit,
+            history: state.history,
+            graphMode: state.graphMode,
           });
           _cachedTableData = state.lastData;
           _cachedTableParams = cacheParams;
@@ -285,11 +280,12 @@ function render() {
     bodyLines.length = targetBodyHeight;
   }
   const frameLines = [...bodyLines];
-  const rest = state.termHeight - frameLines.length;
-  for (let i = 0; i < rest; i++) {
+  while (frameLines.length < targetBodyHeight) {
     frameLines.push('');
   }
-  writeFrame(frameLines);
+  frameLines.push(...footerLines);
+  const fittedLines = frameLines.map(l => fitVisible(l, cols));
+  writeFrame(fittedLines);
 }
 
 function footerLine(): string[] {

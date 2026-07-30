@@ -61,7 +61,8 @@ program
     .option('--p2p-allow <ips>', 'Comma-separated list of allowed IPs (empty = all)')
     .option('--p2p-deny <ips>', 'Comma-separated list of denied IPs')
     .option('--p2p-audit-log <dir>', 'Directory for P2P audit logs')
-    .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)');
+    .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)')
+    .option('--port <port>', 'Port number for web server mode', '3000');
 
 program.parse(process.argv);
 
@@ -176,13 +177,17 @@ async function main() {
   const tempUnit = opts.tempUnit === 'f' ? 'f' : 'c';
 
   if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
+    if (!process.stdout.isTTY && cmd !== 'live') {
+      await runWebCommand();
+      return;
+    }
     if (cmd === 'live') {
       program.args.shift();
     }
     const splashPromise = showSplash({
       enabled: config.splashEnabled,
-      colorScheme: config.splashColorScheme,
-      animation: config.splashAnimation,
+      colorScheme: config.splashColorScheme as any,
+      animation: config.splashAnimation as any,
     });
     const interval = parseFloat(opts.interval) || 2;
     await startLive({
@@ -475,7 +480,7 @@ async function runSshCommand(host: string): Promise<void> {
     }
     process.exit(0);
   });
-  child.stdin.end();
+  child.stdin?.end();
 
   process.once('SIGINT', () => {
     child.kill('SIGTERM');
@@ -485,14 +490,28 @@ async function runSshCommand(host: string): Promise<void> {
 
 async function runWebCommand(): Promise<void> {
   const http = await import('node:http');
-  const data = await collectAll({ detailed: true });
+  const port = parseInt(opts.port || process.env.PORT || '3000', 10) || 3000;
 
-  const server = http.createServer((req, res) => {
-    if (req.url === '/' || req.url === '/index.html') {
+  const server = http.createServer(async (req, res) => {
+    const url = req.url || '/';
+    if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(formatHtml(data));
-    } else if (req.url === '/api') {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      const indexPath = path.join(process.cwd(), 'index.html');
+      let htmlContent = '';
+      if (fs.existsSync(indexPath)) {
+        htmlContent = fs.readFileSync(indexPath, 'utf-8');
+      } else {
+        const data = await collectAll({ detailed: true });
+        htmlContent = formatHtml(data);
+      }
+      res.end(htmlContent);
+    } else if (url === '/api' || url === '/api/stats' || url === '/data') {
+      const data = await collectAll({ detailed: true });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      });
       res.end(JSON.stringify(data, null, 2));
     } else {
       res.writeHead(404);
@@ -500,19 +519,16 @@ async function runWebCommand(): Promise<void> {
     }
   });
 
-  server.listen(0, '127.0.0.1', async () => {
-    const address = server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const url = `http://127.0.0.1:${port}`;
-    console.log(chalk.bold(`\n  pyre web`));
-    console.log(chalk.dim(`  Dashboard: ${url}`));
-    console.log(chalk.dim(`  API:      ${url}/api`));
+  server.listen(port, '0.0.0.0', () => {
+    console.log(chalk.bold(`\n  pyre web server running on port ${port}`));
+    console.log(chalk.dim(`  Dashboard: http://0.0.0.0:${port}/`));
+    console.log(chalk.dim(`  API:       http://0.0.0.0:${port}/api`));
     console.log(chalk.dim('  Press Ctrl+C to stop\n'));
+  });
 
-    process.once('SIGINT', () => {
-      server.close();
-      process.exit(0);
-    });
+  process.once('SIGINT', () => {
+    server.close();
+    process.exit(0);
   });
 }
 

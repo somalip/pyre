@@ -13,7 +13,7 @@ function getFreePort(): Promise<number> {
     const srv = net.createServer();
     srv.listen(0, '127.0.0.1', () => {
       const addr = srv.address();
-      const port = typeof addr === 'object' ? addr.port : 0;
+      const port = (addr && typeof addr === 'object') ? addr.port : 0;
       srv.close(() => resolve(port));
     });
     srv.on('error', reject);
@@ -283,7 +283,7 @@ describe('P2PServer - server-side p2p system', () => {
       const challengeMsg = decodeMessage(challengeBody);
       const nonce = (challengeMsg.payload as { nonce: string }).nonce;
 
-      client.write(signMessage('data', { stats: {} }, TEST_PASSWORD));
+      client.write(signMessage('data', { stats: {} as any }, TEST_PASSWORD));
 
       const failBody = await readMessage(client);
       const failMsg = decodeMessage(failBody);
