@@ -42,10 +42,10 @@ import { writeConfig } from '../state/config.js';
   }
 
   function isUpKey(key: readline.Key, str?: string): boolean {
-  return key.name === 'up' || str === 'k' || key.sequence === '\x1b[A' || key.sequence === '\x1bOA';
+  return key.name === 'up' || key.sequence === '\x1b[A' || key.sequence === '\x1bOA';
 }
 function isDownKey(key: readline.Key, str?: string): boolean {
-  return key.name === 'down' || str === 'j' || key.sequence === '\x1b[B' || key.sequence === '\x1bOB';
+  return key.name === 'down' || key.sequence === '\x1b[B' || key.sequence === '\x1bOB';
 }
 function isEnterKey(key: readline.Key, str?: string): boolean {
   return key.name === 'return' || key.name === 'enter' || key.sequence === '\r' || key.sequence === '\n' || str === '\r' || str === '\n';
