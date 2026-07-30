@@ -226,6 +226,10 @@ export async function collectPower(): Promise<PowerData | null> {
   * Returns null when GPU data is unavailable (e.g. on machines
   * without a discrete GPU or when powermetrics is inaccessible).
   */
+  /**
+   * Gather GPU information from system_profiler, ioreg, powermetrics, or nvidia-smi.
+   * Returns null when GPU hardware is unavailable.
+   */
   export async function collectGpu(detailed?: boolean): Promise<GpuData | null> {
     let spRaw = '';
     const now = Date.now();
@@ -235,48 +239,131 @@ export async function collectPower(): Promise<PowerData | null> {
       spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null')).trim();
       spGpuCache = { raw: spRaw, ts: now };
     }
-    if (!spRaw) return null;
 
-    const modelMatch = spRaw.match(/Chipset Model:\s*(.+)/i);
-    const model = modelMatch ? modelMatch[1].trim() : 'Unknown';
-
-    const memMatch = spRaw.match(/VRAM \(Total\):\s*(.+)/i);
+    let model = 'Unknown';
     let memory = 0;
-    if (memMatch) {
-      const memStr = memMatch[1].trim();
-      const memNum = parseFloat(memStr);
-      if (memStr.includes('GB')) memory = memNum * 1024 * 1024 * 1024;
-      else if (memStr.includes('MB')) memory = memNum * 1024 * 1024;
+
+    if (spRaw) {
+      const modelMatch = spRaw.match(/(?:Chipset Model|Model|Device Name):\s*(.+)/i);
+      if (modelMatch) model = modelMatch[1].trim();
+
+      const memMatch = spRaw.match(/(?:VRAM \(Total\)|VRAM \(Dynamic, Max\)|Shared System Memory|Memory|VRAM):\s*([0-9.]+\s*[KMGT]?B)/i);
+      if (memMatch) {
+        const memStr = memMatch[1].trim();
+        const memNum = parseFloat(memStr);
+        if (/GB/i.test(memStr)) memory = memNum * 1024 * 1024 * 1024;
+        else if (/MB/i.test(memStr)) memory = memNum * 1024 * 1024;
+        else if (/KB/i.test(memStr)) memory = memNum * 1024;
+      }
+    } else {
+      // Check Linux nvidia-smi fallback
+      try {
+        const nvRaw = (await run('nvidia-smi --query-gpu=gpu_name,memory.total,utilization.gpu --format=csv,noheader,nounits 2>/dev/null', '')).trim();
+        if (nvRaw) {
+          const parts = nvRaw.split(',').map(s => s.trim());
+          if (parts.length >= 3) {
+            model = parts[0];
+            memory = (parseFloat(parts[1]) || 0) * 1024 * 1024;
+            const utilization = Math.min(100, Math.max(0, Math.round(parseFloat(parts[2]) || 0)));
+            return { model, memory, utilization, processes: 0 };
+          }
+        }
+      } catch {
+        // ignore
+      }
+      return null;
+    }
+
+    // Unified memory fallback on Apple Silicon / macOS when VRAM is not explicitly listed
+    if (memory === 0) {
+      try {
+        const memSizeStr = await cachedSysctl('hw.memsize', '0');
+        const totalBytes = parseInt(memSizeStr, 10) || 0;
+        if (totalBytes > 0) {
+          memory = totalBytes;
+        }
+      } catch {
+        // ignore
+      }
     }
 
     let utilization = 0;
     let temperature: number | undefined;
     let gpuProcesses = 0;
 
-    if (detailed) {
+    // 1. Try non-root ioreg on macOS (fast, no sudo needed)
+    try {
+      const ioregRaw = await run('ioreg -r -c IOAccelerator 2>/dev/null', '');
+      if (ioregRaw) {
+        const devUtilMatch = ioregRaw.match(/"Device Utilization %"\s*=\s*([\d.]+)/i);
+        const gpuCoreMatch = ioregRaw.match(/"gpu-core-utilization"\s*=\s*([\d.]+)/i);
+        const gpuActMatch = ioregRaw.match(/"GPU Activity"\s*=\s*([\d.]+)/i);
+        const gpuBusyMatch = ioregRaw.match(/"GPU Busy"\s*=\s*([\d.]+)/i);
+
+        if (devUtilMatch) {
+          utilization = Math.min(100, Math.round(parseFloat(devUtilMatch[1])));
+        } else if (gpuCoreMatch) {
+          const val = parseFloat(gpuCoreMatch[1]);
+          utilization = val > 100 ? Math.min(100, Math.round(val / 10000)) : Math.min(100, Math.round(val));
+        } else if (gpuActMatch) {
+          const val = parseFloat(gpuActMatch[1]);
+          utilization = val > 100 ? Math.min(100, Math.round(val / 10000)) : Math.min(100, Math.round(val));
+        } else if (gpuBusyMatch) {
+          utilization = Math.min(100, Math.round(parseFloat(gpuBusyMatch[1])));
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Try powermetrics hardware samplers if ioreg yielded 0 or if detailed is requested
+    if (utilization === 0) {
       try {
         const pm = (await run('sudo -n powermetrics --samplers gpu_power -n 1 --format text 2>/dev/null', '')).trim();
-        const gpuPowerMatch = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
-        if (gpuPowerMatch) {
-          utilization = Math.min(100, Math.round(parseFloat(gpuPowerMatch[1]) / 10));
+        if (pm) {
+          const hwRes = pm.match(/GPU HW active residency:\s*([\d.]+)%/i);
+          const actRes = pm.match(/GPU active residency:\s*([\d.]+)%/i);
+          const gpuUtilMatch = pm.match(/GPU utilization:\s*([\d.]+)%/i) || pm.match(/GPU usage:\s*([\d.]+)%/i);
+          const idleRes = pm.match(/GPU idle residency:\s*([\d.]+)%/i);
+          const gpuPowerMatch = pm.match(/GPU Power:\s*([\d.]+)\s*mW/i);
+
+          if (hwRes) {
+            utilization = Math.min(100, Math.round(parseFloat(hwRes[1])));
+          } else if (actRes) {
+            utilization = Math.min(100, Math.round(parseFloat(actRes[1])));
+          } else if (gpuUtilMatch) {
+            utilization = Math.min(100, Math.round(parseFloat(gpuUtilMatch[1])));
+          } else if (idleRes) {
+            utilization = Math.max(0, Math.min(100, Math.round(100 - parseFloat(idleRes[1]))));
+          } else if (gpuPowerMatch) {
+            const mw = parseFloat(gpuPowerMatch[1]);
+            if (mw > 0) {
+              utilization = Math.min(100, Math.max(1, Math.round(mw / 50)));
+            }
+          }
         }
       } catch {
         // ignore
       }
+    }
 
-      try {
-        const { temps } = await getSmcMetrics();
-        if (temps.gpu_die !== undefined) temperature = temps.gpu_die;
-      } catch {
-        // ignore
+    // 3. SMC temperature and power fallback
+    try {
+      const { temps, power } = await getSmcMetrics();
+      if (temps.gpu_die !== undefined) temperature = temps.gpu_die;
+      if (utilization === 0 && power.gpu !== undefined && power.gpu > 0) {
+        utilization = Math.min(100, Math.max(1, Math.round(power.gpu * 5)));
       }
+    } catch {
+      // ignore
+    }
 
-      try {
-        const psRaw = (await run('ps aux | grep -i "[g]pu" | wc -l')).trim();
-        gpuProcesses = parseInt(psRaw) || 0;
-      } catch {
-        // ignore
-      }
+    // 4. Count GPU processes
+    try {
+      const psRaw = (await run('ps aux | grep -iE "[g]pu|[m]etal|[w]indowserver" | wc -l', '0')).trim();
+      gpuProcesses = parseInt(psRaw, 10) || 0;
+    } catch {
+      // ignore
     }
 
     return { model, memory, utilization, temperature, processes: gpuProcesses };
@@ -561,21 +648,19 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
     const temperatures: Record<string, number | null> = {};
     let cpuDieTemp: number | undefined;
 
-    // Grab the CPU die temp regardless of `detailed` — we need it both for the
-    // detailed sensor breakdown and as a state fallback below.
     try {
       const { temps } = await getSmcMetrics();
       cpuDieTemp = temps.cpu_die;
-      if (detailed) {
-        if (temps.cpu_die !== undefined) temperatures['cpu_die'] = temps.cpu_die;
-        if (temps.gpu_die !== undefined) temperatures['gpu_die'] = temps.gpu_die;
-        if (temps.smc_die !== undefined) temperatures['smc_die'] = temps.smc_die;
-        if (!Object.keys(temps).length) {
-          detail += ' (sensor data needs powermetrics privileges)';
+      if (temps.cpu_die !== undefined) temperatures['cpu_die'] = temps.cpu_die;
+      if (temps.gpu_die !== undefined) temperatures['gpu_die'] = temps.gpu_die;
+      if (temps.smc_die !== undefined) temperatures['smc_die'] = temps.smc_die;
+      for (const [k, v] of Object.entries(temps)) {
+        if (temperatures[k] === undefined && v !== undefined) {
+          temperatures[k] = v;
         }
       }
     } catch {
-      if (detailed) detail += ' (powermetrics unavailable)';
+      // ignore
     }
 
     // Last resort: if we still don't know the state (e.g. pmset gave us nothing

@@ -107,42 +107,45 @@ function p2pPanelLines(): { title: string; body: string[] } {
   return { title, body };
 }
 
-function renderCustomizerOverlay(): string {
-   const themesList = Object.keys(THEMES) as ThemeName[];
-   const lines = [
-     chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) '),
-   ];
+function renderCustomizerOverlay(scrollOffset: number, maxVisibleItems: number): string {
+    const themesList = Object.keys(THEMES) as ThemeName[];
+    const headerLine = chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) ');
+    const totalItems = state.CUSTOMIZER_OPTIONS.length;
+    const end = Math.min(scrollOffset + maxVisibleItems, totalItems);
 
-     state.CUSTOMIZER_OPTIONS.forEach((opt, idx) => {
-       const isSelected = idx === state.customizerIndex;
-       const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+    const lines = [headerLine];
 
-        if (opt === 'Theme') {
-          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-        } else if (opt === 'Graph Mode') {
-          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
-        } else if (opt === 'Splash Screen') {
-          const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
-          lines.push(`${prefix}${opt}: ${status}`);
-        } else if (opt === 'Splash Color') {
-          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
-        } else if (opt === 'Splash Animation') {
-          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
-        } else if (opt === 'Notifications') {
-          const status = state.notificationsEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
-          lines.push(`${prefix}${opt}: ${status}`);
-        } else if (opt === 'Temperature Unit') {
-          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.tempUnit.toUpperCase())} [C, F]`);
-        } else {
-          const toggleKey = getToggleKey(opt);
-          const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
-          const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-          lines.push(`${prefix}${opt}: ${status}`);
-        }
-     });
+    for (let i = scrollOffset; i < end; i++) {
+      const opt = state.CUSTOMIZER_OPTIONS[i];
+      const isSelected = i === state.customizerIndex;
+      const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+
+       if (opt === 'Theme') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
+       } else if (opt === 'Graph Mode') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
+       } else if (opt === 'Splash Screen') {
+         const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
+         lines.push(`${prefix}${opt}: ${status}`);
+       } else if (opt === 'Splash Color') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
+       } else if (opt === 'Splash Animation') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
+       } else if (opt === 'Notifications') {
+         const status = state.notificationsEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
+         lines.push(`${prefix}${opt}: ${status}`);
+       } else if (opt === 'Temperature Unit') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.tempUnit.toUpperCase())} [C, F]`);
+       } else {
+         const toggleKey = getToggleKey(opt);
+         const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
+         const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
+         lines.push(`${prefix}${opt}: ${status}`);
+       }
+    }
 
    return lines.map(l => `  ${l}`).join('\n');
- }
+  }
 
 // --- frame diffing -------------------------------------------------------
 // Instead of erasing the whole screen (`\x1b[2J`) and repainting everything
@@ -255,27 +258,38 @@ function render() {
   const footerLine3 = footerLine()[2] || ' ';
   const footerLines = [footerLine1, footerLine2, footerLine3];
 
-  if (state.inputMode === 'customizer') {
-     bodyLines.push('');
-     bodyLines.push(...renderCustomizerOverlay().split('\n'));
-   } else if (state.inputMode === 'filter') {
-     bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
-   } else if (state.inputMode === 'kill') {
-     bodyLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
-   } else if (state.inputMode === 'signal') {
-     const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
-     const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
-     bodyLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
-     bodyLines.push(chalk.dim(`  ${sigList}`));
-     bodyLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
-   } else if (state.inputMode === 'p2p') {
-     bodyLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
-   } else if (state.statusMessage) {
-     bodyLines.push(`  ${state.statusMessage}`);
-   }
-
   const footerHeight = 3;
   const targetBodyHeight = Math.max(1, state.termHeight - footerHeight);
+
+  if (state.inputMode === 'customizer') {
+    const preOverlayCount = bodyLines.length;
+    const availableForOverlay = targetBodyHeight - preOverlayCount;
+    const totalItems = state.CUSTOMIZER_OPTIONS.length;
+    const headerLines = 1;
+    const blankLines = availableForOverlay >= 2 ? 1 : 0;
+    const maxVisibleItems = Math.max(0, availableForOverlay - headerLines - blankLines);
+    const scrollOffset = totalItems > maxVisibleItems
+      ? Math.max(0, Math.min(state.customizerIndex, totalItems - maxVisibleItems))
+      : 0;
+
+    if (blankLines > 0) bodyLines.push('');
+    bodyLines.push(...renderCustomizerOverlay(scrollOffset, maxVisibleItems).split('\n'));
+  } else if (state.inputMode === 'filter') {
+    bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
+  } else if (state.inputMode === 'kill') {
+    bodyLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
+  } else if (state.inputMode === 'signal') {
+    const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
+    const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
+    bodyLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
+    bodyLines.push(chalk.dim(`  ${sigList}`));
+    bodyLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
+  } else if (state.inputMode === 'p2p') {
+    bodyLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
+  } else if (state.statusMessage) {
+    bodyLines.push(`  ${state.statusMessage}`);
+  }
+
   if (bodyLines.length > targetBodyHeight) {
     bodyLines.length = targetBodyHeight;
   }
