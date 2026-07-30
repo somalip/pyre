@@ -14,28 +14,33 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 ## Features
 
 - **P2P live data streaming** — send live system stats to another system over TCP with password authentication, TLS encryption, rate limiting, IP allow/deny lists, audit logging, and HMAC message signing
-- **Real-time system stats** — CPU brand, cores, frequency, load, and usage
+- **Real-time system stats & per-core CPU** — CPU brand, cores, frequency, load, per-core utilization mini-bars, and overall usage
 - **GPU monitoring** — GPU model, VRAM, utilization, temperature, and process count (detailed mode)
 - **Power draw monitoring** — CPU watts, GPU watts, and combined power draw via SMC/ioreg
 - **Memory monitoring** — usage, swap, and total/available
-- **Disk space** — mounted volume usage
-- **Battery & power** — level, power source, condition, charge cycles, max capacity, estimated time to empty, discharge rate, power draw in watts
+- **Disk I/O throughput & space** — read/write speed per volume and mounted volume space usage
+- **Battery & power health** — level, power source, condition, charge cycles, max capacity, health trends, estimated time to empty, discharge rate, power draw in watts
 - **Packet monitor** — network packet counts, packet rates, active TCP connections, top network processes
 - **Task list** — running tasks/applications sorted by CPU with PID, user, memory, state, and runtime
 - **Thermal state** — CPU temperature via `pmset` and `powermetrics` (sudo for detailed readings)
 - **Network** — RX/TX bytes and per-second rates
-- **Top processes** — sorted by CPU, memory, or PID with live filtering, tree view, and kill with signal picker
-- **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, and tab-based panel navigation
+- **Top processes & search-as-you-type** — live filtering, tree view, sorting by CPU/memory/PID, and process kill with signal picker
+- **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, configurable panel layout, and tab-based panel navigation
 - **Snapshot export** — JSON, CSV, TSV, HTML, or Markdown output formats
 - **Continuous CSV logging** — automatic per-tick data logging to timestamped files with log rotation
-- **Visual themes** — six built-in colour themes for the dashboard
-- **Alert system** — configurable CPU usage and temperature threshold alerts with terminal bell and desktop notification
+- **Visual themes & custom themes** — six built-in color themes plus user-defined JSON theme support in `~/.config/pyre/themes/`
+- **Persistent configuration** — save default themes, intervals, and thresholds in `~/.config/pyre/config.json`
+- **Alert system & webhooks** — configurable threshold alerts with terminal bell, desktop notifications, webhook POST payload execution (`--webhook-url`), and custom shell command execution (`--alert-cmd`)
+- **System diagnostic tool (`pyre doctor`)** — check permissions, SMC access, network reachability, and configuration health
+- **History & Snapshot Diff** — query historical CSV log trends (`pyre history`) and compare snapshot files side-by-side (`pyre diff`)
+- **Multi-host fleet dashboard** — stream and tile stats from multiple remote Macs (`pyre fleet`)
+- **Menu Bar & xbar integration** — generate menu bar plugin script (`pyre xbar`) for continuous background status display
 - **Graph mode toggle** — switch between sparkline and bar graph rendering in the live dashboard
 - **P2P dashboard panel** — monitor P2P server status and peer events directly from the live dashboard
 - **Temperature unit toggle** — switch between Celsius and Fahrenheit display in live mode
 - **Hardware overview** — `pyre info` prints a concise hardware summary
 - **Remote SSH monitoring** — `pyre ssh <host>` streams a remote Mac's live dashboard locally
-- **Web dashboard** — `pyre web` serves a self-contained HTML report on a local port
+- **Web dashboard** — `pyre web` serves an auto-refreshing HTML dashboard with real-time SSE stream on a local port
 - **Micro-benchmarking** — `pyre bench <cmd>` logs resource usage during any command
 
 ## Installation
@@ -95,10 +100,13 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `--alert-cpu <pct>` | CPU usage alert threshold (default: `90`) |
 | `--alert-temp <c>` | CPU temperature alert threshold in Celsius (default: `95`) |
 | `--temp-unit <unit>` | Temperature display unit: `c` or `f` (default: `c`) |
+| `--webhook-url <url>` | URL to POST payload to when an alert threshold is triggered |
+| `--alert-cmd <cmd>` | Shell command to execute when an alert threshold is triggered |
+| `--port <port>` | Port number for web server mode (default: `3000`) |
 
 ## Commands
 
-### Static snapshot
+### Static snapshot & diagnostics
 
 | Command | Description |
 |---|---|
@@ -107,24 +115,31 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `pyre --json` | JSON output |
 | `pyre --html` | Self-contained HTML report |
 | `pyre --md` | Markdown tables |
+| `pyre doctor` | Run system diagnostics (permissions, powermetrics access, P2P network check) |
+| `pyre config <show\|reset>` | View or reset persistent configuration file (`~/.config/pyre/config.json`) |
+| `pyre completions <zsh\|bash\|fish>` | Generate shell auto-completion scripts |
 
-### Hardware overview
+### Hardware overview & history
 
 | Command | Description |
 |---|---|
 | `pyre info` | Concise hardware summary (CPU, memory, GPU, battery, thermal) |
+| `pyre history [--days N]` | Graph historical resource trends from CSV logs over past N days |
+| `pyre diff <file1.json> <file2.json>` | Compare two saved snapshot files side-by-side |
 
-### Benchmarking
+### Benchmarking & Menu Bar
 
 | Command | Description |
 |---|---|
 | `pyre bench <cmd>` | Log CPU, memory, network, and thermal usage while running a command |
+| `pyre xbar` | Generate an xbar / SwiftBar menu bar plugin script for stats display |
 
-### Remote monitoring
+### Remote & Multi-host monitoring
 
 | Command | Description |
 |---|---|
 | `pyre ssh <host>` | Stream live stats from a remote Mac over SSH |
+| `pyre fleet <host1> [host2]...` | Multi-host live dashboard monitoring multiple Macs simultaneously |
 
 ### Live dashboard
 
@@ -136,7 +151,7 @@ These options apply to both static snapshots and `pyre live`, except where noted
 
 | Command | Description |
 |---|---|
-| `pyre web` | Serve an auto-refreshing live web portal with real-time stats streaming on localhost (`--port <port>`) |
+| `pyre web` | Serve an auto-refreshing live web portal with real-time SSE stats streaming on localhost (`--port <port>`) |
 
 ### P2P
 
