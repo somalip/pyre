@@ -6,7 +6,7 @@
  * alert checker.  All state variables are imported from
  * `state.ts`.
  */
-import { execFile } from 'node:child_process';
+import { execFile, exec } from 'node:child_process';
 import chalk from 'chalk';
 import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible } from '../formatters/index.js';
 import { detectAnomalies } from '../anomalies.js';
@@ -54,6 +54,7 @@ function tableCacheParams(): string {
     state.treeView ? '1' : '0',
     state.history.version,
     JSON.stringify(state.visiblePanels),
+    JSON.stringify(state.panelLayout),
   ].join('|');
 }
 
@@ -215,10 +216,12 @@ function render() {
             visible: state.visiblePanels,
             treeView: state.treeView,
             activePanel: state.activePanel,
-            anomalies,
+            anomalies: anomalies,
+            anomalyHistory: state.anomalyHistory,
             tempUnit: state.tempUnit,
             history: state.history,
             graphMode: state.graphMode,
+            panelLayout: state.panelLayout,
           });
           _cachedTableData = state.lastData;
           _cachedTableParams = cacheParams;
@@ -353,6 +356,19 @@ function checkAlerts(data: StatsData) {
    const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
    const hot = data.cpu.usage >= state.CPU_ALERT_PCT || (temp !== null && temp >= state.TEMP_ALERT_C);
    const anomalies = detectAnomalies(data, state.history);
+   
+   // Add timestamp to anomalies and push to history
+   for (const a of anomalies) {
+     const timestamped = { ...a, timestamp: new Date() };
+     // Only add if not already recently reported (same metric and similar zScore)
+     const recent = state.anomalyHistory.slice(-5);
+     const isDuplicate = recent.some(r => r.metric === a.metric && Math.abs(r.zScore - a.zScore) < 0.5);
+     if (!isDuplicate) {
+       state.anomalyHistory.push(timestamped as any);
+       if (state.anomalyHistory.length > 50) state.anomalyHistory.shift();
+     }
+   }
+
    const hasCriticalAnomaly = anomalies.some(a => a.severity === 'critical');
    const hasWarningAnomaly = anomalies.some(a => a.severity === 'warning');
    // Process watchdog check
@@ -381,6 +397,18 @@ function checkAlerts(data: StatsData) {
      }
       setStatus(chalk.red(`⚠ Alert: ${reasons.join('; ')}`), 5000);
       sendNotification('pyre Alert', reasons.join('; '));
+      
+      const alertMsg = reasons.join('; ');
+      if (state.webhookUrl) {
+        fetch(state.webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ alert: alertMsg, timestamp: new Date().toISOString() })
+        }).catch(() => {});
+      }
+      if (state.alertCmd) {
+        exec(state.alertCmd, { env: { ...process.env, PYRE_ALERT: alertMsg } }, () => {});
+      }
     } else if (!hot && !anomalyTriggered && !watchdogTriggered) {
      state.alerted = false;
    }

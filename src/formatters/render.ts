@@ -10,7 +10,7 @@
  * all layout-related code is co-located.
  */
 import chalk from 'chalk';
-import { sparkline, multiRowSparkline } from '../sparkline.js';
+import { sparkline, multiRowSparkline, brailleGraph } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
@@ -90,8 +90,8 @@ export function panel(
   } else if (visLen(topInner) < innerW) {
     topInner = topInner + '─'.repeat(innerW - visLen(topInner));
   }
-  const top = borderAccent('┌' + topInner + '┐');
-  const bottom = borderAccent('└' + '─'.repeat(innerW) + '┘');
+  const top = borderAccent('╭' + topInner + '╮');
+  const bottom = borderAccent('╰' + '─'.repeat(innerW) + '╯');
   const body: string[] = [];
   for (let i = 0; i < h; i++) {
     const line = lines[i] ?? '';
@@ -103,12 +103,19 @@ export function panel(
 export function gaugeBar(percent: number, width = 12): string {
   const w = Math.max(1, width);
   const pct = Math.min(100, Math.max(0, percent));
-  const filled = Math.round((pct / 100) * w);
-  const empty = w - filled;
-  const filledStr = '█'.repeat(filled);
-  const emptyStr = '░'.repeat(empty);
+  const totalEighths = Math.round((pct / 100) * w * 8);
+  const fullBlocks = Math.floor(totalEighths / 8);
+  const remainder = totalEighths % 8;
+  const blocks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+  
+  let str = '█'.repeat(fullBlocks);
+  if (fullBlocks < w && remainder > 0) {
+    str += blocks[remainder];
+  }
+  const empty = Math.max(0, w - visLen(str));
+  
   const color = pct > 85 ? chalk.red : pct > 65 ? chalk.yellow : chalk.cyan;
-  return color(filledStr) + chalk.dim(emptyStr);
+  return color(str) + chalk.dim('─'.repeat(empty));
 }
 
 /** Join equal-or-uneven-height panel blocks side by side with a gap. */
@@ -141,23 +148,40 @@ function statRow(label: string, value: string, width = 9): string {
 }
 
 function bar(percent: number, width = 20): string {
-  const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * width);
-  const empty = width - filled;
-  const filledStr = '█'.repeat(Math.max(0, filled));
-  const emptyStr = '░'.repeat(Math.max(0, empty));
+  const w = Math.max(1, width);
+  const pct = Math.min(100, Math.max(0, percent));
+  const totalEighths = Math.round((pct / 100) * w * 8);
+  const fullBlocks = Math.floor(totalEighths / 8);
+  const remainder = totalEighths % 8;
+  const blocks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+  
+  let str = '█'.repeat(fullBlocks);
+  if (fullBlocks < w && remainder > 0) {
+    str += blocks[remainder];
+  }
+  const empty = Math.max(0, w - visLen(str));
   const color = percent > 90 ? chalk.red : percent > 70 ? chalk.yellow : chalk.green;
-  return color(filledStr + emptyStr);
+  return color(str) + chalk.dim('─'.repeat(empty));
 }
 
 function gaugeRow(label: string, percent: number, contentWidth: number): string {
   const labelW = 9;
   const pctText = `${Math.round(percent)}%`;
   const barW = Math.max(6, contentWidth - labelW - pctText.length - 1);
-  const filled = Math.round((Math.min(100, Math.max(0, percent)) / 100) * barW);
-  const empty = barW - filled;
-  const barStr = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, empty));
-  const color = percent > 90 ? chalk.red : percent > 70 ? chalk.yellow : chalk.green;
-  return `${chalk.dim(label.padEnd(labelW))}${color(barStr)} ${pctText}`;
+  const pct = Math.min(100, Math.max(0, percent));
+  
+  const totalEighths = Math.round((pct / 100) * barW * 8);
+  const fullBlocks = Math.floor(totalEighths / 8);
+  const remainder = totalEighths % 8;
+  const blocks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
+  
+  let str = '█'.repeat(fullBlocks);
+  if (fullBlocks < barW && remainder > 0) {
+    str += blocks[remainder];
+  }
+  const empty = Math.max(0, barW - visLen(str));
+  const color = pct > 90 ? chalk.red : pct > 70 ? chalk.yellow : chalk.green;
+  return `${chalk.dim(label.padEnd(labelW))}${color(str)}${chalk.dim('─'.repeat(empty))} ${pctText}`;
 }
 
 export function thermalColor(pressureLevel: number) {
@@ -360,6 +384,7 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'disk', label: 'Disk', key: '0' },
   { id: 'process', label: 'Process', key: 'P' },
   { id: 'p2p', label: 'P2P', key: 'R' },
+  { id: 'anomalies', label: 'Anomalies', key: 'A' },
 ];
 
 /** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */
@@ -662,6 +687,20 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       }
       return processTableLines(limited, width - 4, theme.border);
     }
+    case 'anomalies': {
+      if (!opts.anomalyHistory || opts.anomalyHistory.length === 0) return ['No anomalies detected yet.'];
+      const lines: string[] = [];
+      // Sort by timestamp descending
+      const sorted = [...opts.anomalyHistory].sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0));
+      for (const a of sorted) {
+        const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
+        const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
+        const valStr = a.metric.toLowerCase().includes('net') ? `${formatBytes(a.value)}/s` : `${a.value.toFixed(1)}%`;
+        const timeStr = a.timestamp ? a.timestamp.toLocaleTimeString() : '';
+        lines.push(color(` ${timeStr.padEnd(10)} ⚠ ${a.metric.padEnd(8)}: ${valStr.padEnd(12)} (${direction}, σ=${a.zScore.toFixed(1)})`));
+      }
+      return lines;
+    }
     default:
       return null;
   }
@@ -735,7 +774,9 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
     lines.push(chalk.bold(truncatePlain(data.cpu.brand, contentWidth)));
     lines.push(`CPU ${gaugeBar(data.cpu.usage, Math.max(4, contentWidth - 12))} ${data.cpu.usage.toFixed(0)}%`);
     if (opts.history?.cpuUsage.length) {
-      lines.push(theme.cpu(sparkline(opts.history.cpuUsage, { min: 0, max: 100 })));
+      const gMode = opts.graphMode || 'spark';
+      const gStr = gMode === 'bar' ? sparkline(opts.history.cpuUsage, { min: 0, max: 100 }) : brailleGraph(opts.history.cpuUsage, { min: 0, max: 100 });
+      lines.push(theme.cpu(gStr));
     }
     lines.push(`Load: ${data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')}`);
     return panel('1 cpu', lines, width, theme.cpu, theme.border, lines.length, rightTitle);
@@ -745,54 +786,61 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
 function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
   const contentWidth = width - 4;
   const out: string[] = [];
+  const layout = opts.panelLayout || ['mem', 'disk', 'net'];
 
-  // --- Box 1: 2 mem ---
-  const memLines: string[] = [];
-  memLines.push(`RAM [${gaugeBar(data.memory.usagePercent, Math.max(4, contentWidth - 12))}] ${data.memory.usagePercent}%`);
-  memLines.push(`Used: ${formatBytes(data.memory.used)} / ${formatBytes(data.memory.total)}`);
-  memLines.push(`Free: ${formatBytes(data.memory.free)} · Cache: ${formatBytes(data.memory.total - data.memory.free - data.memory.used)}`);
-  if (data.memory.swapTotal > 0) {
-    const swapPct = Math.round((data.memory.swapUsed / data.memory.swapTotal) * 100);
-    memLines.push(`Swap [${gaugeBar(swapPct, Math.max(4, contentWidth - 12))}] ${swapPct}%`);
-  }
-  out.push(...panel('2 mem', memLines, width, theme.mem, theme.border, memLines.length, `${formatBytes(data.memory.used)}`));
-
-  // --- Box 2: 0 disk ---
-  if (data.disk.length) {
-    const diskLines: string[] = [];
-    for (const d of data.disk.slice(0, 2)) {
-      const capNum = parseInt(d.capacity, 10) || 0;
-      const mountShort = truncatePlain(d.mountpoint, 8);
-      let ioStr = '';
-      if (d.readBytesSec !== undefined || d.writeBytesSec !== undefined) {
-        const rStr = formatBytes(d.readBytesSec || 0);
-        const wStr = formatBytes(d.writeBytesSec || 0);
-        ioStr = ` R:${rStr}/s W:${wStr}/s`;
+  for (const panelName of layout) {
+    if (panelName === 'mem') {
+      // --- Box 1: 2 mem ---
+      const memLines: string[] = [];
+      memLines.push(`RAM [${gaugeBar(data.memory.usagePercent, Math.max(4, contentWidth - 12))}] ${data.memory.usagePercent}%`);
+      memLines.push(`Used: ${formatBytes(data.memory.used)} / ${formatBytes(data.memory.total)}`);
+      memLines.push(`Free: ${formatBytes(data.memory.free)} · Cache: ${formatBytes(data.memory.total - data.memory.free - data.memory.used)}`);
+      if (data.memory.swapTotal > 0) {
+        const swapPct = Math.round((data.memory.swapUsed / data.memory.swapTotal) * 100);
+        memLines.push(`Swap [${gaugeBar(swapPct, Math.max(4, contentWidth - 12))}] ${swapPct}%`);
       }
-      diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18 - ioStr.length))}] ${d.capacity}${ioStr}`);
+      out.push(...panel('2 mem', memLines, width, theme.mem, theme.border, memLines.length, `${formatBytes(data.memory.used)}`));
+    } else if (panelName === 'disk' && data.disk.length) {
+      // --- Box 2: 0 disk ---
+      const diskLines: string[] = [];
+      for (const d of data.disk.slice(0, 2)) {
+        const capNum = parseInt(d.capacity, 10) || 0;
+        const mountShort = truncatePlain(d.mountpoint, 8);
+        let ioStr = '';
+        if (d.readBytesSec !== undefined || d.writeBytesSec !== undefined) {
+          const rStr = formatBytes(d.readBytesSec || 0);
+          const wStr = formatBytes(d.writeBytesSec || 0);
+          ioStr = ` R:${rStr}/s W:${wStr}/s`;
+        }
+        diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18 - ioStr.length))}] ${d.capacity}${ioStr}`);
+      }
+      const totalRead = data.disk.reduce((acc, d) => acc + (d.readBytesSec || 0), 0);
+      const totalWrite = data.disk.reduce((acc, d) => acc + (d.writeBytesSec || 0), 0);
+      const diskHeaderRight = `R:${formatBytes(totalRead)}/s W:${formatBytes(totalWrite)}/s`;
+      out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length, diskHeaderRight));
+    } else if (panelName === 'net') {
+      // --- Box 3: 7 net ---
+      const netLines: string[] = [];
+      const rxRate = opts.history?.netRxRate.length ? opts.history.netRxRate[opts.history.netRxRate.length - 1] : 0;
+      const txRate = opts.history?.netTxRate.length ? opts.history.netTxRate[opts.history.netTxRate.length - 1] : 0;
+
+      netLines.push(`down ▼ ${formatBytes(rxRate)}/s (${formatBytes(data.network.rxBytes)})`);
+      if (opts.history?.netRxRate.length) {
+        const gMode = opts.graphMode || 'spark';
+        const gStr = gMode === 'bar' ? sparkline(opts.history.netRxRate, {}) : brailleGraph(opts.history.netRxRate, {});
+        netLines.push(chalk.cyan(fitVisible(gStr, contentWidth)));
+      }
+
+      netLines.push(`up   ▲ ${formatBytes(txRate)}/s (${formatBytes(data.network.txBytes)})`);
+      if (opts.history?.netTxRate.length) {
+        const gMode = opts.graphMode || 'spark';
+        const gStr = gMode === 'bar' ? sparkline(opts.history.netTxRate, {}) : brailleGraph(opts.history.netTxRate, {});
+        netLines.push(theme.network(fitVisible(gStr, contentWidth)));
+      }
+
+      out.push(...panel('7 net', netLines, width, theme.network, theme.border, netLines.length, `${data.network.interface}`));
     }
-    const totalRead = data.disk.reduce((acc, d) => acc + (d.readBytesSec || 0), 0);
-    const totalWrite = data.disk.reduce((acc, d) => acc + (d.writeBytesSec || 0), 0);
-    const diskHeaderRight = `R:${formatBytes(totalRead)}/s W:${formatBytes(totalWrite)}/s`;
-    out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length, diskHeaderRight));
   }
-
-  // --- Box 3: 7 net ---
-  const netLines: string[] = [];
-  const rxRate = opts.history?.netRxRate.length ? opts.history.netRxRate[opts.history.netRxRate.length - 1] : 0;
-  const txRate = opts.history?.netTxRate.length ? opts.history.netTxRate[opts.history.netTxRate.length - 1] : 0;
-
-  netLines.push(`down ▼ ${formatBytes(rxRate)}/s (${formatBytes(data.network.rxBytes)})`);
-  if (opts.history?.netRxRate.length) {
-    netLines.push(chalk.cyan(fitVisible(sparkline(opts.history.netRxRate, {}), contentWidth)));
-  }
-
-  netLines.push(`up   ▲ ${formatBytes(txRate)}/s (${formatBytes(data.network.txBytes)})`);
-  if (opts.history?.netTxRate.length) {
-    netLines.push(theme.network(fitVisible(sparkline(opts.history.netTxRate, {}), contentWidth)));
-  }
-
-  out.push(...panel('7 net', netLines, width, theme.network, theme.border, netLines.length, `${data.network.interface}`));
 
   return out;
 }

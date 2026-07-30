@@ -13,6 +13,7 @@ export interface AnomalyAlert {
   value: number;
   zScore: number;
   severity: 'warning' | 'critical';
+  timestamp?: Date;
 }
 
 const ZSCORE_THRESHOLD = 2.5;

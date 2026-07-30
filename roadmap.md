@@ -1,20 +1,3 @@
-## Tier 2 — Medium effort, strong differentiation
-
-- [x] **Custom theme files** — user-authored themes in `~/.config/pyre/themes/`,
-      not just the six built-ins.
-- [x] **Historical trend view** — replay/query past CSV logs into a graph over
-      days or weeks (`pyre history --days 7`), rather than only the live session window.
-      Builds directly on the export/logging system that already exists.
-- [x] **`pyre diff`** — compare two exported snapshots side-by-side (e.g. before/after
-      a build or deploy). Simple to implement given existing export formats.
-- [x] **Process resource watchdog** — alert or auto-log when a *named* process
-      crosses a CPU/mem threshold, not just system-wide alerts.
-- [x] **Battery health trend** — chart cycle count / max capacity over time from
-      logged snapshots, to predict degradation. Leans into the Mac-specific angle
-      btop can't match.
-- [x] **Live web dashboard** — upgrade `pyre web` from a static snapshot to an
-      auto-refreshing page, so it's genuinely useful on a second monitor.
-
 ## Tier 3 — Bigger bets (high effort, high differentiation)
 
 - [ ] **Multi-host dashboard** — tile stats from several Macs at once in one view,

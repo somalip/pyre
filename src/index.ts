@@ -22,6 +22,8 @@ import { generateZshCompletions, generateBashCompletions, generateFishCompletion
 import { runHistoryCommand } from './historyCmd.js';
 import { runDiffCommand } from './diffCmd.js';
 import { readConfig, CONFIG_FILE } from './state/config.js';
+import { generateXbarPlugin } from './xbar.js';
+import { runFleetCommand } from './fleet.js';
 
 const config = readConfig();
 
@@ -65,6 +67,8 @@ program
     .option('--p2p-deny <ips>', 'Comma-separated list of denied IPs')
     .option('--p2p-audit-log <dir>', 'Directory for P2P audit logs')
     .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)')
+    .option('--webhook-url <url>', 'URL to POST to on alert')
+    .option('--alert-cmd <cmd>', 'Command to execute on alert')
     .option('--port <port>', 'Port number for web server mode', '3000');
 
 program.parse(process.argv);
@@ -203,8 +207,26 @@ async function main() {
     return;
   }
 
-  const alertCpu = opts.alertCpu ? parseInt(opts.alertCpu, 10) : undefined;
-  const alertTemp = opts.alertTemp ? parseInt(opts.alertTemp, 10) : undefined;
+  if (cmd === 'xbar') {
+    generateXbarPlugin();
+    return;
+  }
+
+  if (cmd === 'fleet') {
+    const hosts = program.args.slice(1);
+    if (hosts.length === 0) {
+      console.error(chalk.red('Usage: pyre fleet <host1> [host2] ...'));
+      process.exit(1);
+    }
+    runFleetCommand(hosts);
+    return;
+  }
+
+  if (opts.alertCpu) config.cpuAlertPct = Number(opts.alertCpu);
+  if (opts.alertTemp) config.tempAlertC = Number(opts.alertTemp);
+  if (opts.webhookUrl) config.webhookUrl = opts.webhookUrl;
+  if (opts.alertCmd) config.alertCmd = opts.alertCmd;
+  if (opts.exportDir) config.exportDir = opts.exportDir;
   const tempUnit = opts.tempUnit === 'f' ? 'f' : 'c';
 
   if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
@@ -227,8 +249,8 @@ async function main() {
       theme: opts.theme || config.theme,
       exportDir: opts.exportDir || config.exportDir,
       autoLog: opts.log || config.autoLog,
-      alertCpu,
-      alertTemp,
+      alertCpu: config.cpuAlertPct,
+      alertTemp: config.tempAlertC,
       tempUnit,
     }, splashPromise);
     return;

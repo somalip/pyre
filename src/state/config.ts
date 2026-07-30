@@ -37,6 +37,8 @@ export interface PyreConfig {
   watchdogProcess?: string;
   watchdogCpu?: number;
   watchdogMem?: number;
+  webhookUrl?: string;
+  alertCmd?: string;
   visiblePanels?: {
     cpu?: boolean;
     mem?: boolean;
@@ -51,6 +53,7 @@ export interface PyreConfig {
     process?: boolean;
     tree?: boolean;
   };
+  panelLayout?: string[];
 }
 
 export const DEFAULT_CONFIG: Required<PyreConfig> = {
@@ -75,6 +78,8 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   splashEnabled: true,
   splashColorScheme: 'fire',
   splashAnimation: 'classic',
+  webhookUrl: '',
+  alertCmd: '',
   visiblePanels: {
     cpu: true,
     mem: true,
@@ -89,6 +94,7 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
     process: true,
     tree: false,
   },
+  panelLayout: ['mem', 'disk', 'net'],
 };
 
 export function readConfig(): Required<PyreConfig> {

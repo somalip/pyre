@@ -48,6 +48,7 @@ export interface AnomalyAlert {
   value: number;
   zScore: number;
   severity: 'warning' | 'critical';
+  timestamp?: Date;
 }
 
 export interface TableOptions {
@@ -66,13 +67,17 @@ export interface TableOptions {
     /** Show process tree view instead of flat list. */
     treeView?: boolean;
     /** Active panel for detail/focus view. 'grid' means show all panels. */
-    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p';
+    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies';
     /** Active anomaly alerts from the statistical detector. */
     anomalies?: AnomalyAlert[];
+    /** Historical anomaly alerts for the anomalies tab. */
+    anomalyHistory?: AnomalyAlert[];
     /** Temperature display unit: 'c' or 'f'. */
     tempUnit?: 'c' | 'f';
     /** Rolling history instance for live graphs. */
     history?: History;
     /** Graph mode: 'spark' or 'bar'. */
     graphMode?: 'spark' | 'bar';
+    /** Panel layout order. */
+    panelLayout?: string[];
 }
