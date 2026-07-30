@@ -258,7 +258,7 @@
 <div class="steps" id="steps">
       <div class="track"><div class="fill" id="stepsFill"></div></div>
       <div class="labels">
-        <div class="step-pip" data-step="0">sensor</div>
+        <div class="step-pip" data-step="0">readme</div>
         <div class="step-pip" data-step="1">appearance</div>
         <div class="step-pip" data-step="2">behavior</div>
         <div class="step-pip" data-step="3">p2p server</div>
@@ -268,35 +268,38 @@
 
     <main>
       <section class="panel" data-panel="0">
-        <div class="eyebrow">why this step exists</div>
+        <div class="eyebrow">documentation</div>
         <pre class="ascii-art" id="anim-sensor">  ┌──────────┐
-  │ <span class="hot">▓▓▓▓▓▓</span>   │  62°C
+  │ <span class="hot">pyre</span> CLI │  no sudo required
   └────┬─────┘
-       │ sudo
+       │ real-time stats
    ────┴────</pre>
-        <h2>Give pyre read access to temperature sensors</h2>
-        <p class="lead">Real CPU/GPU die temperatures on macOS only come from <code>powermetrics</code>,
-          which requires root. Without this, pyre still runs — it just shows thermal state without a
-          live °C/°F reading. This grants passwordless sudo to that one binary only, nothing else.</p>
+        <h2>pyre Overview & Documentation</h2>
+        <p class="lead">Mac system monitoring CLI for real-time CPU, memory, GPU, disk I/O, battery health, packet monitoring, live dashboards, P2P data streaming, and web monitoring without requiring root privileges.</p>
 
         <div class="card">
-          <h3>RUN IN TERMINAL</h3>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="sudo-cmd">copy</button>
-            <pre id="sudo-cmd"><span class="dim"># grants NOPASSWD access to powermetrics only, for your user</span>
-echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" | \
-  sudo tee /etc/sudoers.d/pyre-powermetrics > /dev/null
-sudo chmod 440 /etc/sudoers.d/pyre-powermetrics</pre>
-          </div>
-          <p class="note">To undo this later: <b>sudo rm /etc/sudoers.d/pyre-powermetrics</b></p>
+          <h3>KEY FEATURES</h3>
+          <ul style="list-style:none; padding:0; margin:0 0 16px; font-size:0.85rem; color:var(--paper-dim);">
+            <li style="margin-bottom:8px">🔥 <b>Real-time Dashboard:</b> Interactive TUI with mouse support, graphs, and custom panel layouts.</li>
+            <li style="margin-bottom:8px">⚡ <b>Zero Sudo Access Required:</b> Native SMC sensor caching and system APIs provide temperatures and power metrics out-of-the-box.</li>
+            <li style="margin-bottom:8px">🌐 <b>P2P & Remote Fleet:</b> Stream live telemetry over encrypted TCP connections or monitor multiple Macs via <code>pyre fleet</code>.</li>
+            <li style="margin-bottom:8px">📊 <b>History & Benchmarking:</b> Log metrics to CSV, query historical trends (<code>pyre history</code>), and compare snapshots (<code>pyre diff</code>).</li>
+          </ul>
         </div>
 
-        <div class="toggle-row">
-          <div>
-            <div class="t-label">I've run this command</div>
-            <div class="t-desc">Optional — you can always come back and run it later.</div>
+        <div class="card">
+          <h3>QUICK START COMMANDS</h3>
+          <div class="code-box">
+            <button class="copy-btn" data-copy="quickstart-cmd">copy</button>
+            <pre id="quickstart-cmd"><span class="dim"># Launch interactive live dashboard</span>
+pyre live
+
+<span class="dim"># Static snapshot overview</span>
+pyre --once
+
+<span class="dim"># Serve live web dashboard on localhost</span>
+pyre web --port 3000</pre>
           </div>
-          <div class="switch" id="toggle-sudo-done"></div>
         </div>
       </section>
 
@@ -755,10 +758,12 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '�
     pips.forEach(p => p.addEventListener('click', () => { state.step = Number(p.dataset.step); render(); }));
 
     const sudoToggle = document.getElementById('toggle-sudo-done');
-    sudoToggle.addEventListener('click', () => {
-      state.sudoDone = !state.sudoDone;
-      sudoToggle.classList.toggle('on', state.sudoDone);
-    });
+    if (sudoToggle) {
+      sudoToggle.addEventListener('click', () => {
+        state.sudoDone = !state.sudoDone;
+        sudoToggle.classList.toggle('on', state.sudoDone);
+      });
+    }
 
     document.querySelectorAll('.theme-swatch').forEach(sw => {
       sw.addEventListener('click', () => {
