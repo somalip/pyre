@@ -73,36 +73,11 @@ gap neither competitor has bothered with, or genuine new ground past both.
 
 ---
 
-## 2. Tier 0 — do this before anything else here
-
-Don't re-litigate this — `advanced.md` Section 2 already flags two `roadmap.md`
-checkboxes as thinner than they claim:
-
-- **P0-2**: `src/anomalies.ts` has no digest/report command surface yet.
-
-Fix those first so this document isn't building differentiation on top of an
-already-oversold feature. Full detail is in `advanced.md`, not repeated here.
-
 ---
 
 ## 3. Track M — macmon parity & Apple Silicon depth (new — not in any other doc)
 
-### M1. Sudoless power/thermal via private IOReport API
-**Difficulty: L · Audience: [Both]**
-
-Every temp/power reading in pyre currently goes through `sudo -n powermetrics`
-(`src/monitors/smc.ts`), which silently returns nothing for anyone without
-passwordless sudo configured in `/etc/sudoers`. This is the single biggest
-practical gap versus macmon, whose entire pitch is "sudoless" — it (and mactop,
-socpowerbud) reads CPU/GPU/ANE power and per-cluster usage from Apple's private
-`IOReport` framework instead of shelling out to `powermetrics` and parsing text.
-In Node this means a small native addon (N-API) or a compiled Swift/C helper
-binary shipped next to `dist/` and talked to over IPC — real systems work, not
-glue code. Treat it as its own spike before committing to shipping it.
-
-**DoD:** `pyre` shows CPU/GPU wattage and per-cluster usage with zero sudo prompt
-on a clean test account with no sudoers entry; the existing powermetrics path
-stays as an automatic fallback for anything IOReport doesn't expose.
+---
 
 ---
 
