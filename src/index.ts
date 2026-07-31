@@ -74,7 +74,7 @@ program
     .option('--alert-cmd <cmd>', 'Command to execute on alert')
     .option('--port <port>', 'Port number for web server mode', '3000');
 
-program.addHelpText('after', \`
+program.addHelpText('after', `
 Commands:
   live                           Interactive live dashboard
   ui                             Launch the native macOS UI dashboard
@@ -96,7 +96,7 @@ Commands:
   xbar                           Generate an xbar / SwiftBar menu bar plugin script
   p2p <server|connect>           Start a P2P server or connect to one
   server                         Print commands for starting P2P server/client
-\`);
+`);
 
 program.parse(process.argv);
 
