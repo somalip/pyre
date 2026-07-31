@@ -132,6 +132,7 @@ const state = {
         splashEnabled: config.splashEnabled,
         splashColorScheme: config.splashColorScheme as SplashColorScheme,
         splashAnimation: config.splashAnimation as SplashAnimation,
+        menuSelectionIndex: 0,
         readmeScrollOffset: 0,
     };
 

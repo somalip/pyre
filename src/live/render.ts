@@ -463,21 +463,20 @@ function renderSplashMenu(cols: number, rows: number): string[] {
   const out: string[] = [];
   const contentLines: string[] = [];
   const logo = [
-    chalk.hex('#ff6004').bold('                ██████╗ ██╗   ██╗██████╗ ███████╗'),
-    chalk.hex('#ff8004').bold('                ██╔══██╗╚██╗ ██╔╝██╔══██╗██╔════╝'),
-    chalk.hex('#ffa004').bold('                ██████╔╝ ╚████╔╝ ██████╔╝█████╗  '),
-    chalk.hex('#ffc004').bold('                ██╔═══╝   ╚██╔╝  ██╔══██╗██╔══╝  '),
-    chalk.hex('#ffe004').bold('                ██║        ██║   ██║  ██║███████╗'),
-    chalk.hex('#ffff40').bold('                ╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝')
+    chalk.hex('#ff6004').bold('██████╗ ██╗   ██╗██████╗ ███████╗'),
+    chalk.hex('#ff8004').bold('██╔══██╗╚██╗ ██╔╝██╔══██╗██╔════╝'),
+    chalk.hex('#ffa004').bold('██████╔╝ ╚████╔╝ ██████╔╝█████╗  '),
+    chalk.hex('#ffc004').bold('██╔═══╝   ╚██╔╝  ██╔══██╗██╔══╝  '),
+    chalk.hex('#ffe004').bold('██║        ██║   ██║  ██║███████╗'),
+    chalk.hex('#ffff40').bold('╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝')
   ];
 
   const menuTop = Math.max(0, Math.floor(rows / 2) - 8);
   for (let i = 0; i < menuTop; i++) out.push('');
 
-  const strip = (s: string) => s.replace(/^(\x1b\[[0-9;]*m)+( +)/, '$1');
-  for (const line of logo) contentLines.push(strip(line));
+  for (const line of logo) contentLines.push(line);
   contentLines.push('');
-  contentLines.push(strip(chalk.dim('                  system monitor v9.0.0')));
+  contentLines.push(chalk.dim('system monitor v9.0.0'));
   contentLines.push('');
   contentLines.push('');
 
@@ -491,13 +490,14 @@ function renderSplashMenu(cols: number, rows: number): string[] {
 
   contentLines.push('');
   contentLines.push('');
-  contentLines.push(strip(chalk.dim('             Use ↑/↓ to navigate, Enter to select')));
+  contentLines.push(chalk.dim('Use ↑/↓ to navigate, Enter to select'));
 
-  while (contentLines.length < rows) contentLines.push('');
+  while (contentLines.length + menuTop < rows) contentLines.push('');
   const maxWidth = Math.max(...contentLines.map(visLen));
   const padding = Math.max(0, Math.floor((cols - maxWidth) / 2));
   const padStr = ' '.repeat(padding);
-  for (const line of contentLines) out.push(padStr + fitVisible(line, cols));
+  const fit = (l: string) => padStr + fitVisible(l, cols - padding);
+  for (const line of contentLines) out.push(fit(line));
   return out;
 }
 
