@@ -474,7 +474,8 @@ function pctColor(v: number): (s: string) => string {
 function processTableLines(
    processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[],
    contentWidth: number,
-   borderAccent = THEMES.default.border
+   borderAccent = THEMES.default.border,
+   selectedIdx: number = -1
  ): string[] {
     const pidW = 8, ppidW = 8, userW = 12, cpuW = 8, memW = 8, stateW = 8, thrW = 6, rtW = 10;
 
@@ -490,13 +491,14 @@ function processTableLines(
       chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' RUNTIME  ') +
       chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' COMMAND'.padEnd(cmdW + 1));
 
-   const rows = processes.map(p => {
+   const rows = processes.map((p, idx) => {
+     const isSelected = idx === selectedIdx;
      const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}`.padEnd(cpuW));
      const memStr = pctColor(p.mem)(`${p.mem.toFixed(1)}`.padEnd(memW));
      const stateStr = chalk.dim(p.state.padEnd(stateW));
      const thrStr = String(p.threads).padEnd(thrW);
      const rtStr = formatRuntime(p.runtime).padEnd(rtW);
-     return (
+     const line = (
        String(p.pid).padEnd(pidW) +
        String(p.ppid).padEnd(ppidW) +
        truncatePlain(p.user, userW - 1).padEnd(userW) +
@@ -507,6 +509,7 @@ function processTableLines(
        rtStr +
        truncatePlain(p.command, cmdW)
      );
+     return isSelected ? chalk.bgCyan.black(line) : line;
    });
    return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
  }
@@ -605,7 +608,7 @@ function diskTableLines(
 
 // --- main dashboard ------------------------------------------------------------
 
-function detailPanelTitle(panel: string): string {
+function detailPanelTitle(panel: string, trackedPid?: number | null): string {
   const map: Record<string, string> = {
     cpu: 'CPU',
     mem: 'Memory',
@@ -617,7 +620,7 @@ function detailPanelTitle(panel: string): string {
     packets: 'Packets',
     tasks: 'Tasks',
     disk: 'Disk',
-    process: 'Processes',
+    process: trackedPid !== undefined && trackedPid !== null ? `Processes (Following PID ${trackedPid})` : 'Processes',
   };
   return map[panel] || panel;
 }
@@ -681,11 +684,25 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
         ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
         : data.processes;
       const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
-      const limited = opts.processLimit ? sorted.slice(0, opts.processLimit) : sorted;
-      if (opts.treeView) {
-        return buildProcessTree(limited);
+      let selectedIdx = opts.selectedProcessIndex ?? -1;
+      if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+        const trackedIdx = sorted.findIndex(p => p.pid === opts.trackedPid);
+        if (trackedIdx >= 0) {
+          selectedIdx = trackedIdx;
+        }
       }
-      return processTableLines(limited, width - 4, theme.border);
+      const availableRows = opts.processLimit || sorted.length;
+      let offset = 0;
+      if (selectedIdx >= 0) {
+        if (selectedIdx >= availableRows) {
+          offset = selectedIdx - availableRows + 1;
+        }
+      }
+      const visible = sorted.slice(offset, offset + availableRows);
+      if (opts.treeView) {
+        return buildProcessTree(visible);
+      }
+      return processTableLines(visible, width - 4, theme.border, selectedIdx - offset);
     }
     case 'anomalies': {
       if (!opts.anomalyHistory || opts.anomalyHistory.length === 0) return ['No anomalies detected yet.'];
@@ -856,7 +873,21 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
   const tableHeaderOverhead = 2; // header + separator line
   const availableRows = Math.max(1, targetHeight - headerRowOverhead - tableHeaderOverhead);
 
-  const limited = sorted.slice(0, availableRows);
+  let selectedIdx = opts.selectedProcessIndex ?? -1;
+  if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+    const trackedIdx = sorted.findIndex(p => p.pid === opts.trackedPid);
+    if (trackedIdx >= 0) {
+      selectedIdx = trackedIdx;
+    }
+  }
+
+  let offset = 0;
+  if (selectedIdx >= 0) {
+    if (selectedIdx >= availableRows) {
+      offset = selectedIdx - availableRows + 1;
+    }
+  }
+  const visible = sorted.slice(offset, offset + availableRows);
 
   const pidW = 6, userW = 7, thrW = 3, memW = 6, cpuW = 6;
   const fixedW = pidW + userW + thrW + memW + cpuW + 5;
@@ -871,12 +902,13 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     chalk.bold('CPU%'.padStart(cpuW));
 
   if (opts.treeView) {
-    const treeLines = buildProcessTree(limited);
+    const treeLines = buildProcessTree(visible);
     const rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · sort: ${opts.sortBy || 'cpu'}`;
     return panel('P proc', [head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, targetHeight - 2, rightTitle);
   }
 
-  const rows = limited.map(p => {
+  const rows = visible.map((p, idx) => {
+    const isSelected = (offset + idx) === selectedIdx;
     const cpuVal = p.cpu.toFixed(1) + '%';
     const cpuStr = p.cpu > 50 ? chalk.red.bold(cpuVal.padStart(cpuW)) : p.cpu > 20 ? chalk.yellow(cpuVal.padStart(cpuW)) : chalk.green(cpuVal.padStart(cpuW));
     const memStr = (p.mem.toFixed(1) + '%').padStart(memW);
@@ -885,7 +917,8 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     const pidStr = String(p.pid).padEnd(pidW);
     const cmdStr = truncatePlain(p.command, cmdW).padEnd(cmdW);
 
-    return `${pidStr} ${cmdStr} ${userStr} ${thrStr} ${memStr} ${cpuStr}`;
+    const line = `${pidStr} ${cmdStr} ${userStr} ${thrStr} ${memStr} ${cpuStr}`;
+    return isSelected ? chalk.bgCyan.black(line) : line;
   });
 
   const lines = [head, theme.border('─'.repeat(contentWidth)), ...rows];
@@ -893,7 +926,10 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     lines.push(chalk.dim(`No processes match "${opts.filter || ''}"`));
   }
 
-  const rightTitle = opts.filter ? `filter: "${opts.filter}"` : `sort: ${opts.sortBy || 'cpu'}`;
+  let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `sort: ${opts.sortBy || 'cpu'}`;
+  if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+    rightTitle += ` · following PID ${opts.trackedPid}`;
+  }
   return panel('P proc', lines, width, theme.process, theme.border, targetHeight - 2, rightTitle);
 }
 
@@ -920,31 +956,44 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   if (activePanel !== 'grid') {
     const lines = activeDetailLines(data, activePanel, width, opts);
     if (lines) {
-      out.push(...panel(detailPanelTitle(activePanel), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border));
+      out.push(...panel(detailPanelTitle(activePanel, opts.trackedPid), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border));
     }
-    return out.join('\n');
+  } else {
+    // --- btop Dashboard Grid ---
+    // 1. Top CPU & System Overview Box
+    out.push(...btopCpuBox(data, width, theme, opts));
+    out.push('');
+
+    // 2. Bottom Split Section
+    if (width >= 85) {
+      const leftColW = Math.max(32, Math.floor(width * 0.38));
+      const rightColW = width - leftColW - 2;
+
+      const leftLines = btopLeftColumn(data, leftColW, theme, opts);
+      const procLines = btopProcBox(data, rightColW, leftLines.length, theme, opts);
+
+      out.push(...hstack([leftLines, procLines], 2, width));
+    } else {
+      const leftLines = btopLeftColumn(data, width, theme, opts);
+      out.push(...leftLines);
+      out.push('');
+      const procLines = btopProcBox(data, width, 12, theme, opts);
+      out.push(...procLines);
+    }
   }
 
-  // --- btop Dashboard Grid ---
-  // 1. Top CPU & System Overview Box
-  out.push(...btopCpuBox(data, width, theme, opts));
-  out.push('');
-
-  // 2. Bottom Split Section
-  if (width >= 85) {
-    const leftColW = Math.max(32, Math.floor(width * 0.38));
-    const rightColW = width - leftColW - 2;
-
-    const leftLines = btopLeftColumn(data, leftColW, theme, opts);
-    const procLines = btopProcBox(data, rightColW, leftLines.length, theme, opts);
-
-    out.push(...hstack([leftLines, procLines], 2, width));
-  } else {
-    const leftLines = btopLeftColumn(data, width, theme, opts);
-    out.push(...leftLines);
+  if (opts.inspectProcess) {
+    const p = opts.inspectProcess;
+    const modalLines: string[] = [
+      `${chalk.bold('PID:')} ${p.pid}   ${chalk.bold('PPID:')} ${p.ppid}   ${chalk.bold('USER:')} ${p.user}`,
+      `${chalk.bold('CPU Usage:')} ${p.cpu.toFixed(1)}%   ${chalk.bold('Memory Usage:')} ${p.mem.toFixed(1)}%`,
+      `${chalk.bold('State:')} ${p.state}   ${chalk.bold('Threads:')} ${p.threads}   ${chalk.bold('Runtime:')} ${formatRuntime(p.runtime)}`,
+      `${chalk.bold('Command:')} ${p.command}`,
+      '',
+      chalk.dim('Press Esc or Enter to close process details modal.')
+    ];
     out.push('');
-    const procLines = btopProcBox(data, width, 12, theme, opts);
-    out.push(...procLines);
+    out.push(...panel(`PROCESS DETAILS · PID ${p.pid}`, modalLines, width, theme.process, theme.border));
   }
 
   return out.join('\n');

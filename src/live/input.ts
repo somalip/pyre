@@ -569,11 +569,68 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         case 'tab':
           cycleTab(1);
           break;
+        case 'up':
+          if (state.lastData?.processes?.length) {
+            state.trackedPid = null;
+            state.processSelectionIndex = Math.max(0, state.processSelectionIndex - 1);
+            render();
+          }
+          break;
+        case 'down':
+          if (state.lastData?.processes?.length) {
+            state.trackedPid = null;
+            const count = state.lastData.processes.length;
+            state.processSelectionIndex = Math.min(count - 1, state.processSelectionIndex + 1);
+            render();
+          }
+          break;
+        case 'space':
+        case ' ':
+          if (state.lastData?.processes?.length && state.processSelectionIndex >= 0) {
+            const sorted = state.lastData.processes;
+            const proc = sorted[state.processSelectionIndex];
+            if (proc) {
+              if (state.trackedPid === proc.pid) {
+                state.trackedPid = null;
+                setStatus(`Stopped following PID ${proc.pid}`);
+              } else {
+                state.trackedPid = proc.pid;
+                setStatus(`Following PID ${proc.pid} (${proc.command})`);
+              }
+              render();
+            }
+          }
+          break;
+        case 'return':
+        case 'enter':
+          if (state.inspectingProcess) {
+            state.inspectingProcess = null;
+            render();
+          } else if (state.lastData?.processes?.length && state.processSelectionIndex >= 0) {
+            const sorted = state.lastData.processes;
+            const proc = sorted[state.processSelectionIndex];
+            if (proc) {
+              state.inspectingProcess = proc;
+              state.trackedPid = proc.pid;
+              setStatus(`Inspecting & following PID ${proc.pid}`);
+              render();
+            }
+          }
+          break;
         case 'escape':
         case 'esc':
-          state.activePanel = 'grid';
-          setStatus('Grid view');
-          render();
+          if (state.inspectingProcess) {
+            state.inspectingProcess = null;
+            render();
+          } else if (state.trackedPid !== null) {
+            state.trackedPid = null;
+            setStatus('Stopped following process');
+            render();
+          } else {
+            state.activePanel = 'grid';
+            setStatus('Grid view');
+            render();
+          }
           break;
         default:
           if (str && str.length === 1) {
@@ -592,7 +649,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   }
 
   function tabKeyToId(str: string): string | null {
-    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'r': 'p2p' };
+    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'r': 'p2p', 'A': 'anomalies' };
     return map[str] ?? null;
   }
 
@@ -612,6 +669,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     const cy = seq.charCodeAt(5) - 32;
     if (cb === 0 || cb === 1) {
       handleMouseClick(cy, cx);
+    } else if (cb === 64) {
+      // scroll up
+      scrollProcessSelection(-1);
+    } else if (cb === 65) {
+      // scroll down
+      scrollProcessSelection(1);
     }
   }
 
@@ -623,6 +686,19 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     const cy = parseInt(match[3]) - 1;
     if (button === 0 || button === 1) {
       handleMouseClick(cy, cx);
+    } else if (button === 64) {
+      scrollProcessSelection(-1);
+    } else if (button === 65) {
+      scrollProcessSelection(1);
+    }
+  }
+
+  function scrollProcessSelection(dir: number) {
+    if (state.lastData?.processes?.length) {
+      state.trackedPid = null;
+      const count = state.lastData.processes.length;
+      state.processSelectionIndex = Math.max(0, Math.min(count - 1, state.processSelectionIndex + dir));
+      render();
     }
   }
 

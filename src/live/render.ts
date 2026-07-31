@@ -48,6 +48,9 @@ function tableCacheParams(): string {
   return [
     state.sortMode,
     state.processFilter || '',
+    state.processSelectionIndex,
+    state.trackedPid || '',
+    state.inspectingProcess ? state.inspectingProcess.pid : '',
     limit,
     state.currentTheme,
     state.activePanel,
@@ -68,8 +71,7 @@ function graphsCacheParams(): string {
 
 function processRowBudget(): number {
   let overlayRows = 0;
-  if (state.inputMode === 'customizer') overlayRows = state.CUSTOMIZER_OPTIONS.length + 3;
-  else if (state.inputMode === 'signal') overlayRows = 6;
+  if (state.inputMode === 'signal') overlayRows = 6;
   else if (state.inputMode === 'filter' || state.inputMode === 'kill' || state.inputMode === 'p2p') overlayRows = 3;
 
   if (state.activePanel === 'process') {
@@ -203,8 +205,23 @@ function render() {
 
    const params = tableCacheParams();
    const anomalies = detectAnomalies(state.lastData, state.history);
+   if (anomalies.length > 0) {
+     for (const a of anomalies) {
+       const now = new Date();
+       const alertWithTime = { ...a, timestamp: now };
+       const exists = state.anomalyHistory.some(
+         h => h.metric === a.metric && Math.abs(h.zScore - a.zScore) < 0.1 && (now.getTime() - (h.timestamp?.getTime() || 0)) < 10000
+       );
+       if (!exists) {
+         state.anomalyHistory.unshift(alertWithTime);
+       }
+     }
+     if (state.anomalyHistory.length > 100) {
+       state.anomalyHistory.length = 100;
+     }
+   }
    const anomalyCacheKey = anomalies.map(a => `${a.metric}:${a.zScore.toFixed(2)}`).join(',');
-   const cacheParams = params + '|' + anomalyCacheKey;
+   const cacheParams = params + '|' + anomalyCacheKey + '|' + state.anomalyHistory.length;
     const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
       ? (() => {
           const out = formatTable(state.lastData, {
@@ -222,6 +239,9 @@ function render() {
             history: state.history,
             graphMode: state.graphMode,
             panelLayout: state.panelLayout,
+            selectedProcessIndex: state.processSelectionIndex,
+            trackedPid: state.trackedPid,
+            inspectProcess: state.inspectingProcess,
           });
           _cachedTableData = state.lastData;
           _cachedTableParams = cacheParams;
@@ -265,17 +285,26 @@ function render() {
   const targetBodyHeight = Math.max(1, state.termHeight - footerHeight);
 
   if (state.inputMode === 'customizer') {
-    const preOverlayCount = bodyLines.length;
-    const availableForOverlay = targetBodyHeight - preOverlayCount;
     const totalItems = state.CUSTOMIZER_OPTIONS.length;
-    const headerLines = 1;
-    const blankLines = availableForOverlay >= 2 ? 1 : 0;
-    const maxVisibleItems = Math.max(0, availableForOverlay - headerLines - blankLines);
+    const headerLines = 1;  // the "UI CUSTOMIZER" header
+    const blankLines = 1;   // blank separator line
+    // Reserve a fixed height for the customizer: show all items if they fit,
+    // otherwise guarantee at least 10 visible items (or half the screen).
+    const idealOverlayHeight = totalItems + headerLines + blankLines;
+    const minOverlayHeight = Math.min(10 + headerLines + blankLines, Math.floor(targetBodyHeight / 2));
+    const overlayHeight = Math.min(idealOverlayHeight, Math.max(minOverlayHeight, Math.floor(targetBodyHeight * 0.6)));
+    // Truncate table body to make room for the customizer overlay
+    const maxBodyForTable = Math.max(3, targetBodyHeight - overlayHeight);
+    if (bodyLines.length > maxBodyForTable) {
+      bodyLines.length = maxBodyForTable;
+    }
+    const availableForOverlay = targetBodyHeight - bodyLines.length;
+    const maxVisibleItems = Math.max(1, availableForOverlay - headerLines - blankLines);
     const scrollOffset = totalItems > maxVisibleItems
       ? Math.max(0, Math.min(state.customizerIndex, totalItems - maxVisibleItems))
       : 0;
 
-    if (blankLines > 0) bodyLines.push('');
+    bodyLines.push('');
     bodyLines.push(...renderCustomizerOverlay(scrollOffset, maxVisibleItems).split('\n'));
   } else if (state.inputMode === 'filter') {
     bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));

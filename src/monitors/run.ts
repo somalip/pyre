@@ -11,7 +11,7 @@ import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
 
-async function run(cmd: string, fallback: string = '', timeout = 5000): Promise<string> {
+async function run(cmd: string, fallback: string = '', timeout = 3000): Promise<string> {
   try {
     return (await execAsync(cmd, { encoding: 'utf8', timeout })).stdout.trim();
   } catch {

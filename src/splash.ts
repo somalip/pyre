@@ -198,6 +198,6 @@ export async function showSplash(config?: SplashConfig): Promise<void> {
     process.stdin.resume();
     process.stdin.on('data', onEnter);
 
-    setTimeout(onEnter, 5000);
+    setTimeout(onEnter, 1500);
   });
 }

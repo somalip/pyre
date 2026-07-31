@@ -20,6 +20,7 @@ import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerDat
 const SP_TTL_MS = 10_000;
 const NETSTAT_TTL_MS = 1000;
 let prevCpuTimes: { total: number; idle: number }[] | null = null;
+let prevCpuTotal = { total: 0, idle: 0, ts: 0 };
 const ROUTE_TTL_MS = 5_000;
 const SYSCTL_TTL_MS = 60_000;
 
@@ -236,7 +237,7 @@ export async function collectPower(): Promise<PowerData | null> {
     if (spGpuCache && now - spGpuCache.ts < SP_TTL_MS) {
       spRaw = spGpuCache.raw;
     } else {
-      spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null')).trim();
+      spRaw = (await run('system_profiler SPDisplaysDataType 2>/dev/null', '', 3000)).trim();
       spGpuCache = { raw: spRaw, ts: now };
     }
 
@@ -400,18 +401,36 @@ export async function collectCpu(): Promise<CpuData> {
     }
   }
 
+  if (frequency === 0) {
+    try {
+      const cpus = os.cpus();
+      if (cpus && cpus.length > 0 && cpus[0].speed) {
+        frequency = cpus[0].speed;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Use os.cpus() delta instead of the very slow `top -l 1 -n 0` which
+  // blocks for ~1-2s waiting for a sampling window. os.cpus() is instant.
   let usage = 0;
   try {
-    const top = (await run('top -l 1 -n 0')).trim();
-    // Real `top -l 1 -n 0` output is comma-separated and newline-terminated,
-    // e.g. "CPU usage: 5.26% user, 10.52% sys, 84.21% idle" — there is no
-    // semicolon anywhere on that line. The old regex required one to
-    // terminate the match, so it never matched and usage stayed at 0.
-    const cpuLine = top.match(/CPU usage:\s*[\d.]+%\s*user,\s*[\d.]+%\s*sys,\s*([\d.]+)%\s*idle/);
-    if (cpuLine) {
-      const idle = parseFloat(cpuLine[1]);
-      usage = Math.round(100 - idle);
+    const cpus = os.cpus();
+    let totalNow = 0;
+    let idleNow = 0;
+    for (const cpu of cpus) {
+      totalNow += cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq;
+      idleNow += cpu.times.idle;
     }
+    if (prevCpuTotal.ts > 0) {
+      const totalDelta = totalNow - prevCpuTotal.total;
+      const idleDelta = idleNow - prevCpuTotal.idle;
+      if (totalDelta > 0) {
+        usage = Math.round(((totalDelta - idleDelta) / totalDelta) * 100);
+      }
+    }
+    prevCpuTotal = { total: totalNow, idle: idleNow, ts: Date.now() };
   } catch {
     // ignore
   }
@@ -534,7 +553,7 @@ async function getDiskIoRates(): Promise<{ readBytesSec: number; writeBytesSec: 
     return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
   }
   try {
-    const raw = (await run('iostat -d -c 2 1 2', '')).trim();
+    const raw = (await run('iostat -d -c 2 1 2', '', 3000)).trim();
     const blocks = raw.split(/\n\s*\n/).filter(Boolean);
     const targetBlock = blocks.length > 1 ? blocks[1] : blocks[0];
     if (targetBlock) {
@@ -606,7 +625,7 @@ export async function collectBattery(): Promise<BatteryData | null> {
       if (spBatteryCache && now - spBatteryCache.ts < SP_TTL_MS) {
         battInfo = spBatteryCache.raw;
       } else {
-        battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null')).trim();
+        battInfo = (await run('system_profiler SPPowerDataType 2>/dev/null', '', 3000)).trim();
         spBatteryCache = { raw: battInfo, ts: now };
       }
 
@@ -821,7 +840,7 @@ export async function collectPackets(): Promise<PacketData | null> {
 
      let connections = 0;
      try {
-       const tcpConns = (await run('netstat -an | grep ESTABLISHED | wc -l', '0')).trim();
+       const tcpConns = (await run('netstat -an | grep ESTABLISHED | wc -l', '0', 2000)).trim();
        connections = parseInt(tcpConns) || 0;
      } catch {
        connections = 0;
@@ -830,7 +849,7 @@ export async function collectPackets(): Promise<PacketData | null> {
      let topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[] = [];
      let allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[] = [];
        try {
-          const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '')).trim();
+          const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '', 2000)).trim();
          const lsofLines = lsof.split('\n');
          topProcesses = lsofLines.map(line => {
            const parts = line.trim().split(/\s+/);

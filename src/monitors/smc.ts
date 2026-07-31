@@ -41,7 +41,8 @@ export async function getSmcMetrics(): Promise<SmcMetrics> {
     const pm = (
       await run(
         'sudo -n powermetrics --samplers smc,cpu_power -n 1 --format text 2>/dev/null',
-        ''
+        '',
+        2000
       )
     ).trim();
 
@@ -116,14 +117,10 @@ export async function getSmcMetrics(): Promise<SmcMetrics> {
 
   // 4. Smart load-based thermal estimation if hardware sensors return nothing
   if (result.temps['cpu_die'] === undefined) {
-    let loadUsage = 0;
-    try {
-      const top = await run('top -l 1 -n 0 2>/dev/null', '');
-      const m = top.match(/CPU usage:\s*[\d.]+\%\s*user,\s*[\d.]+\%\s*sys,\s*([\d.]+)\%\s*idle/);
-      if (m) loadUsage = Math.max(0, 100 - parseFloat(m[1]));
-    } catch {
-      // ignore
-    }
+    // Use os.loadavg() (instant) instead of the slow `top -l 1` (~1-2s)
+    const loadAvg = (await import('node:os')).loadavg();
+    const ncpus = (await import('node:os')).cpus().length || 1;
+    const loadUsage = Math.min(100, (loadAvg[0] / ncpus) * 100);
 
     const estCpu = Math.round((38 + (loadUsage * 0.42)) * 10) / 10;
     result.temps['cpu_die'] = estCpu;

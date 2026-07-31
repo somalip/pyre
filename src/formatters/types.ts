@@ -80,4 +80,10 @@ export interface TableOptions {
     graphMode?: 'spark' | 'bar';
     /** Panel layout order. */
     panelLayout?: string[];
+    /** Currently selected process index for highlight. */
+    selectedProcessIndex?: number;
+    /** Currently tracked PID. */
+    trackedPid?: number | null;
+    /** Currently inspected process details for modal overlay. */
+    inspectProcess?: any;
 }

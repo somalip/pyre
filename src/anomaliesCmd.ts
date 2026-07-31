@@ -20,7 +20,7 @@ export function runAnomaliesDigest(opts: AnomaliesCmdOptions = {}): void {
     return;
   }
 
-  const files = fs.readdirSync(dir).filter(f => f.startsWith('pyre-log-') && f.endsWith('.csv'));
+  const files = fs.readdirSync(dir).filter(f => f.startsWith('pyre-') && f.endsWith('.csv'));
   if (files.length === 0) {
     console.log(chalk.yellow(`  No CSV logs found for range '${sinceStr}' in ${dir}.`));
     console.log(chalk.dim('  Enable background logging with `pyre --log` to record history.\n'));
