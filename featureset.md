@@ -78,8 +78,6 @@ gap neither competitor has bothered with, or genuine new ground past both.
 Don't re-litigate this — `advanced.md` Section 2 already flags two `roadmap.md`
 checkboxes as thinner than they claim:
 
-- **P0-1**: `pyre fleet` is sequential SSH+`--once` polling, not a real concurrent
-  tiled dashboard, despite the roadmap checkbox.
 - **P0-2**: `src/anomalies.ts` has no digest/report command surface yet.
 
 Fix those first so this document isn't building differentiation on top of an
@@ -121,18 +119,6 @@ These are cheap ways to close that gap without touching architecture.
 
 Not macmon catch-up (that's Track M) — genuine new ground, using data pyre
 already half-collects.
-
-### P1. Per-process GPU/ANE attribution
-**Difficulty: M/L · Audience: [Power]**
-
-macmon's ANE/GPU power is system-wide only; btop doesn't attribute GPU load to
-processes either. Cross-reference `system_profiler SPDisplaysDataType`'s
-process count (already read in `collectGpu()`) with the process table to show
-which processes are actually driving GPU/ANE load — useful for "why is my fan
-spinning during this LLM run," and something neither competitor offers at all.
-
-**DoD:** at minimum flags which top-N processes are plausibly GPU/ML-heavy even
-if exact per-process wattage isn't obtainable from public APIs.
 
 ---
 

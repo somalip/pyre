@@ -163,4 +163,5 @@ export interface ProcessData {
    state: string;
    threads: number;
    runtime: number;
+   isGpuOrMlAttributed?: boolean;
 }
