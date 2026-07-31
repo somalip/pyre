@@ -511,15 +511,22 @@ Useful for:
 
 # 14. What btop Does NOT Do
 
-Compared to macOS Activity Monitor, btop does **not** provide:
+---
 
-* App energy impact scoring
-* Detailed GPU history graphs on all Macs
-* Network connection inspector
-* Application sandbox details
-* Launch agent management
-* System extension management
-* Full disk/file activity tracing
+# 15. Exclusive pyre Features (Not Available in btop)
+
+pyre provides Mac-native security, diagnostics, and ecosystem capabilities that btop structurally cannot offer:
+
+* **Security & Posture Audit** — Gatekeeper enforcement (`spctl`), System Integrity Protection (`csrutil`), XProtect definition update checks in `pyre doctor`, and System Extensions inspector (`pyre extensions`).
+* **Statistical Anomaly Digest** — `pyre anomalies --since <range>` analyzes historical CSV telemetry and highlights z-score metric spikes (+2.5σ/3.5σ).
+* **Mac Ecosystem Inspectors** — Homebrew health summary (`pyre brew`), Time Machine backup status (`pyre info`), and connected display resolution/type details (`pyre info`).
+* **Memory Pressure & Pressure Level** — Wired, compressed, purgeable memory, swapins/outs, and kernel VM pressure level (`Normal`, `Warning`, `Critical`).
+* **Micro-benchmarking Energy Estimator** — `pyre bench <cmd>` calculates Watt-seconds, total kWh energy consumption, and dollar cost estimation.
+* **Grafana Infrastructure Export** — Shipped `grafana/pyre-dashboard.json` dashboard template mapping pyre's metric schema.
+* **Atomic Config Profiles** — `pyre profile save/load/list` for rapid context switching (dev, gaming, monitoring).
+* **Kill Confirmation Guard Rails** — Hard confirmation safety check when attempting to terminate protected system PIDs (`launchd`, pyre PID, parent PID).
+* **Accessible Plain-Text Mode** — `--plain`/`--a11y` mode for screen reader compatibility and clean file logging without ANSI noise.
+* **P2P Live Data Streaming & Fleet** — Multi-Mac live streaming with password/TLS auth, HMAC signing, rate-limiting, and IP filtering.
 
 ---
 

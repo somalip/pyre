@@ -13,5 +13,6 @@
  */
 export { formatTable, clampWidth, gridColumns, thermalColor, capacityColor, getTabHitboxes, TAB_BAR_ROW, TAB_DEFS, panel, formatBytes, padVisible, visLen, fitVisible } from './render.js';
 export { formatJson, formatCsv, formatTsv, formatGraphs, formatHtml, formatMarkdown } from './output.js';
+export { getDashboardHtml } from './html_template.js';
 export type { ThemeName, ThemeColors, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 export { THEMES } from './themes.js';

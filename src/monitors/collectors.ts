@@ -466,6 +466,14 @@ export async function collectMemory(): Promise<MemoryData> {
   const wiredPages = getPageCount('wired down');
   const compressedPages = getPageCount('occupied by compressor');
 
+  const purgeablePages = getPageCount('purgeable');
+  const getStatCount = (label: string) => {
+    const m = vmStat.match(new RegExp(`${label}:\\s+(\\d+)\\.`));
+    return m ? parseInt(m[1]) : 0;
+  };
+  const swapIns = getStatCount('Swapins') || getStatCount('Pageins');
+  const swapOuts = getStatCount('Swapouts') || getStatCount('Pageouts');
+
   const free = freePages * pageSize;
   const used = (activePages + inactivePages + wiredPages + compressedPages) * pageSize;
   const usagePercent = totalBytes > 0 ? Math.round((used / totalBytes) * 100) : 0;
@@ -475,11 +483,6 @@ export async function collectMemory(): Promise<MemoryData> {
   let swapFree = 0;
   try {
     const swapRaw = (await run('sysctl -n vm.swapusage')).trim();
-    // Real output is "total = 3072.00M  used = 1497.75M  free = 1574.25M
-    // (encrypted)" — the parentheses wrap the trailing "(encrypted)" note,
-    // not the used value. The old regex required a literal "(" right before
-    // "used", which never appears, so this never matched and swap stayed at
-    // 0 forever instead of updating.
     const swapMatch = swapRaw.match(
       /total\s*=\s*([\d.]+)([KMGkmg])\s+used\s*=\s*([\d.]+)([KMGkmg])\s+free\s*=\s*([\d.]+)([KMGkmg])/
     );
@@ -492,6 +495,18 @@ export async function collectMemory(): Promise<MemoryData> {
     // ignore
   }
 
+  let pressureLevel = 'Normal';
+  try {
+    const pressVal = (await run('sysctl -n kern.memorystatus_vm_pressure_level')).trim();
+    const pressNum = parseInt(pressVal, 10);
+    if (pressNum === 2) pressureLevel = 'Warning';
+    else if (pressNum >= 4) pressureLevel = 'Critical';
+    else if (!isNaN(pressNum)) pressureLevel = 'Normal';
+    else pressureLevel = pressVal || 'Normal';
+  } catch {
+    pressureLevel = 'Normal';
+  }
+
   return {
     total: totalBytes,
     used,
@@ -501,6 +516,12 @@ export async function collectMemory(): Promise<MemoryData> {
     swapFree,
     pageSize,
     usagePercent,
+    wiredBytes: wiredPages * pageSize,
+    compressedBytes: compressedPages * pageSize,
+    purgeableBytes: purgeablePages * pageSize,
+    swapIns,
+    swapOuts,
+    pressureLevel,
   };
 }
 
@@ -855,7 +876,91 @@ export async function collectTasks(limit = 12): Promise<TaskData[]> {
           return { pid: parseInt(parts[1]), user: parts[2], cpu: parseFloat(parts[3]), mem: parseFloat(parts[4]), state: parts[5], runtime: runtimeSec, command: parts[7] };
        })
        .filter((t): t is TaskData => t !== null && t.pid > 0);
+   } catch {
+     return [];
+   }
+ }
+
+export interface DisplayInfo {
+  name: string;
+  resolution: string;
+  connectionType?: string;
+  isMain?: boolean;
+}
+
+export async function getDisplayInfo(): Promise<DisplayInfo[]> {
+  try {
+    const raw = await run('system_profiler SPDisplaysDataType 2>&1', '');
+    const displays: DisplayInfo[] = [];
+    const lines = raw.split('\n');
+    let currentName = '';
+    let currentRes = '';
+    let isMain = false;
+    let connType = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.endsWith(':') && !trimmed.startsWith('Chipset') && !trimmed.startsWith('Displays') && !trimmed.startsWith('Graphics')) {
+        if (currentName && currentRes) {
+          displays.push({ name: currentName, resolution: currentRes, isMain, connectionType: connType || undefined });
+          currentRes = '';
+          isMain = false;
+          connType = '';
+        }
+        currentName = trimmed.slice(0, -1);
+      } else if (trimmed.startsWith('Resolution:')) {
+        currentRes = trimmed.replace('Resolution:', '').trim();
+      } else if (trimmed.startsWith('Main Display: Yes')) {
+        isMain = true;
+      } else if (trimmed.startsWith('Connection Type:')) {
+        connType = trimmed.replace('Connection Type:', '').trim();
+      }
+    }
+    if (currentName && currentRes) {
+      displays.push({ name: currentName, resolution: currentRes, isMain, connectionType: connType || undefined });
+    }
+    return displays;
   } catch {
     return [];
+  }
+}
+
+export interface TimeMachineStatus {
+  configured: boolean;
+  running: boolean;
+  percent?: number;
+  latestBackup?: string;
+}
+
+export async function getTimeMachineStatus(): Promise<TimeMachineStatus> {
+  try {
+    const statusRaw = await run('tmutil status 2>&1', '');
+    if (statusRaw.includes('No Time Machine destination') || statusRaw.includes('not configured')) {
+      return { configured: false, running: false };
+    }
+
+    const running = statusRaw.includes('Running = 1;');
+    let percent: number | undefined = undefined;
+    const pctMatch = statusRaw.match(/Percent\s*=\s*"?(0\.\d+|\d+)"?/i);
+    if (pctMatch) {
+      percent = Math.round(parseFloat(pctMatch[1]) * 100);
+    }
+
+    let latestBackup = 'Unknown';
+    try {
+      const latestRaw = await run('tmutil latestbackup 2>&1', '');
+      if (latestRaw.trim() && !latestRaw.includes('error') && !latestRaw.includes('No backups')) {
+        const basename = latestRaw.trim().split('/').pop() || latestRaw.trim();
+        latestBackup = basename.replace('.previous', '').replace('.backup', '');
+      } else {
+        latestBackup = 'No backup found / Unmounted';
+      }
+    } catch {
+      latestBackup = 'Not mounted';
+    }
+
+    return { configured: true, running, percent, latestBackup };
+  } catch {
+    return { configured: false, running: false };
   }
 }

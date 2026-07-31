@@ -10,7 +10,7 @@
  * all layout-related code is co-located.
  */
 import chalk from 'chalk';
-import { sparkline, multiRowSparkline, brailleGraph } from '../sparkline.js';
+import { sparkline, multiRowSparkline, brailleGraph, multiRowBrailleGraph } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
@@ -730,7 +730,7 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
 
     const cpuHistory = opts.history?.cpuUsage || [];
     if (cpuHistory.length > 1) {
-      const graphRows = multiRowSparkline(cpuHistory, 3, { min: 0, max: 100 });
+      const graphRows = multiRowBrailleGraph(cpuHistory, 3, { min: 0, max: 100 });
       for (const gr of graphRows) {
         leftLines.push(theme.cpu(fitVisible(gr, leftW)));
       }

@@ -80,6 +80,12 @@ export interface MemoryData {
   swapFree: number;
   pageSize: number;
   usagePercent: number;
+  wiredBytes?: number;
+  compressedBytes?: number;
+  purgeableBytes?: number;
+  swapIns?: number;
+  swapOuts?: number;
+  pressureLevel?: string;
 }
 
 export interface ThermalData {

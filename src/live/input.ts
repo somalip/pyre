@@ -207,12 +207,24 @@ function handleInputModeKey(str: string, key: readline.Key) {
    }
  }
 
+let confirmKillPid: number | null = null;
+
 function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    const pid = parseInt(pidStr, 10);
    if (!pid || pid <= 0) {
      setStatus(`Invalid PID: ${pidStr}`);
      return;
    }
+
+   const isProtected = pid === 1 || pid === process.pid || pid === process.ppid;
+   if (isProtected && confirmKillPid !== pid) {
+     confirmKillPid = pid;
+     const name = pid === 1 ? 'launchd (system init)' : (pid === process.pid ? 'pyre itself' : 'parent process');
+     setStatus(`⚠️ PROTECTED PID ${pid} (${name})! Re-enter PID ${pid} to confirm termination.`, 8000);
+     return;
+   }
+
+   confirmKillPid = null;
    try {
      process.kill(pid, signal as NodeJS.Signals);
      setStatus(`Sent ${signal} to PID ${pid}`);

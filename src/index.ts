@@ -13,7 +13,7 @@ import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { collectAll } from './monitors/index.js';
-import { formatTable, formatJson, formatCsv, formatTsv, formatHtml, formatMarkdown, formatBytes } from './formatters/index.js';
+import { formatTable, formatJson, formatCsv, formatTsv, formatHtml, getDashboardHtml, formatMarkdown, formatBytes } from './formatters/index.js';
 import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
@@ -67,6 +67,9 @@ program
     .option('--p2p-deny <ips>', 'Comma-separated list of denied IPs')
     .option('--p2p-audit-log <dir>', 'Directory for P2P audit logs')
     .option('--p2p-hmac-key <key>', 'HMAC key for message signing (default: derived from password)')
+    .option('--since <range>', 'Time range for anomalies digest (e.g. 1d, 7d, yesterday)')
+    .option('--plain', 'Output in plain accessible text without ANSI colors or line-drawing characters')
+    .option('--a11y', 'Alias for --plain')
     .option('--webhook-url <url>', 'URL to POST to on alert')
     .option('--alert-cmd <cmd>', 'Command to execute on alert')
     .option('--port <port>', 'Port number for web server mode', '3000');
@@ -74,6 +77,10 @@ program
 program.parse(process.argv);
 
 const opts = program.opts();
+
+if (opts.plain || opts.a11y) {
+  chalk.level = 0;
+}
 
 function isExportMode() {
   return opts.json || opts.csv || opts.tsv || opts.html || opts.md;
@@ -145,6 +152,61 @@ async function runServerCommand(): Promise<void> {
 async function main() {
   const cmd = program.args[0];
 
+  if (cmd === 'anomalies') {
+    const { runAnomaliesDigest } = await import('./anomaliesCmd.js');
+    runAnomaliesDigest({ since: opts.since || '7d', dir: opts.exportDir });
+    return;
+  }
+
+  if (cmd === 'extensions') {
+    const { printExtensionsReport } = await import('./extensions.js');
+    await printExtensionsReport();
+    return;
+  }
+
+  if (cmd === 'brew') {
+    const { printBrewHealthReport } = await import('./brewHealth.js');
+    await printBrewHealthReport();
+    return;
+  }
+
+  if (cmd === 'update') {
+    const { printUpdateReport } = await import('./updateCheck.js');
+    await printUpdateReport(pkg.version);
+    return;
+  }
+
+  if (cmd === 'profile') {
+    const sub = program.args[1];
+    const name = program.args[2];
+    const { saveProfile, loadProfile, listProfiles } = await import('./state/config.js');
+    if (sub === 'save' && name) {
+      saveProfile(name);
+      console.log(chalk.green(`  ✔ Profile '${name}' saved successfully.`));
+    } else if (sub === 'load' && name) {
+      try {
+        loadProfile(name);
+        console.log(chalk.green(`  ✔ Profile '${name}' loaded successfully.`));
+      } catch (err: any) {
+        console.log(chalk.red(`  ✖ ${err.message}`));
+      }
+    } else if (sub === 'list') {
+      const profiles = listProfiles();
+      console.log(chalk.bold('\n  pyre Profiles:\n'));
+      if (profiles.length === 0) {
+        console.log(chalk.dim('  No saved profiles found. Save one with `pyre profile save <name>`.'));
+      } else {
+        for (const p of profiles) {
+          console.log(`  • ${p}`);
+        }
+      }
+      console.log();
+    } else {
+      console.log('Usage: pyre profile <save|load|list> [name]');
+    }
+    return;
+  }
+
   if (cmd === 'history') {
     const daysIdx = program.args.indexOf('--days');
     const days = daysIdx !== -1 ? parseInt(program.args[daysIdx + 1], 10) || 7 : 7;
@@ -175,6 +237,11 @@ async function main() {
 
   if (cmd === 'web') {
     await runWebCommand();
+    return;
+  }
+
+  if (cmd === 'ui') {
+    await runUiCommand();
     return;
   }
 
@@ -209,6 +276,25 @@ async function main() {
 
   if (cmd === 'xbar') {
     generateXbarPlugin();
+    return;
+  }
+
+  if (cmd === 'doctor') {
+    const { runDoctor, printDoctorReport } = await import('./doctor.js');
+    const checks = await runDoctor();
+    printDoctorReport(checks);
+    return;
+  }
+
+  if (cmd === 'info') {
+    await runInfoCommand();
+    return;
+  }
+
+  if (cmd === 'completions') {
+    const { printCompletions } = await import('./completions.js');
+    const shell = program.args[1] || 'zsh';
+    printCompletions(shell);
     return;
   }
 
@@ -492,8 +578,12 @@ async function runP2PConnect(): Promise<void> {
 
 async function runInfoCommand(): Promise<void> {
   const data = await collectAll({ detailed: true });
+  const { getDisplayInfo, getTimeMachineStatus } = await import('./monitors/collectors.js');
+  const displays = await getDisplayInfo();
+  const tmStatus = await getTimeMachineStatus();
+
   const lines: string[] = [];
-  lines.push(chalk.bold('  pyre info'));
+  lines.push(chalk.bold('  pyre info — Mac System Information'));
   lines.push('');
   lines.push(`  Hostname:  ${data.header.hostname}`);
   lines.push(`  OS:        ${data.header.os}`);
@@ -501,13 +591,34 @@ async function runInfoCommand(): Promise<void> {
   lines.push(`  CPU:       ${data.cpu.brand}`);
   lines.push(`  Cores:     ${data.cpu.physicalCores}/${data.cpu.cores} (phys/log)`);
   lines.push(`  Frequency: ${data.cpu.frequency} MHz`);
-  lines.push(`  Memory:    ${formatBytes(data.memory.total)}`);
+  lines.push(`  Memory:    ${formatBytes(data.memory.total)}${data.memory.pressureLevel ? ` (Pressure: ${data.memory.pressureLevel})` : ''}`);
+  if (data.memory.wiredBytes !== undefined && data.memory.compressedBytes !== undefined) {
+    lines.push(`             Wired: ${formatBytes(data.memory.wiredBytes)} | Compressed: ${formatBytes(data.memory.compressedBytes)}`);
+  }
   if (data.gpu) lines.push(`  GPU:       ${data.gpu.model} (${formatBytes(data.gpu.memory)})`);
   if (data.battery) {
     lines.push(`  Battery:   ${data.battery.level}% (${data.battery.state})`);
     lines.push(`  Health:    ${data.battery.health}`);
   }
   lines.push(`  Thermal:   ${data.thermal.state}`);
+
+  if (displays.length > 0) {
+    lines.push('');
+    lines.push(chalk.cyan.bold('  🖥 Displays:'));
+    for (const d of displays) {
+      lines.push(`    • ${d.name}: ${d.resolution}${d.isMain ? ' (Main)' : ''}${d.connectionType ? ` [${d.connectionType}]` : ''}`);
+    }
+  }
+
+  lines.push('');
+  lines.push(chalk.cyan.bold('  ⏱ Time Machine Backup:'));
+  if (!tmStatus.configured) {
+    lines.push('    • Not configured');
+  } else {
+    lines.push(`    • Status: ${tmStatus.running ? chalk.yellow(`Backup in progress (${tmStatus.percent || 0}%)`) : chalk.green('Idle')}`);
+    lines.push(`    • Latest Backup: ${tmStatus.latestBackup}`);
+  }
+
   console.log(lines.join('\n'));
 }
 
@@ -541,9 +652,9 @@ async function runSshCommand(host: string): Promise<void> {
   });
 }
 
-async function runWebCommand(): Promise<void> {
+async function runWebCommand(): Promise<number> {
   const http = await import('node:http');
-  const port = parseInt(opts.port || process.env.PORT || '3000', 10) || 3000;
+  const port = parseInt(opts.port || process.env.PORT || '3000', 10) || (opts.port === '0' ? 0 : 3000);
 
   const server = http.createServer(async (req, res) => {
     const url = req.url || '/';
@@ -585,17 +696,14 @@ async function runWebCommand(): Promise<void> {
     // 4. Static/Dynamic HTML live dashboard & API snapshot endpoints
     if (url === '/' || url === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
-      const data = await collectAll({ detailed: true });
-      const htmlContent = formatHtml(data);
-      res.end(htmlContent);
+      res.end(getDashboardHtml());
     } else if (url === '/setup') {
       res.writeHead(200, { 'Content-Type': 'text/html' });
       const indexPath = path.join(process.cwd(), 'index.html');
       if (fs.existsSync(indexPath)) {
         res.end(fs.readFileSync(indexPath, 'utf-8'));
       } else {
-        const data = await collectAll({ detailed: true });
-        res.end(formatHtml(data));
+        res.end(getDashboardHtml());
       }
     } else if (url === '/api' || url === '/api/stats' || url === '/data') {
       const data = await collectAll({ detailed: true });
@@ -625,20 +733,145 @@ async function runWebCommand(): Promise<void> {
 
   const ip = detectLocalIP() || 'localhost';
 
-  server.listen(port, '0.0.0.0', () => {
-    console.log(chalk.bold(`\n  pyre web server running on port ${port}`));
-    console.log(chalk.dim(`  Local URL:   http://localhost:${port}/`));
-    console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${port}/  (Accessible on same Wi-Fi / LAN)`));
-    console.log(chalk.dim(`  API:         http://${ip}:${port}/api`));
-    console.log(chalk.dim(`  SSE Stream:  http://${ip}:${port}/api/stream`));
-    console.log(chalk.yellow(`\n  Troubleshooting connection from phone/other devices:`));
-    console.log(chalk.dim(`  1. macOS Firewall: System Settings -> Network -> Firewall -> Allow incoming node/pyre connections`));
-    console.log(chalk.dim(`  2. Wi-Fi Router: Ensure "AP Isolation" / "Guest Mode" is OFF on your Wi-Fi router`));
-    console.log(chalk.dim(`  3. Verify phone is connected to the exact same Wi-Fi network\n`));
+  return new Promise((resolve) => {
+    server.listen(port, '0.0.0.0', () => {
+      const address = server.address();
+      const actualPort = typeof address === 'object' && address ? address.port : port;
+      
+      console.log(chalk.bold(`\n  pyre web server running on port ${actualPort}`));
+      console.log(chalk.dim(`  Local URL:   http://localhost:${actualPort}/`));
+      console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${actualPort}/  (Accessible on same Wi-Fi / LAN)`));
+      console.log(chalk.dim(`  API:         http://${ip}:${actualPort}/api`));
+      console.log(chalk.dim(`  SSE Stream:  http://${ip}:${actualPort}/api/stream`));
+      
+      resolve(actualPort);
+    });
+
+    process.once('SIGINT', () => {
+      server.close();
+      process.exit(0);
+    });
+  });
+}
+
+async function runUiCommand(): Promise<void> {
+  // Use a random ephemeral port to avoid collisions
+  opts.port = '0';
+  const port = await runWebCommand();
+  
+  const swiftScript = `
+import Cocoa
+import WebKit
+
+// WKWebView subclass that allows the window to be dragged from any pixel
+class DraggableWebView: WKWebView {
+    override var mouseDownCanMoveWindow: Bool { return true }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    var window: NSWindow!
+    var webView: DraggableWebView!
+    var dataTimer: Timer?
+    let serverPort = ${port}
+
+    func applicationDidFinishLaunching(_ n: Notification) {
+        // Window
+        let screen = NSScreen.main?.visibleFrame ?? NSRect(x:0, y:0, width:1280, height:800)
+        let W = min(1180.0, screen.width - 80)
+        let H = min(820.0, screen.height - 80)
+        let rect = NSRect(x: screen.minX + (screen.width - W) / 2,
+                          y: screen.minY + (screen.height - H) / 2,
+                          width: W, height: H)
+
+        window = NSWindow(contentRect: rect,
+                          styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                          backing: .buffered, defer: false)
+        window.title = "Pyre"
+        window.minSize = NSSize(width: 800, height: 600)
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = NSColor(white: 0, alpha: 1)
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+
+        // WebView
+        let cfg = WKWebViewConfiguration()
+        webView = DraggableWebView(frame: window.contentView!.bounds, configuration: cfg)
+        webView.autoresizingMask = [.width, .height]
+        webView.setValue(NSColor(white: 0, alpha: 1),
+                         forKey: "backgroundColor")
+
+        // Load the dashboard HTML from the local server
+        var req = URLRequest(url: URL(string: "http://localhost:\\(serverPort)/")!)
+        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        webView.load(req)
+
+        window.contentView?.addSubview(webView)
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Start native data timer (URLSession has full network access — no sandbox issues)
+        // We wait 1.5 s for the page to load, then start pushing data every 2 s.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.fetchAndPush()
+            self?.dataTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+                self?.fetchAndPush()
+            }
+        }
+    }
+
+    // URLSession fetch (runs in the main app process — not sandboxed like WebContent)
+    func fetchAndPush() {
+        guard let url = URL(string: "http://localhost:\\(serverPort)/api/stats") else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, err in
+            if let err = err {
+                print("Swift UI Fetch Error: \\(err)")
+                return
+            }
+            guard let data = data else {
+                print("Swift UI Fetch Error: No data")
+                return
+            }
+            let b64 = data.base64EncodedString()
+            let js = "if(window.__pyreUpdate){window.__pyreUpdate(decodeURIComponent(escape(atob('\\(b64)'))))}"
+            DispatchQueue.main.async {
+                self?.webView.evaluateJavaScript(js) { res, err in
+                    if let err = err {
+                        print("Swift UI JS Eval Error: \\(err)")
+                    }
+                }
+            }
+        }.resume()
+    }
+
+    func windowWillClose(_ n: Notification) {
+        dataTimer?.invalidate()
+        NSApplication.shared.terminate(self)
+    }
+    func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
+}
+
+let app = NSApplication.shared
+app.setActivationPolicy(.regular)
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+`;
+
+
+  const scriptPath = path.join(os.tmpdir(), 'pyre-ui.swift');
+  fs.writeFileSync(scriptPath, swiftScript);
+
+  const { spawn } = await import('node:child_process');
+  console.log(chalk.cyan(`\n  Launching native UI window...`));
+  const ui = spawn('swift', [scriptPath], { stdio: 'inherit' });
+  
+  ui.on('close', () => {
+    console.log(chalk.dim('UI window closed, shutting down server...'));
+    process.exit(0);
   });
 
   process.once('SIGINT', () => {
-    server.close();
+    ui.kill();
     process.exit(0);
   });
 }
@@ -650,11 +883,15 @@ async function runBenchCommand(benchCmd: string): Promise<void> {
 
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
   const stream = fs.createWriteStream(file, { flags: 'a' });
-  stream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state\n');
+  stream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state,power_watts\n');
 
   console.log(chalk.bold(`\n  pyre bench`));
   console.log(chalk.dim(`  Command: ${benchCmd}`));
   console.log(chalk.dim(`  Log: ${file}\n`));
+
+  const startTime = Date.now();
+  let accumulatedWattSeconds = 0;
+  let powerSamplesCount = 0;
 
   const child = spawn('sh', ['-c', benchCmd]);
   child.stdout.on('data', d => process.stdout.write(d));
@@ -668,23 +905,40 @@ async function runBenchCommand(benchCmd: string): Promise<void> {
       const rxPackets = data.network.rxPackets ?? 0;
       const txPackets = data.network.txPackets ?? 0;
       const connections = data.network.connections ?? 0;
-      stream.write(`${data.timestamp},${data.cpu.usage},${data.memory.usagePercent},${temp},${data.network.rxBytes},${data.network.txBytes},${rxPackets},${txPackets},${connections},${data.thermal.state}\n`);
+      const watts = data.power?.combinedWatts ?? data.power?.cpuWatts;
+      if (watts !== undefined && watts > 0) {
+        accumulatedWattSeconds += watts * interval;
+        powerSamplesCount++;
+      }
+      stream.write(`${data.timestamp},${data.cpu.usage},${data.memory.usagePercent},${temp},${data.network.rxBytes},${data.network.txBytes},${rxPackets},${txPackets},${connections},${data.thermal.state},${watts ?? ''}\n`);
     } catch {
       // skip bad tick
     }
   }, interval * 1000);
 
-  child.on('close', () => {
+  const printSummary = () => {
     clearInterval(handle);
     stream.end();
-    console.log(chalk.green(`\n  Bench complete. Log saved to ${file}`));
+    const durationSec = Math.max(0.1, (Date.now() - startTime) / 1000);
+    console.log(chalk.green(`\n  ✔ Bench complete (${durationSec.toFixed(2)}s). Log saved to ${file}`));
+
+    if (powerSamplesCount > 0 && accumulatedWattSeconds > 0) {
+      const kWh = accumulatedWattSeconds / (3600 * 1000);
+      const rate = config.electricityRateKwH ?? 0.15;
+      const cost = kWh * rate;
+      console.log(chalk.cyan(`  ⚡ Energy Consumption: ${kWh.toFixed(6)} kWh | Est. Cost: $${cost.toFixed(6)} (@ $${rate}/kWh)`));
+    }
+  };
+
+  child.on('close', () => {
+    printSummary();
     process.exit(0);
   });
 
   process.once('SIGINT', () => {
     clearInterval(handle);
     child.kill('SIGTERM');
-    stream.end();
+    printSummary();
     process.exit(0);
   });
 }

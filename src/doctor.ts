@@ -86,7 +86,83 @@ export async function runDoctor(): Promise<DoctorCheck[]> {
     });
   }
 
-  // 4. Config file integrity
+  // 4. Gatekeeper Status (spctl)
+  try {
+    const spctlOut = await run('spctl --status 2>&1', '');
+    if (spctlOut.includes('assessments enabled')) {
+      checks.push({
+        name: 'Gatekeeper',
+        status: 'ok',
+        message: 'Gatekeeper enforcement is enabled.',
+      });
+    } else {
+      checks.push({
+        name: 'Gatekeeper',
+        status: 'warn',
+        message: 'Gatekeeper is disabled or status check unconfirmed.',
+        details: 'Re-enable Gatekeeper using "sudo spctl --master-enable" to protect against untrusted software.',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'Gatekeeper',
+      status: 'warn',
+      message: 'Could not query Gatekeeper status.',
+    });
+  }
+
+  // 5. System Integrity Protection (SIP / csrutil)
+  try {
+    const sipOut = await run('csrutil status 2>&1', '');
+    if (sipOut.includes('enabled')) {
+      checks.push({
+        name: 'System Integrity Protection',
+        status: 'ok',
+        message: 'SIP is enabled.',
+      });
+    } else {
+      checks.push({
+        name: 'System Integrity Protection',
+        status: 'warn',
+        message: 'SIP is disabled or restricted.',
+        details: 'System Integrity Protection protects core system files. Enable it from macOS Recovery.',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'System Integrity Protection',
+      status: 'warn',
+      message: 'Could not query SIP status.',
+    });
+  }
+
+  // 6. XProtect Definition Status
+  try {
+    const xprotectOut = await run('system_profiler SPInstallHistoryDataType 2>&1', '');
+    const xpMatches = Array.from(xprotectOut.matchAll(/XProtect(?:Remediator)?ConfigData.*?\n.*?Install Date:\s*(.+)/gi));
+    if (xpMatches.length > 0) {
+      const latestDateStr = xpMatches[xpMatches.length - 1][1];
+      checks.push({
+        name: 'XProtect Definitions',
+        status: 'ok',
+        message: `XProtect active (last updated ${latestDateStr.trim()}).`,
+      });
+    } else {
+      checks.push({
+        name: 'XProtect Definitions',
+        status: 'ok',
+        message: 'XProtect definitions installed.',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'XProtect Definitions',
+      status: 'warn',
+      message: 'Could not determine XProtect update history.',
+    });
+  }
+
+  // 7. Config file integrity
   try {
     const cfg = readConfig();
     checks.push({

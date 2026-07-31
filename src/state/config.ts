@@ -26,14 +26,16 @@ export interface PyreConfig {
   graphMode?: string;
   showGraphs?: boolean;
   autoLog?: boolean;
-   mouseEnabled?: boolean;
+  mouseEnabled?: boolean;
   cpuAlertPct?: number;
   tempAlertC?: number;
+  electricityRateKwH?: number;
   notificationsEnabled?: boolean;
   p2pPort?: number;
   p2pPassword?: string;
   splashEnabled?: boolean;
   splashColorScheme?: string;
+  splashAnimation?: string;
   watchdogProcess?: string;
   watchdogCpu?: number;
   watchdogMem?: number;
@@ -69,6 +71,7 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   mouseEnabled: true,
   cpuAlertPct: 90,
   tempAlertC: 95,
+  electricityRateKwH: 0.15,
   watchdogProcess: '',
   watchdogCpu: 80,
   watchdogMem: 80,
@@ -120,6 +123,37 @@ export function writeConfig(config: Partial<PyreConfig>): void {
   }
 }
 
+const PROFILES_DIR = path.join(CONFIG_DIR, 'profiles');
+
+export function saveProfile(name: string): void {
+  if (!name || name.includes('/') || name.includes('\\')) {
+    throw new Error('Invalid profile name.');
+  }
+  if (!fs.existsSync(PROFILES_DIR)) {
+    fs.mkdirSync(PROFILES_DIR, { recursive: true });
+  }
+  const currentConfig = readConfig();
+  const profileFile = path.join(PROFILES_DIR, `${name}.json`);
+  fs.writeFileSync(profileFile, JSON.stringify(currentConfig, null, 2) + '\n');
+}
+
+export function loadProfile(name: string): void {
+  const profileFile = path.join(PROFILES_DIR, `${name}.json`);
+  if (!fs.existsSync(profileFile)) {
+    throw new Error(`Profile '${name}' does not exist.`);
+  }
+  const raw = fs.readFileSync(profileFile, 'utf-8');
+  const parsed = JSON.parse(raw);
+  // Atomic write to main config
+  writeConfig(parsed);
+}
+
+export function listProfiles(): string[] {
+  if (!fs.existsSync(PROFILES_DIR)) return [];
+  const files = fs.readdirSync(PROFILES_DIR);
+  return files.filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
+}
+
 function deepMerge(target: any, source: any): any {
   const result = { ...target };
   for (const key of Object.keys(source)) {
@@ -138,4 +172,4 @@ export function getConfigPath(): string {
   return CONFIG_FILE;
 }
 
-export { CONFIG_FILE };
+export { CONFIG_FILE, PROFILES_DIR };

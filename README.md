@@ -17,31 +17,35 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 - **Real-time system stats & per-core CPU** — CPU brand, cores, frequency, load, per-core utilization mini-bars, and overall usage
 - **GPU monitoring** — GPU model, VRAM, utilization, temperature, and process count (detailed mode)
 - **Power draw monitoring** — CPU watts, GPU watts, and combined power draw via SMC/ioreg
-- **Memory monitoring** — usage, swap, and total/available
+- **Memory monitoring & pressure** — usage, swap, wired, compressed, purgeable, swapins/outs, and kernel VM pressure level
 - **Disk I/O throughput & space** — read/write speed per volume and mounted volume space usage
 - **Battery & power health** — level, power source, condition, charge cycles, max capacity, health trends, estimated time to empty, discharge rate, power draw in watts
 - **Packet monitor** — network packet counts, packet rates, active TCP connections, top network processes
 - **Task list** — running tasks/applications sorted by CPU with PID, user, memory, state, and runtime
 - **Thermal state** — CPU temperature via `pmset` and `powermetrics` (sudo for detailed readings)
 - **Network** — RX/TX bytes and per-second rates
-- **Top processes & search-as-you-type** — live filtering, tree view, sorting by CPU/memory/PID, and process kill with signal picker
+- **Top processes & search-as-you-type** — live filtering, tree view, sorting by CPU/memory/PID, and process kill with protected PID confirmation guard
 - **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, configurable panel layout, and tab-based panel navigation
 - **Snapshot export** — JSON, CSV, TSV, HTML, or Markdown output formats
-- **Continuous CSV logging** — automatic per-tick data logging to timestamped files with log rotation
+- **Continuous CSV logging & Anomaly Digest** — automatic per-tick logging and statistical spike analysis (`pyre anomalies`)
 - **Visual themes & custom themes** — six built-in color themes plus user-defined JSON theme support in `~/.config/pyre/themes/`
-- **Persistent configuration** — save default themes, intervals, and thresholds in `~/.config/pyre/config.json`
+- **Persistent configuration & Profiles** — save themes and thresholds in `~/.config/pyre/config.json`, plus atomic profile management (`pyre profile`)
 - **Alert system & webhooks** — configurable threshold alerts with terminal bell, desktop notifications, webhook POST payload execution (`--webhook-url`), and custom shell command execution (`--alert-cmd`)
-- **System diagnostic tool (`pyre doctor`)** — check permissions, SMC access, network reachability, and configuration health
+- **System diagnostic tool (`pyre doctor`)** — check permissions, SMC access, Gatekeeper, SIP status, XProtect definitions, and P2P reachability
+- **Security & Ecosystem inspectors** — System Extensions inspector (`pyre extensions`), Homebrew health (`pyre brew`), and Time Machine backup status
+- **Accessible plain-text mode** — `--plain`/`--a11y` mode for screen readers and ANSI-free logging
+- **Grafana Integration** — ready-to-import Grafana dashboard template (`grafana/pyre-dashboard.json`)
 - **History & Snapshot Diff** — query historical CSV log trends (`pyre history`) and compare snapshot files side-by-side (`pyre diff`)
 - **Multi-host fleet dashboard** — stream and tile stats from multiple remote Macs (`pyre fleet`)
 - **Menu Bar & xbar integration** — generate menu bar plugin script (`pyre xbar`) for continuous background status display
 - **Graph mode toggle** — switch between sparkline and bar graph rendering in the live dashboard
 - **P2P dashboard panel** — monitor P2P server status and peer events directly from the live dashboard
 - **Temperature unit toggle** — switch between Celsius and Fahrenheit display in live mode
-- **Hardware overview** — `pyre info` prints a concise hardware summary
+- **Hardware & Displays overview** — `pyre info` prints hardware, connected displays, and Time Machine status
 - **Remote SSH monitoring** — `pyre ssh <host>` streams a remote Mac's live dashboard locally
 - **Web dashboard** — `pyre web` serves an auto-refreshing HTML dashboard with real-time SSE stream on a local port
-- **Micro-benchmarking** — `pyre bench <cmd>` logs resource usage during any command
+- **Micro-benchmarking & Energy Cost** — `pyre bench <cmd>` logs resource usage and estimates energy consumption/cost (kWh)
+- **Update checker** — `pyre update` checks npm registry for new pyre-cli releases
 
 ## Installation
 
@@ -63,17 +67,21 @@ curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
 pyre                           # Static snapshot, all system stats
 pyre --detailed                # Include sensor / powermetrics detail
 pyre --json                    # JSON output (also --csv, --tsv, --html, --md)
-pyre --html --out report.html  # Self-contained HTML report
+pyre --plain                   # Plain-text accessible output without ANSI noise
 
 pyre live                      # Interactive live dashboard
 pyre live --interval 3 --log   # Custom refresh interval + auto-logging
 pyre live --alert-cpu 80 --alert-temp 85 --temp-unit f
 
-pyre server                    # Print ready-to-paste P2P server/client commands for your LAN
-pyre info                      # Concise hardware overview
-pyre ssh build-server          # Stream remote Mac stats over SSH
-pyre web                       # Serve HTML dashboard on localhost
-pyre bench "make build"        # Log resources during a command
+pyre anomalies --since 7d      # Statistical resource spike digest from past CSV logs
+pyre doctor                    # System diagnostics (Gatekeeper, SIP, XProtect, powermetrics)
+pyre extensions                # System extensions inspector (systemextensionsctl)
+pyre brew                      # Homebrew health summary & cellar size
+pyre update                    # Check for pyre-cli updates
+pyre profile save dev          # Save active configuration profile
+pyre profile load dev          # Load configuration profile
+pyre info                      # Concise hardware, display & Time Machine overview
+pyre bench "make build"        # Benchmark command & estimate kWh energy cost
 ```
 
 ## Options Reference
@@ -87,7 +95,9 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `--md` | Output as Markdown |
 | `-c, --csv` | Output as CSV |
 | `-t, --tsv` | Output as TSV |
+| `--plain` / `--a11y` | Plain text output mode without ANSI colors or line-drawing characters |
 | `--detailed` | Include detailed system info and sensor readings |
+| `--since <range>` | Time range for anomaly digest (e.g. `1d`, `7d`, `yesterday`) |
 | `--theme <name>` | Theme for live mode (`default`, `dracula`, `cyberpunk`, `monochrome`, `nord`, `gruvbox`) |
 | `--interval <seconds>` | Refresh interval for live mode (default: `2`) |
 | `--once` | Show a single static snapshot instead of live feed |
@@ -115,7 +125,11 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `pyre --json` | JSON output |
 | `pyre --html` | Self-contained HTML report |
 | `pyre --md` | Markdown tables |
-| `pyre doctor` | Run system diagnostics (permissions, powermetrics access, P2P network check) |
+| `pyre doctor` | Run system diagnostics (permissions, Gatekeeper, SIP, XProtect, P2P network) |
+| `pyre extensions` | System Extensions inspector (`systemextensionsctl list`) |
+| `pyre brew` | Homebrew health panel (installed formulae, outdated count, Cellar disk size, doctor summary) |
+| `pyre update` | Check npm registry for latest `pyre-cli` release |
+| `pyre profile <save\|load\|list> [name]` | Atomic configuration profile management (`~/.config/pyre/profiles/`) |
 | `pyre config <show\|reset>` | View or reset persistent configuration file (`~/.config/pyre/config.json`) |
 | `pyre completions <zsh\|bash\|fish>` | Generate shell auto-completion scripts |
 
@@ -123,7 +137,8 @@ These options apply to both static snapshots and `pyre live`, except where noted
 
 | Command | Description |
 |---|---|
-| `pyre info` | Concise hardware summary (CPU, memory, GPU, battery, thermal) |
+| `pyre info` | Concise hardware summary (CPU, memory pressure, GPU, battery, displays, Time Machine) |
+| `pyre anomalies [--since N]` | Compute z-score anomalies and print plain-language resource spike digest |
 | `pyre history [--days N]` | Graph historical resource trends from CSV logs over past N days |
 | `pyre diff <file1.json> <file2.json>` | Compare two saved snapshot files side-by-side |
 
@@ -131,7 +146,7 @@ These options apply to both static snapshots and `pyre live`, except where noted
 
 | Command | Description |
 |---|---|
-| `pyre bench <cmd>` | Log CPU, memory, network, and thermal usage while running a command |
+| `pyre bench <cmd>` | Log CPU, memory, network, power draw, and estimate kWh energy cost during command execution |
 | `pyre xbar` | Generate an xbar / SwiftBar menu bar plugin script for stats display |
 
 ### Remote & Multi-host monitoring
@@ -425,11 +440,16 @@ timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_pa
 pyre/
 ├── src/
 │   ├── index.ts            # CLI entry point (commander definitions, main())
+│   ├── anomaliesCmd.ts     # Resource spike & anomaly digest generator
+│   ├── brewHealth.ts       # Homebrew health & cellar usage inspector
+│   ├── doctor.ts           # System diagnostics (permissions, Gatekeeper, SIP, XProtect)
+│   ├── extensions.ts       # System Extensions inspector (systemextensionsctl list)
+│   ├── updateCheck.ts      # Passive and on-demand npm registry version check
 │   ├── monitors/           # System metric collection (CPU, memory, disk, battery, thermal, network, packets, power, tasks)
 │   │   ├── index.ts        # Public API: collectAll, collectPower, collectPackets, collectTasks
 │   │   ├── types.ts        # TypeScript interfaces for all metric types
 │   │   ├── smc.ts          # SMC sensor reading with caching
-│   │   ├── collectors.ts   # Individual metric collectors and orchestrator
+│   │   ├── collectors.ts   # Individual metric collectors, displays, Time Machine, and orchestrator
 │   │   └── run.ts          # Shared shell-execution helper
 │   ├── formatters/         # Output formatting and rendering
 │   │   ├── index.ts        # Public API: formatTable, formatJson, formatCsv, formatTsv, formatGraphs
@@ -440,7 +460,7 @@ pyre/
 │   ├── live/               # Interactive live dashboard
 │   │   ├── index.ts        # Public API: startLive, stopLive
 │   │   ├── state.ts        # Shared mutable session state
-│   │   ├── input.ts        # Keypress handling and session lifecycle
+│   │   ├── input.ts        # Keypress handling, signal picker, protected PID kill guards
 │   │   ├── render.ts       # Screen rendering and alert checking
 │   │   ├── export.ts       # Snapshot export and CSV logging
 │   │   └── types.ts        # LiveOptions, ExportFormat, InputMode, SortMode
@@ -450,10 +470,13 @@ pyre/
 │   │   ├── protocol.ts     # Length-prefixed JSON message framing
 │   │   ├── server.ts       # TCP server: auth, TLS, rate limiting, IP filtering, audit logging, HMAC signing, data streaming
 │   │   └── client.ts       # TCP client that connects and displays live data
+│   ├── state/              # Config & profile state management
+│   │   └── config.ts       # Config file I/O & atomic profile save/load
 │   ├── history.ts          # Rolling history buffer for sparkline data
-│   ├── sparkline.ts        # ASCII sparkline rendering
+│   ├── sparkline.ts        # ASCII sparkline rendering & plain-text mode
 │   └── utils/              # Shared utility functions
 ├── dist/                   # Built output (esm)
+├── grafana/                # Grafana dashboard JSON template
 ├── pyre-exports/           # Default directory for snapshot exports and logs
 ├── Formula/                # Homebrew formula
 ├── install.sh              # curl installation script
