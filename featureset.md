@@ -106,16 +106,6 @@ glue code. Treat it as its own spike before committing to shipping it.
 on a clean test account with no sudoers entry; the existing powermetrics path
 stays as an automatic fallback for anything IOReport doesn't expose.
 
-### M3. ANE (Neural Engine) power draw
-**Difficulty: S once M1 lands · Audience: [Power]**
-
-Already flagged as B2 in `advanced.md`; listed here because macmon ships this
-**today** and pyre doesn't — this is catch-up, not hypothetical differentiation.
-Directly relevant to local-LLM/Core ML users, which is macmon's own stated
-motivation for existing in the first place.
-
-**DoD:** shows `0` gracefully instead of omitting the row where unsupported.
-
 ---
 
 ## 4. Tier 1 (XS–S) — quick wins for the simple/casual-user side

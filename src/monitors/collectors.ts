@@ -173,7 +173,7 @@ export async function collectPower(): Promise<PowerData | null> {
    try {
      const { power } = await getSmcMetrics();
      if (power.cpu !== undefined || power.gpu !== undefined || power.combined !== undefined) {
-       return { cpuWatts: power.cpu, gpuWatts: power.gpu, combinedWatts: power.combined };
+       return { cpuWatts: power.cpu, gpuWatts: power.gpu, aneWatts: 0, combinedWatts: power.combined };
      }
    } catch {
      // ignore

@@ -288,6 +288,7 @@ function gpuCard(data: StatsData, contentWidth: number): string[] | null {
    if (data.power) {
      if (data.power.cpuWatts !== undefined) lines.push(statRow('CPU', `${data.power.cpuWatts.toFixed(2)} W`));
      if (data.power.gpuWatts !== undefined) lines.push(statRow('GPU', `${data.power.gpuWatts.toFixed(2)} W`));
+     lines.push(statRow('ANE', `${(data.power.aneWatts ?? 0).toFixed(2)} W`));
      if (data.power.combinedWatts !== undefined) lines.push(statRow('Total', `${data.power.combinedWatts.toFixed(2)} W`));
    }
    if (data.battery?.powerWatts !== undefined && data.battery.powerWatts > 0) {

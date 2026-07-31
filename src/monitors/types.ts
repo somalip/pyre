@@ -34,6 +34,7 @@ export interface GpuData {
  export interface PowerData {
    cpuWatts?: number;
    gpuWatts?: number;
+   aneWatts?: number;
    combinedWatts?: number;
  }
 
