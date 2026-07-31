@@ -131,19 +131,6 @@ motivation for existing in the first place.
 
 **DoD:** shows `0` gracefully instead of omitting the row where unsupported.
 
-### M5. Prometheus `/metrics` endpoint
-**Difficulty: M · Audience: [Power]**
-
-Already flagged as D1 in `advanced.md`'s DevOps track — pulled forward here
-because macmon's `serve` subcommand ships this **today**, with a working
-Prometheus+Grafana example in its own repo as proof this is table stakes for
-the category now, not a nice-to-have. pyre already ships a Grafana dashboard
-JSON (`grafana/pyre-dashboard.json`) built for polling ingestion — a `/metrics`
-endpoint is a more natural fit for that file than the current SSE-only `pyre web`.
-
-**DoD:** `curl localhost:3000/metrics` returns valid Prometheus text-exposition
-format; the existing SSE dashboard route keeps working unchanged.
-
 ---
 
 ## 4. Tier 1 (XS–S) — quick wins for the simple/casual-user side
@@ -171,18 +158,6 @@ spinning during this LLM run," and something neither competitor offers at all.
 
 **DoD:** at minimum flags which top-N processes are plausibly GPU/ML-heavy even
 if exact per-process wattage isn't obtainable from public APIs.
-
-### P2. Historical avg/max annotations directly on live graphs
-**Difficulty: S/M · Audience: [Both]**
-
-macmon's historical charts show running average and max on the chart itself.
-pyre's `history.ts`/`sparkline.ts` already track a rolling buffer for the live
-session — surfacing "avg 34% · max 91%" next to each live graph (not only in
-the separate `pyre history` command) is a small addition with an immediate
-payoff for anyone glancing at the dashboard mid-session.
-
-**DoD:** labels update live with no noticeable render-loop slowdown; works for
-both sparkline and bar graph modes (`g`/`b` toggles).
 
 ### P3. Compact "widget" window mode for `pyre ui`
 **Difficulty: S · Audience: [Both]**

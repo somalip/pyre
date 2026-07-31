@@ -777,9 +777,15 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
     const rightW = contentWidth - leftW - 2;
 
     const leftLines: string[] = [];
-    leftLines.push(fitVisible(theme.cpu('CPU Usage History'), leftW));
-
     const cpuHistory = opts.history?.cpuUsage || [];
+    let historyLabel = 'CPU Usage History';
+    if (cpuHistory.length > 0) {
+      const avg = Math.round(cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length);
+      const max = Math.round(Math.max(...cpuHistory));
+      historyLabel += ` (avg ${avg}% · max ${max}%)`;
+    }
+    leftLines.push(fitVisible(theme.cpu(historyLabel), leftW));
+
     if (cpuHistory.length > 1) {
       const graphRows = multiRowBrailleGraph(cpuHistory, 3, { min: 0, max: 100 });
       for (const gr of graphRows) {
