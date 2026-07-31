@@ -85,6 +85,7 @@ pyre profile save dev          # Save active configuration profile
 pyre profile load dev          # Load configuration profile
 pyre info                      # Concise hardware, display & Time Machine overview
 pyre bench "make build"        # Benchmark command & estimate kWh energy cost
+pyre benchmark                 # Run a 1-minute CPU benchmark calculating digits of PI
 ```
 
 ## Options Reference
@@ -150,6 +151,7 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | Command | Description |
 |---|---|
 | `pyre bench <cmd>` | Log CPU, memory, network, power draw, and estimate kWh energy cost during command execution |
+| `pyre benchmark` | Run a 1-minute CPU benchmark calculating digits of PI and score the system |
 | `pyre xbar` | Generate an xbar / SwiftBar menu bar plugin script for stats display |
 
 ### Remote & Multi-host monitoring

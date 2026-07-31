@@ -82,6 +82,7 @@ Commands:
   ssh <host>                     Stream live stats from a remote Mac over SSH
   fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple Macs
   bench <cmd>                    Log CPU, memory, network, power draw, and estimate kWh cost
+  benchmark                      Run a 1-minute CPU benchmark calculating digits of PI
   anomalies                      Compute z-score anomalies and print plain-language digest
   doctor                         Run system diagnostics
   extensions                     System Extensions inspector
@@ -276,6 +277,12 @@ async function main() {
       process.exit(1);
     }
     await runBenchCommand(benchCmd);
+    return;
+  }
+
+  if (cmd === 'benchmark') {
+    const { runBenchmarkCommand } = await import('./benchmarkCmd.js');
+    await runBenchmarkCommand();
     return;
   }
 
