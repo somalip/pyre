@@ -240,6 +240,11 @@ function cpuCard(data: StatsData, contentWidth: number): string[] {
     gaugeRow('Usage', data.cpu.usage, contentWidth),
     statRow('Load', data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')),
   ];
+  if (data.cpu.clusters && data.cpu.clusters.length) {
+    for (const cl of data.cpu.clusters) {
+      lines.push(statRow(cl.name, `${cl.frequencyMhz} MHz · eff ${cl.effectiveUsagePercent}% · act ${cl.activeResidencyPercent}%`));
+    }
+  }
   if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
     const slotW = 2;
     const maxCores = Math.max(1, Math.floor((contentWidth - 10) / (slotW + 1)));

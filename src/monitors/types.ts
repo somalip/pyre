@@ -69,6 +69,13 @@ export interface CpuData {
   loadAvg: number[];
   temperature?: number;
   coreUsage?: number[];
+  clusters?: {
+    name: string;
+    cores: number;
+    frequencyMhz: number;
+    effectiveUsagePercent: number;
+    activeResidencyPercent: number;
+  }[];
 }
 
 export interface MemoryData {

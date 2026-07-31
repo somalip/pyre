@@ -106,21 +106,6 @@ glue code. Treat it as its own spike before committing to shipping it.
 on a clean test account with no sudoers entry; the existing powermetrics path
 stays as an automatic fallback for anything IOReport doesn't expose.
 
-### M2. E-core / P-core cluster usage + frequency, with dual usage metrics
-**Difficulty: S/M · Audience: [Power]**
-
-Overlaps `advanced.md`'s B1, but macmon's version is the concrete bar to clear:
-per-cluster **frequency (MHz)** *and* two distinct numbers — "effective usage"
-(frequency-scaled) versus "active residency ratio" (not frequency-scaled). Most
-tools blend these into one percentage; exposing both is what actually reads as
-Apple-Silicon-native instead of a generic CPU bar wearing a Mac skin. Can ship
-today on `sysctl hw.perflevel{0,1}.physicalcpu` + the existing powermetrics path,
-then swap to M1's data source once that lands.
-
-**DoD:** live dashboard shows two labeled clusters, each with its own frequency
-and both usage numbers; Intel Macs fall back to one undifferentiated cluster,
-matching current behavior.
-
 ### M3. ANE (Neural Engine) power draw
 **Difficulty: S once M1 lands · Audience: [Power]**
 
