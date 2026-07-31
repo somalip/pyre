@@ -86,4 +86,6 @@ export interface TableOptions {
     trackedPid?: number | null;
     /** Currently inspected process details for modal overlay. */
     inspectProcess?: any;
+    /** Minimal mode: renders only CPU, GPU, Memory, and Temperature as large glanceable gauges. */
+    minimal?: boolean;
 }

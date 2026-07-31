@@ -657,6 +657,18 @@ export async function collectBattery(): Promise<BatteryData | null> {
     if (cycles !== undefined) healthParts.push(`${cycles} cycles`);
     const health = healthParts.length ? healthParts.join(', ') : 'unknown';
 
+    let friendlySummary: string | undefined;
+    const condLower = (condition || '').toLowerCase();
+    if (condLower.includes('service') || condLower.includes('replace') || condLower.includes('check')) {
+      friendlySummary = 'Your battery has more wear than usual — consider a service appointment.';
+    } else if (cycles !== undefined && cycles > 1000) {
+      friendlySummary = 'Your battery cycle count is high — capacity may be reduced.';
+    } else if (maxCapacityPercent !== undefined && maxCapacityPercent < 80) {
+      friendlySummary = 'Your battery maximum capacity is below 80% — consider servicing.';
+    } else if (condition) {
+      friendlySummary = `Battery condition is ${condition.toLowerCase()}.`;
+    }
+
     const estimate = estimateBatteryLife(level, state);
 
     return {
@@ -668,6 +680,7 @@ export async function collectBattery(): Promise<BatteryData | null> {
       cycles,
       condition,
       maxCapacityPercent,
+      friendlySummary,
       ...estimate,
     };
   } catch {

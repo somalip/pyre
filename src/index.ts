@@ -53,6 +53,7 @@ program
     .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10')
     .option('--alert-cpu <pct>', 'CPU usage alert threshold (default: 90)', String(config.cpuAlertPct))
     .option('--alert-temp <c>', 'CPU temperature alert threshold in Celsius (default: 95)', String(config.tempAlertC))
+    .option('--minimal', 'Render minimal macmon-style glanceable view (CPU, GPU, Memory, Temp)')
     .option('--temp-unit <unit>', 'Temperature display unit: c or f (default: c)', 'c')
     .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)')
     .option('--p2p-port <port>', 'P2P port number', '9876')
@@ -70,13 +71,20 @@ program
     .option('--since <range>', 'Time range for anomalies digest (e.g. 1d, 7d, yesterday)')
     .option('--plain', 'Output in plain accessible text without ANSI colors or line-drawing characters')
     .option('--a11y', 'Alias for --plain')
-    .option('--webhook-url <url>', 'URL to POST to on alert')
-    .option('--alert-cmd <cmd>', 'Command to execute on alert')
+    .option('-d, --duration <seconds>', 'Duration in seconds for stress/bench commands', '30')
+    .option('--cores <n>', 'Number of worker threads for stress command')
+    .option('--exit-code', 'Exit non-zero if system health checks trigger alerts (for check command)')
+    .option('--no-wizard', 'Skip first-run interactive setup wizard')
+    .option('--install', 'Install pyre web as a background launchd agent')
+    .option('--uninstall', 'Uninstall pyre web launchd agent')
     .option('--port <port>', 'Port number for web server mode', '3000');
 
 program.addHelpText('after', `
 Commands:
   live                           Interactive live dashboard
+  check                          One-line plain-English health summary
+  pipe                           Continuous newline-delimited JSON stream for scripting
+  stress                         Synthetic CPU/GPU load generator
   ui                             Launch the native macOS UI dashboard
   web                            Serve an auto-refreshing live web portal
   ssh <host>                     Stream live stats from a remote Mac over SSH
@@ -175,7 +183,41 @@ async function runServerCommand(): Promise<void> {
 }
 
 async function main() {
+  const { runSetupWizardIfNeeded } = await import('./wizard.js');
+  await runSetupWizardIfNeeded(!opts.wizard);
+
   const cmd = program.args[0];
+
+  if (cmd === 'check') {
+    const { runCheckCommand } = await import('./checkCmd.js');
+    await runCheckCommand({
+      exitCode: !!opts.exitCode,
+      cpuAlertPct: config.cpuAlertPct,
+      tempAlertC: config.tempAlertC,
+      detailed: opts.detailed,
+    });
+    return;
+  }
+
+  if (cmd === 'pipe') {
+    const { runPipeCommand } = await import('./pipeCmd.js');
+    const intervalSec = parseFloat(opts.interval) || 1;
+    const samples = parseInt(opts.samples, 10) || 0;
+    await runPipeCommand({
+      intervalMs: intervalSec * 1000,
+      samples,
+      detailed: opts.detailed,
+    });
+    return;
+  }
+
+  if (cmd === 'stress') {
+    const { runStressCommand } = await import('./stressCmd.js');
+    const durationSec = parseFloat(opts.duration) || 30;
+    const cores = opts.cores ? parseInt(opts.cores, 10) : undefined;
+    await runStressCommand({ durationSec, cores });
+    return;
+  }
 
   if (cmd === 'anomalies') {
     const { runAnomaliesDigest } = await import('./anomaliesCmd.js');
@@ -261,6 +303,17 @@ async function main() {
   }
 
   if (cmd === 'web') {
+    if (opts.install) {
+      const { installLaunchdAgent } = await import('./service.js');
+      const port = parseInt(opts.port || '3000', 10) || 3000;
+      installLaunchdAgent(port);
+      return;
+    }
+    if (opts.uninstall) {
+      const { uninstallLaunchdAgent } = await import('./service.js');
+      uninstallLaunchdAgent();
+      return;
+    }
     await runWebCommand();
     return;
   }
@@ -400,7 +453,7 @@ async function main() {
   else if (opts.md) output = formatMarkdown(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, visible: { packets: opts.packets ? true : undefined } });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, minimal: !!opts.minimal, visible: { packets: opts.packets ? true : undefined } });
 
   console.log(output);
 
@@ -697,6 +750,15 @@ async function runWebCommand(): Promise<number> {
       return;
     }
 
+    // 2. Prometheus metrics exposition endpoint
+    if (url === '/metrics') {
+      const { formatPrometheusMetrics } = await import('./prometheus.js');
+      const data = await collectAll({ detailed: true });
+      res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+      res.end(formatPrometheusMetrics(data));
+      return;
+    }
+
     // 3. Real-time Server-Sent Events (SSE) stream endpoint
     if (url === '/api/stream') {
       res.writeHead(200, {
@@ -773,6 +835,7 @@ async function runWebCommand(): Promise<number> {
       console.log(chalk.dim(`  Local URL:   http://localhost:${actualPort}/`));
       console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${actualPort}/  (Accessible on same Wi-Fi / LAN)`));
       console.log(chalk.dim(`  API:         http://${ip}:${actualPort}/api`));
+      console.log(chalk.dim(`  Metrics:     http://${ip}:${actualPort}/metrics`));
       console.log(chalk.dim(`  SSE Stream:  http://${ip}:${actualPort}/api/stream`));
       
       resolve(actualPort);

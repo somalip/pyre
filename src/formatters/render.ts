@@ -184,17 +184,25 @@ function gaugeRow(label: string, percent: number, contentWidth: number): string 
   return `${chalk.dim(label.padEnd(labelW))}${color(str)}${chalk.dim('─'.repeat(empty))} ${pctText}`;
 }
 
+export function statusSymbol(level: 'ok' | 'warn' | 'crit'): string {
+  if (level === 'crit') return '✕ ';
+  if (level === 'warn') return '⚠ ';
+  return '✓ ';
+}
+
 export function thermalColor(pressureLevel: number) {
-  if (pressureLevel >= 3) return chalk.red;
-  if (pressureLevel === 2) return chalk.yellow;
-  if (pressureLevel === 1) return chalk.yellowBright;
-  return chalk.green;
+  const symbol = pressureLevel >= 3 ? '✕ ' : pressureLevel >= 1 ? '⚠ ' : '✓ ';
+  if (pressureLevel >= 3) return (s: string) => chalk.red(symbol + s);
+  if (pressureLevel === 2) return (s: string) => chalk.yellow(symbol + s);
+  if (pressureLevel === 1) return (s: string) => chalk.yellowBright(symbol + s);
+  return (s: string) => chalk.green(symbol + s);
 }
 
 export function capacityColor(percent: number) {
-  if (percent < 80) return chalk.red;
-  if (percent < 90) return chalk.yellow;
-  return chalk.green;
+  const symbol = percent < 80 ? '✕ ' : percent < 90 ? '⚠ ' : '✓ ';
+  if (percent < 80) return (s: string) => chalk.red(symbol + s);
+  if (percent < 90) return (s: string) => chalk.yellow(symbol + s);
+  return (s: string) => chalk.green(symbol + s);
 }
 
 export function formatBytes(bytes: number): string {
@@ -1004,6 +1012,23 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
 
   out.push(tabBar(activePanel, width, theme));
   out.push('');
+
+  if (opts.minimal) {
+    const contentWidth = width - 4;
+    const lines: string[] = [];
+    lines.push(gaugeRow('CPU', data.cpu.usage, contentWidth));
+    lines.push(gaugeRow('Memory', data.memory.usagePercent, contentWidth));
+    if (data.gpu) {
+      lines.push(gaugeRow('GPU', data.gpu.utilization, contentWidth));
+    }
+    const tempC = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die;
+    if (tempC !== undefined) {
+      const tempStr = formatTempUnit(tempC, opts.tempUnit);
+      lines.push(statRow('Temp', thermalColor(data.thermal.pressureLevel)(tempStr)));
+    }
+    out.push(...panel('macmon mode', lines, width, theme.cpu, theme.border));
+    return out.join('\n');
+  }
 
   if (activePanel !== 'grid') {
     const lines = activeDetailLines(data, activePanel, width, opts);

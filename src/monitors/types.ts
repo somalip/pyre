@@ -109,6 +109,7 @@ export interface BatteryData {
   estimatedTimeToEmpty?: string;
   dischargeRatePerHour?: number;
   powerWatts?: number;
+  friendlySummary?: string;
 }
 
 export interface DiskData {

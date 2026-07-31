@@ -131,18 +131,6 @@ motivation for existing in the first place.
 
 **DoD:** shows `0` gracefully instead of omitting the row where unsupported.
 
-### M4. `pyre pipe` — continuous newline-delimited JSON for scripting
-**Difficulty: XS/S · Audience: [Power]**
-
-pyre has one-shot `--json` snapshots but nothing that streams the way
-`macmon pipe | jq` does. Add `pyre pipe [--interval ms] [--samples n]`: write one
-JSON object per line at a fixed cadence, exit after `n` samples (`0` = forever).
-Trivial on top of the existing `collectAll()`/formatter pipeline, but it's the
-exact feature that makes pyre pipeable into other Unix tooling instead of only
-human-readable.
-
-**DoD:** `pyre pipe -i 500 -s 10 | jq` produces 10 valid JSON lines, no ANSI codes.
-
 ### M5. Prometheus `/metrics` endpoint
 **Difficulty: M · Audience: [Power]**
 
@@ -156,29 +144,6 @@ endpoint is a more natural fit for that file than the current SSE-only `pyre web
 **DoD:** `curl localhost:3000/metrics` returns valid Prometheus text-exposition
 format; the existing SSE dashboard route keeps working unchanged.
 
-### M6. `pyre web --install` — launchd auto-start
-**Difficulty: S · Audience: [Simple] (one flag, no plist-editing) and [Power] (matches `macmon serve --install`)**
-
-macmon installs itself as a launchd agent with one flag so metrics survive
-reboots without hand-writing a plist. pyre's closest equivalent today is the
-xbar plugin route, which requires xbar/SwiftBar already installed. Add
-`--install`/`--uninstall` to `pyre web` that write/remove
-`~/Library/LaunchAgents/com.pyre.web.plist`, restart-on-crash included.
-
-**DoD:** `pyre web --install` survives a reboot in a manual test; `--uninstall`
-fully removes the agent and stops the process.
-
-### M7. `pyre stress` — synthetic CPU/GPU load generator
-**Difficulty: XS/S · Audience: [Power]**
-
-macmon ships a `stress` subcommand purely so sensor readings can be sanity-checked
-against known load, without reaching for `yes > /dev/null` or a third-party tool.
-Cheap to build (N worker threads/processes doing busywork for a duration) and
-directly useful for testing pyre's own alert thresholds and in CI.
-
-**DoD:** `pyre stress --duration 30` visibly moves CPU usage in a concurrently
-running `pyre live` session; exits cleanly on timer or Ctrl+C.
-
 ---
 
 ## 4. Tier 1 (XS–S) — quick wins for the simple/casual-user side
@@ -187,82 +152,6 @@ Most of pyre's feature list (P2P, fleet, security inspectors) is power-user
 territory — a real strength, but it means someone who just wants "is my Mac
 okay?" wades through more surface area than macmon or even btop force on them.
 These are cheap ways to close that gap without touching architecture.
-
-### S1. `pyre check` — one-line plain-English health summary
-**Difficulty: XS/S · Audience: [Simple]**
-
-No AI, no network call (contrast with `advanced.md`'s opt-in G2 LLM explain
-command) — just rule-based sentences from data pyre already collects: *"CPU
-running cool at 42°C, 12% used. Battery at 87%, health good. 3.2 GB free on
-Macintosh HD."* This is the highest-value simple-user feature in this whole
-document: it directly answers "I don't want a dashboard, just tell me if
-something's wrong" — exactly the audience macmon's minimalism targets — and
-neither macmon nor btop offer natural-language output at all.
-
-**DoD:** runs in under a second, no flags required, always exits `0` (a status
-readout, not a health gate — see S2 for that).
-
-### S2. `pyre check --exit-code` — CI/script-friendly health gate
-**Difficulty: XS · Audience: [Power] (pairs with S1)**
-
-Same data as S1, but exits non-zero if any metric crosses its alert threshold —
-lets it double as a pre-flight check in shell scripts/CI ("don't start a build
-if the machine is already thermal-throttled").
-
-**DoD:** exit code reflects at minimum CPU%, temp, and disk-space thresholds;
-documented in `--help`.
-
-### S3. First-run setup wizard
-**Difficulty: S · Audience: [Simple]**
-
-`README.md` currently warns *"you can skip init with Enter, but you may
-encounter some UI bugs"* — a rough first impression for a non-power-user.
-Replace the ad-hoc init prompt with a short guided flow: pick a theme, decide
-on notifications, explain (don't require) the sudo/powermetrics tradeoff in one
-sentence — write the result straight to `~/.config/pyre/config.json` so it
-never asks again.
-
-**DoD:** a brand-new user with an empty config directory gets a coherent
-3-question flow instead of the current bug-prone Enter-to-skip path;
-`--no-wizard` / `PYRE_NO_WIZARD=1` skips it for scripting/CI.
-
-### S4. `--minimal` — a "macmon mode" view
-**Difficulty: S · Audience: [Simple]**
-
-One flag that renders just the big four macmon shows — CPU, GPU, memory,
-temperature — as large glanceable gauges, hiding process lists, packet
-monitors, and panel tabs entirely. This directly targets users who'd otherwise
-pick macmon specifically *because* pyre's full dashboard feels like too much —
-give them macmon's simplicity without giving up pyre to get it.
-
-**DoD:** `pyre live --minimal` renders in under a quarter of the terminal
-real-estate the full dashboard needs; keybindings not applicable in minimal
-mode are simply absent, not broken.
-
-### S5. Colorblind-safe default theme pass
-**Difficulty: XS · Audience: [Simple]**
-
-`monochrome` already exists, but it's opt-in and buried in the theme cycle.
-Audit the *default* theme's red/green alert coloring (a classic colorblind
-failure mode for exactly the "is something wrong" signal S1 exists to answer)
-and pair color with a shape/symbol (✓ / ⚠ / ✕) so state doesn't depend on hue
-alone.
-
-**DoD:** default theme's alert states are distinguishable in a grayscale
-screenshot, not only a colored one.
-
-### S6. Friendlier battery/thermal phrasing
-**Difficulty: XS · Audience: [Simple]**
-
-`BatteryData`'s `condition`/`health` fields already exist; today they likely
-surface whatever `system_profiler`'s raw string says. Map known raw values
-("Service Recommended", high cycle counts) to one plain sentence ("Your
-battery has more wear than usual — consider a service appointment") instead of
-macOS's exact spec terminology, which most non-power-users don't recognize.
-
-**DoD:** covers the 3–4 raw condition strings macOS actually emits; falls back
-to showing the raw string unmodified for anything unrecognized — never
-fabricate a diagnosis.
 
 ---
 
