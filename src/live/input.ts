@@ -10,7 +10,7 @@ import readline from 'node:readline';
 import chalk from 'chalk';
 import { collectAll, StatsData } from '../monitors/index.js';
 import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
-import { state, setStatus, getToggleKey, type SplashColorScheme, type SplashAnimation } from './state.js';
+import { state, setStatus, getToggleKey, type SplashColorScheme, type SplashAnimation, MENU_OPTIONS } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
 import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode, ActivePanel } from './types.js';
@@ -114,6 +114,70 @@ function handleInputModeKey(str: string, key: readline.Key) {
       render();
       return;
    }
+
+    if (state.inputMode === 'menu') {
+      if (isEscKey(key, str)) {
+        state.inputMode = null;
+        render();
+        return;
+      }
+      if (isUpKey(key, str)) {
+        state.menuSelectionIndex = (state.menuSelectionIndex - 1 + MENU_OPTIONS.length) % MENU_OPTIONS.length;
+        render();
+        return;
+      }
+      if (isDownKey(key, str)) {
+        state.menuSelectionIndex = (state.menuSelectionIndex + 1) % MENU_OPTIONS.length;
+        render();
+        return;
+      }
+      if (isEnterKey(key, str) || str === ' ') {
+        const option = MENU_OPTIONS[state.menuSelectionIndex];
+        switch (option) {
+          case 'Resume Dashboard':
+            state.inputMode = null;
+            break;
+          case 'Settings (Customizer)':
+            state.inputMode = 'customizer';
+            state.customizerIndex = 0;
+            break;
+          case 'Readme':
+            state.inputMode = 'readme';
+            break;
+          case 'Credits':
+            state.inputMode = 'credits';
+            break;
+          case 'Quit pyre':
+            process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+            process.exit(0);
+        }
+        render();
+        return;
+      }
+      render();
+      return;
+    }
+
+    if (state.inputMode === 'readme' || state.inputMode === 'credits') {
+      if (isEscKey(key, str) || isEnterKey(key, str)) {
+        state.inputMode = 'menu';
+        render();
+        return;
+      }
+      if (state.inputMode === 'readme') {
+        if (isUpKey(key, str)) {
+          state.readmeScrollOffset = Math.max(0, state.readmeScrollOffset - 1);
+          render();
+          return;
+        }
+        if (isDownKey(key, str)) {
+          state.readmeScrollOffset += 1;
+          render();
+          return;
+        }
+      }
+      return;
+    }
 
     if (state.inputMode === 'signal') {
       if (isUpKey(key, str)) {
@@ -626,9 +690,13 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
             state.trackedPid = null;
             setStatus('Stopped following process');
             render();
-          } else {
+          } else if (state.activePanel !== 'grid') {
             state.activePanel = 'grid';
             setStatus('Grid view');
+            render();
+          } else {
+            state.inputMode = 'menu';
+            state.menuSelectionIndex = 0;
             render();
           }
           break;

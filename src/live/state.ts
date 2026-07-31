@@ -19,6 +19,8 @@ import { type SplashColorScheme, type SplashAnimation } from '../splash.js';
 
 export { type SplashColorScheme, type SplashAnimation };
 
+export const MENU_OPTIONS = ['Resume Dashboard', 'Settings (Customizer)', 'Readme', 'Credits', 'Quit pyre'] as const;
+
 const config = readConfig();
 
 const state = {
@@ -130,6 +132,7 @@ const state = {
         splashEnabled: config.splashEnabled,
         splashColorScheme: config.splashColorScheme as SplashColorScheme,
         splashAnimation: config.splashAnimation as SplashAnimation,
+        readmeScrollOffset: 0,
     };
 
 function setStatus(msg: string, ms = 3000) {

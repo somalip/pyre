@@ -7,10 +7,13 @@
  * `state.ts`.
  */
 import { execFile, exec } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
-import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible } from '../formatters/index.js';
+import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible, visLen } from '../formatters/index.js';
 import { detectAnomalies } from '../anomalies.js';
-import { state, setStatus, SIGNAL_OPTIONS, getToggleKey } from './state.js';
+import { state, setStatus, SIGNAL_OPTIONS, getToggleKey, MENU_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
 
 function formatTempForUnit(c: number): string {
@@ -198,6 +201,19 @@ function render() {
     out.push(msg.padEnd(cols));
     while (out.length < rows) out.push('');
     writeFrame(out);
+    return;
+  }
+
+  if (state.inputMode === 'menu') {
+    writeFrame(renderSplashMenu(cols, rows));
+    return;
+  }
+  if (state.inputMode === 'readme') {
+    writeFrame(renderReadme(cols, rows));
+    return;
+  }
+  if (state.inputMode === 'credits') {
+    writeFrame(renderCredits(cols, rows));
     return;
   }
   const lines: string[] = [];
@@ -442,5 +458,110 @@ function checkAlerts(data: StatsData) {
      state.alerted = false;
    }
   }
+
+function renderSplashMenu(cols: number, rows: number): string[] {
+  const out: string[] = [];
+  const contentLines: string[] = [];
+  const logo = [
+    chalk.hex('#ff6004').bold('                ██████╗ ██╗   ██╗██████╗ ███████╗'),
+    chalk.hex('#ff8004').bold('                ██╔══██╗╚██╗ ██╔╝██╔══██╗██╔════╝'),
+    chalk.hex('#ffa004').bold('                ██████╔╝ ╚████╔╝ ██████╔╝█████╗  '),
+    chalk.hex('#ffc004').bold('                ██╔═══╝   ╚██╔╝  ██╔══██╗██╔══╝  '),
+    chalk.hex('#ffe004').bold('                ██║        ██║   ██║  ██║███████╗'),
+    chalk.hex('#ffff40').bold('                ╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝')
+  ];
+
+  const menuTop = Math.max(0, Math.floor(rows / 2) - 8);
+  for (let i = 0; i < menuTop; i++) out.push('');
+
+  const strip = (s: string) => s.replace(/^(\x1b\[[0-9;]*m)+( +)/, '$1');
+  for (const line of logo) contentLines.push(strip(line));
+  contentLines.push('');
+  contentLines.push(strip(chalk.dim('                  system monitor v9.0.0')));
+  contentLines.push('');
+  contentLines.push('');
+
+  for (let i = 0; i < MENU_OPTIONS.length; i++) {
+    const isSelected = i === state.menuSelectionIndex;
+    const opt = MENU_OPTIONS[i];
+    const prefix = isSelected ? chalk.cyan.bold('  ▶ ') : '    ';
+    const text = isSelected ? chalk.bgCyan.black(` ${opt} `) : chalk.dim(` ${opt} `);
+    contentLines.push(prefix + text);
+  }
+
+  contentLines.push('');
+  contentLines.push('');
+  contentLines.push(strip(chalk.dim('             Use ↑/↓ to navigate, Enter to select')));
+
+  while (contentLines.length < rows) contentLines.push('');
+  const maxWidth = Math.max(...contentLines.map(visLen));
+  const padding = Math.max(0, Math.floor((cols - maxWidth) / 2));
+  const padStr = ' '.repeat(padding);
+  for (const line of contentLines) out.push(padStr + fitVisible(line, cols));
+  return out;
+}
+
+let cachedReadmeLines: string[] | null = null;
+
+function getReadmeLines(): string[] {
+  if (cachedReadmeLines) return cachedReadmeLines;
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const rootDir = path.resolve(__dirname, '..', '..');
+    const readmePath = path.join(rootDir, 'README.md');
+    const content = fs.readFileSync(readmePath, 'utf8');
+    cachedReadmeLines = content.split('\n');
+    return cachedReadmeLines;
+  } catch (err) {
+    return [chalk.red('Failed to load README.md')];
+  }
+}
+
+function renderReadme(cols: number, rows: number): string[] {
+  const lines = getReadmeLines();
+  const availableLines = Math.max(1, rows - 2); // Body height of the panel
+  
+  const startIdx = Math.min(state.readmeScrollOffset, Math.max(0, lines.length - availableLines));
+  state.readmeScrollOffset = startIdx; // Clamp the state value
+  
+  const content = lines.slice(startIdx, startIdx + availableLines).map(l => {
+    let out = l;
+    if (out.startsWith('#')) {
+       out = chalk.cyan.bold(out);
+    } else if (out.startsWith('```')) {
+       out = chalk.dim(out);
+    } else if (out.startsWith('- ') || out.startsWith('* ')) {
+       out = '  ' + chalk.yellow(out.substring(0, 2)) + out.substring(2);
+    }
+    return out;
+  });
+
+  const out: string[] = [];
+  const pct = Math.round((startIdx / Math.max(1, lines.length - availableLines)) * 100);
+  const title = lines.length > availableLines 
+    ? `README (${pct}%)` 
+    : 'README';
+  out.push(...panel(title, content, cols, chalk.cyan, chalk.dim, availableLines));
+  return out;
+}
+
+function renderCredits(cols: number, rows: number): string[] {
+  const out: string[] = [];
+  const content = [
+    chalk.bold.hex('#ff6004')('Pyre - The Terminal System Monitor'),
+    '',
+    'Created with ❤️  using Node.js',
+    '',
+    chalk.cyan('Libraries used:'),
+    '  - chalk       (Terminal styling)',
+    '  - systeminformation (System metrics)',
+    '',
+    chalk.dim('Press Esc or Enter to return to menu.')
+  ];
+
+  out.push(...panel('CREDITS', content, cols, chalk.magenta, chalk.dim, rows - 2));
+  return out;
+}
 
 export { render, footerLine, renderCustomizerOverlay, checkAlerts, processRowBudget, invalidateTableCache, invalidateFrame };

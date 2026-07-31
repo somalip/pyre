@@ -685,13 +685,39 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
         : data.processes;
       const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
       let selectedIdx = opts.selectedProcessIndex ?? -1;
-      if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+      const isTracking = opts.trackedPid !== undefined && opts.trackedPid !== null;
+      if (isTracking) {
         const trackedIdx = sorted.findIndex(p => p.pid === opts.trackedPid);
         if (trackedIdx >= 0) {
           selectedIdx = trackedIdx;
         }
       }
-      const availableRows = opts.processLimit || sorted.length;
+
+      // Build tracking info header lines if we're following a process
+      const trackingLines: string[] = [];
+      if (isTracking) {
+        const tp = sorted.find(p => p.pid === opts.trackedPid);
+        if (tp) {
+          const cpuColor = tp.cpu > 50 ? chalk.red.bold : tp.cpu > 20 ? chalk.yellow : chalk.green;
+          const memColor = tp.mem > 50 ? chalk.red.bold : tp.mem > 20 ? chalk.yellow : chalk.green;
+          trackingLines.push(chalk.bgHex('#1a1a2e').hex('#e94560').bold(` ◉ FOLLOWING PID ${tp.pid} — ${truncatePlain(tp.command, Math.max(10, contentWidth - 30))} `));
+          trackingLines.push(
+            `  ${chalk.bold('CPU:')} ${cpuColor(tp.cpu.toFixed(1) + '%')}   ` +
+            `${chalk.bold('MEM:')} ${memColor(tp.mem.toFixed(1) + '%')}   ` +
+            `${chalk.bold('State:')} ${chalk.dim(tp.state)}   ` +
+            `${chalk.bold('Threads:')} ${tp.threads}   ` +
+            `${chalk.bold('Runtime:')} ${formatRuntime(tp.runtime)}   ` +
+            `${chalk.bold('User:')} ${tp.user}`
+          );
+          trackingLines.push(chalk.dim(`  Full: ${tp.command}`));
+          trackingLines.push(theme.border('─'.repeat(contentWidth)));
+        } else {
+          trackingLines.push(chalk.yellow(` ◉ PID ${opts.trackedPid} exited — no longer in process list`));
+          trackingLines.push(theme.border('─'.repeat(contentWidth)));
+        }
+      }
+
+      const availableRows = Math.max(1, (opts.processLimit || sorted.length) - trackingLines.length);
       let offset = 0;
       if (selectedIdx >= 0) {
         if (selectedIdx >= availableRows) {
@@ -700,9 +726,9 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       }
       const visible = sorted.slice(offset, offset + availableRows);
       if (opts.treeView) {
-        return buildProcessTree(visible);
+        return [...trackingLines, ...buildProcessTree(visible)];
       }
-      return processTableLines(visible, width - 4, theme.border, selectedIdx - offset);
+      return [...trackingLines, ...processTableLines(visible, width - 4, theme.border, selectedIdx - offset)];
     }
     case 'anomalies': {
       if (!opts.anomalyHistory || opts.anomalyHistory.length === 0) return ['No anomalies detected yet.'];
@@ -871,10 +897,35 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
 
   const headerRowOverhead = 2; // top & bottom border
   const tableHeaderOverhead = 2; // header + separator line
-  const availableRows = Math.max(1, targetHeight - headerRowOverhead - tableHeaderOverhead);
+
+  const isTracking = opts.trackedPid !== undefined && opts.trackedPid !== null;
+
+  // Build compact tracking info lines
+  const trackingLines: string[] = [];
+  if (isTracking) {
+    const tp = sorted.find(p => p.pid === opts.trackedPid);
+    if (tp) {
+      const cpuColor = tp.cpu > 50 ? chalk.red.bold : tp.cpu > 20 ? chalk.yellow : chalk.green;
+      const memColor = tp.mem > 50 ? chalk.red.bold : tp.mem > 20 ? chalk.yellow : chalk.green;
+      trackingLines.push(chalk.bgHex('#1a1a2e').hex('#e94560').bold(` ◉ PID ${tp.pid} ${truncatePlain(tp.command, Math.max(6, contentWidth - 20))} `));
+      trackingLines.push(
+        ` ${cpuColor('CPU ' + tp.cpu.toFixed(1) + '%')} ` +
+        `${memColor('MEM ' + tp.mem.toFixed(1) + '%')} ` +
+        `${chalk.dim(tp.state)} ` +
+        `THR:${tp.threads} ` +
+        `${formatRuntime(tp.runtime)}`
+      );
+      trackingLines.push(theme.border('─'.repeat(contentWidth)));
+    } else {
+      trackingLines.push(chalk.yellow(` ◉ PID ${opts.trackedPid} exited`));
+      trackingLines.push(theme.border('─'.repeat(contentWidth)));
+    }
+  }
+
+  const availableRows = Math.max(1, targetHeight - headerRowOverhead - tableHeaderOverhead - trackingLines.length);
 
   let selectedIdx = opts.selectedProcessIndex ?? -1;
-  if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+  if (isTracking) {
     const trackedIdx = sorted.findIndex(p => p.pid === opts.trackedPid);
     if (trackedIdx >= 0) {
       selectedIdx = trackedIdx;
@@ -903,8 +954,9 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
 
   if (opts.treeView) {
     const treeLines = buildProcessTree(visible);
-    const rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · sort: ${opts.sortBy || 'cpu'}`;
-    return panel('P proc', [head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, targetHeight - 2, rightTitle);
+    let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · sort: ${opts.sortBy || 'cpu'}`;
+    if (isTracking) rightTitle += ` · following PID ${opts.trackedPid}`;
+    return panel('P proc', [...trackingLines, head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, targetHeight - 2, rightTitle);
   }
 
   const rows = visible.map((p, idx) => {
@@ -921,13 +973,13 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     return isSelected ? chalk.bgCyan.black(line) : line;
   });
 
-  const lines = [head, theme.border('─'.repeat(contentWidth)), ...rows];
+  const lines = [...trackingLines, head, theme.border('─'.repeat(contentWidth)), ...rows];
   if (rows.length === 0) {
     lines.push(chalk.dim(`No processes match "${opts.filter || ''}"`));
   }
 
   let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `sort: ${opts.sortBy || 'cpu'}`;
-  if (opts.trackedPid !== undefined && opts.trackedPid !== null) {
+  if (isTracking) {
     rightTitle += ` · following PID ${opts.trackedPid}`;
   }
   return panel('P proc', lines, width, theme.process, theme.border, targetHeight - 2, rightTitle);
@@ -982,19 +1034,7 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     }
   }
 
-  if (opts.inspectProcess) {
-    const p = opts.inspectProcess;
-    const modalLines: string[] = [
-      `${chalk.bold('PID:')} ${p.pid}   ${chalk.bold('PPID:')} ${p.ppid}   ${chalk.bold('USER:')} ${p.user}`,
-      `${chalk.bold('CPU Usage:')} ${p.cpu.toFixed(1)}%   ${chalk.bold('Memory Usage:')} ${p.mem.toFixed(1)}%`,
-      `${chalk.bold('State:')} ${p.state}   ${chalk.bold('Threads:')} ${p.threads}   ${chalk.bold('Runtime:')} ${formatRuntime(p.runtime)}`,
-      `${chalk.bold('Command:')} ${p.command}`,
-      '',
-      chalk.dim('Press Esc or Enter to close process details modal.')
-    ];
-    out.push('');
-    out.push(...panel(`PROCESS DETAILS · PID ${p.pid}`, modalLines, width, theme.process, theme.border));
-  }
+  // Inspect process modal has been replaced by inline tracking headers
 
   return out.join('\n');
 }

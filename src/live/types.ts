@@ -20,7 +20,7 @@ export interface LiveOptions {
 
 export type ExportFormat = 'json' | 'csv' | 'tsv' | 'html' | 'md';
 
-type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer' | 'p2p';
+type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer' | 'p2p' | 'menu' | 'readme' | 'credits';
 
 type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
 
