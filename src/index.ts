@@ -54,6 +54,8 @@ program
     .option('--alert-cpu <pct>', 'CPU usage alert threshold (default: 90)', String(config.cpuAlertPct))
     .option('--alert-temp <c>', 'CPU temperature alert threshold in Celsius (default: 95)', String(config.tempAlertC))
     .option('--minimal', 'Render minimal macmon-style glanceable view (CPU, GPU, Memory, Temp)')
+    .option('--compact', 'Launch pyre ui in compact widget mode')
+    .option('--ontop', 'Keep pyre ui window always on top')
     .option('--temp-unit <unit>', 'Temperature display unit: c or f (default: c)', 'c')
     .option('--p2p-host <host>', 'P2P host address (server: bind address, client: server address)')
     .option('--p2p-port <port>', 'P2P port number', '9876')
@@ -870,9 +872,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationDidFinishLaunching(_ n: Notification) {
         // Window
+        let isCompact = ${!!opts.compact}
+        let isAlwaysOnTop = ${!!opts.ontop}
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x:0, y:0, width:1280, height:800)
-        let W = min(1180.0, screen.width - 80)
-        let H = min(820.0, screen.height - 80)
+        let W = isCompact ? 420.0 : min(1180.0, screen.width - 80)
+        let H = isCompact ? 280.0 : min(820.0, screen.height - 80)
         let rect = NSRect(x: screen.minX + (screen.width - W) / 2,
                           y: screen.minY + (screen.height - H) / 2,
                           width: W, height: H)
@@ -880,8 +884,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: rect,
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = "Pyre"
-        window.minSize = NSSize(width: 800, height: 600)
+        window.title = isCompact ? "Pyre Widget" : "Pyre"
+        window.minSize = isCompact ? NSSize(width: 320, height: 200) : NSSize(width: 800, height: 600)
+        if isAlwaysOnTop {
+            window.level = .floating
+        }
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = NSColor(white: 0, alpha: 1)
         window.isReleasedWhenClosed = false

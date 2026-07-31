@@ -159,17 +159,6 @@ spinning during this LLM run," and something neither competitor offers at all.
 **DoD:** at minimum flags which top-N processes are plausibly GPU/ML-heavy even
 if exact per-process wattage isn't obtainable from public APIs.
 
-### P3. Compact "widget" window mode for `pyre ui`
-**Difficulty: S · Audience: [Both]**
-
-macmon supports a small persistent window; `test_ui.swift`/`pyre ui` already
-wraps the web dashboard in a native `NSWindow` — add a compact size preset plus
-an "always on top" toggle so it can sit in a screen corner like a widget,
-reusing S4's `--minimal` panel set as its default content.
-
-**DoD:** compact mode persists window position/size across relaunches (a small
-state file next to the config, no new dependency).
-
 ---
 
 ## 6. Tier 3 and beyond
