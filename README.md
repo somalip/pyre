@@ -73,6 +73,9 @@ pyre live                      # Interactive live dashboard
 pyre live --interval 3 --log   # Custom refresh interval + auto-logging
 pyre live --alert-cpu 80 --alert-temp 85 --temp-unit f
 
+pyre ui                        # Launch native macOS UI dashboard
+pyre web                       # Serve auto-refreshing live web portal on localhost
+
 pyre anomalies --since 7d      # Statistical resource spike digest from past CSV logs
 pyre doctor                    # System diagnostics (Gatekeeper, SIP, XProtect, powermetrics)
 pyre extensions                # System extensions inspector (systemextensionsctl)
@@ -162,11 +165,12 @@ These options apply to both static snapshots and `pyre live`, except where noted
 |---|---|
 | `pyre live` | Start the interactive live dashboard |
 
-### Web dashboard
+### Web & Native dashboards
 
 | Command | Description |
 |---|---|
 | `pyre web` | Serve an auto-refreshing live web portal with real-time SSE stats streaming on localhost (`--port <port>`) |
+| `pyre ui` | Launch the native macOS UI dashboard (wraps the web portal in a native window) |
 
 ### P2P
 

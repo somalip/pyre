@@ -74,6 +74,30 @@ program
     .option('--alert-cmd <cmd>', 'Command to execute on alert')
     .option('--port <port>', 'Port number for web server mode', '3000');
 
+program.addHelpText('after', \`
+Commands:
+  live                           Interactive live dashboard
+  ui                             Launch the native macOS UI dashboard
+  web                            Serve an auto-refreshing live web portal
+  ssh <host>                     Stream live stats from a remote Mac over SSH
+  fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple Macs
+  bench <cmd>                    Log CPU, memory, network, power draw, and estimate kWh cost
+  anomalies                      Compute z-score anomalies and print plain-language digest
+  doctor                         Run system diagnostics
+  extensions                     System Extensions inspector
+  brew                           Homebrew health panel
+  update                         Check for pyre-cli updates
+  profile <save|load|list>       Atomic configuration profile management
+  config <show|reset>            View or reset persistent configuration file
+  history                        Graph historical resource trends from CSV logs
+  diff <file1> <file2>           Compare two saved snapshot files side-by-side
+  info                           Concise hardware summary
+  completions <shell>            Generate shell auto-completion scripts
+  xbar                           Generate an xbar / SwiftBar menu bar plugin script
+  p2p <server|connect>           Start a P2P server or connect to one
+  server                         Print commands for starting P2P server/client
+\`);
+
 program.parse(process.argv);
 
 const opts = program.opts();
