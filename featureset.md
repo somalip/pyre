@@ -1,143 +1,29 @@
-# pyre — Next Features: Beating macmon & btop (v10 planning doc)
+# Pyre Feature Ideas Brainstorming
 
-**Audience:** a coding agent picking up this repo cold, handed only this file.
-**Goal:** close the one real competitive gap pyre still has (macmon's sudoless,
-Apple-Silicon-native depth), while also giving the "I just want to know if my
-Mac is okay" crowd something simpler than the current power-user-first dashboard.
+Here is a list of potential new features that could be added to **Pyre** to make it an even more powerful and comprehensive macOS system monitoring tool:
 
-**Companion docs already in this repo** — read this file first, they fill in detail:
+## 1. Advanced Network Metrics
+- **Per-Process Bandwidth**: Show real-time upload and download speeds per process (potentially leveraging `nettop` under the hood).
+- **Latency / Ping Panel**: A panel to continuously ping predefined endpoints (like 8.8.8.8, 1.1.1.1, or a custom gateway) to show network latency trends.
 
-| Doc | What it covers |
-|---|---|
-| `README.md` | Current shipped feature list |
-| `parity.md` | Full btop feature audit + "what pyre has that btop can't" |
-| `roadmap.md` | Tier 1–3 btop-parity backlog — **fully shipped**, all boxes checked |
-| `advanced.md` | Tracks A–H post-parity roadmap (security, Apple Silicon, ecosystem, DevOps, distribution, UX, AI, moonshots) — several phases still open |
+## 2. Automation & Active Management
+- **Process Auto-Kill (Watchdog)**: Allow users to configure rules to automatically terminate processes if they exceed a certain CPU or Memory threshold for a sustained period.
+- **Auto-Sleep / Wake on LAN**: Trigger macOS sleep or wake actions based on certain conditions (e.g., idle time, network activity, thermal thresholds).
 
-None of the above ever mentions **macmon** by name or compares against it — that's
-the gap this document exists to close. It also explicitly separates features by
-*who they're for*, which `advanced.md`'s difficulty-only tagging doesn't do.
+## 3. Hardware & Sensor Deep Dive
+- **S.M.A.R.T Disk Health**: Display detailed disk health metrics, such as wear level percentage, read/write errors, and remaining lifespan for SSDs.
+- **Fan Speed Monitoring**: Show current fan speeds (RPM) using SMC readings.
+- **Thermal Throttling Indicator**: Explicitly display an alert or status indicator when the CPU or GPU is actively being thermally throttled.
 
----
+## 4. Integrations & Export Upgrades
+- **Prometheus Exporter**: Add a `pyre prometheus` mode that exposes a `/metrics` endpoint for Prometheus to scrape, making it easy to integrate into larger enterprise monitoring stacks.
+- **Direct Cloud Integration**: Send alerts or metrics directly to Slack, Discord webhooks, Datadog, AWS CloudWatch, or New Relic.
 
-## 0. How to use this document
+## 5. Dashboard & UX Enhancements
+- **Log Playback (Replay Mode)**: The ability to load a historical CSV log file and "play it back" within the interactive TUI, allowing users to visually review past anomalies.
+- **Plugin System**: Allow users to write custom metric collectors using simple JavaScript/TypeScript snippets or shell scripts, which can then be rendered as custom panels in the dashboard.
+- **Customizable Layouts**: Allow users to define the exact grid layout, sizing, and position of dashboard panels in `~/.config/pyre/config.json`.
 
-1. Work tier-by-tier, top to bottom — tiers are ordered cheapest-and-highest-impact
-   first, same convention as `roadmap.md`.
-2. Every feature has a **Difficulty** (same legend as `advanced.md`, repeated below
-   so this file works standalone) and an **Audience** tag:
-   - **[Simple]** — for someone who wants a glance-and-go answer, not a dashboard
-   - **[Power]** — for someone who already lives in `pyre live`
-   - **[Both]** — benefits everyone, usually plumbing or a shared surface
-3. Don't duplicate work already tracked in `advanced.md` — where a feature overlaps
-   (e.g. Apple Silicon depth), this doc says so explicitly and adds only the
-   macmon-specific bar to clear, instead of re-explaining the whole feature.
-4. When something in Section 1's comparison table gets closed, update this file's
-   table row *and* `parity.md`'s "what pyre can't do" framing if it changes — keep
-   the "beats btop and macmon" claim honest, not aspirational.
-
-### Difficulty legend
-
-| Tag | Meaning | Rough effort |
-|---|---|---|
-| **XS** | Trivial, mostly wiring existing data | < 4 hours |
-| **S** | Small, one module, no new architecture | 0.5–2 days |
-| **M** | Medium, new module + UI surface + tests | 3–7 days |
-| **L** | Large, cross-cutting or new subsystem | 1–3 weeks |
-| **XL** | Moonshot | 3+ weeks |
-
----
-
-## 1. Where pyre stands today — pyre vs btop vs macmon
-
-| Capability | pyre | btop | macmon |
-|---|---|---|---|
-| Needs sudo for temps/power | **Yes** (powermetrics) | No | No (private IOReport API) ⚠️ |
-| Prometheus `/metrics` endpoint | No | No | **Yes** ⚠️ |
-| Continuous JSON stream for scripting (`\| jq`) | No (snapshot only) | No | **Yes** (`macmon pipe`) ⚠️ |
-| Auto-start as background service | No (xbar plugin only) | No | **Yes** (`--install` launchd) ⚠️ |
-| Per-cluster (E/P) CPU % + frequency | No (flat aggregate) | No | **Yes** ⚠️ |
-| Neural Engine (ANE) power | No | No | **Yes** ⚠️ |
-| Plain-English "is it healthy" summary | No | No | No — **open for anyone** |
-| Process kill / tree / search / signals | **Yes** | Yes | No ✅ |
-| Full multi-panel dashboard (disk/net/battery/packets) | **Yes** | Yes | No (CPU/GPU/mem/temp only) ✅ |
-| Remote / multi-host / P2P streaming | **Yes** | No | No ✅ pyre-only |
-| Security & ecosystem inspectors (doctor/extensions/brew) | **Yes** | No | No ✅ pyre-only |
-| Native compiled binary, zero runtime dependency | No (Node) | Yes (C++) | Yes (Rust) ⚠️ |
-
-**Reading this table:** pyre's breadth already beats both tools combined — that
-story is already told well in `parity.md`. The entire open gap sits in one lane:
-**sudoless, Apple-Silicon-native depth**, which is macmon's whole reason to exist.
-Track M below closes that lane. Everything else in this doc is either a simple-user
-gap neither competitor has bothered with, or genuine new ground past both.
-
----
-
----
-
-## 3. Track M — macmon parity & Apple Silicon depth (new — not in any other doc)
-
----
-
----
-
-## 4. Tier 1 (XS–S) — quick wins for the simple/casual-user side
-
-Most of pyre's feature list (P2P, fleet, security inspectors) is power-user
-territory — a real strength, but it means someone who just wants "is my Mac
-okay?" wades through more surface area than macmon or even btop force on them.
-These are cheap ways to close that gap without touching architecture.
-
----
-
-## 5. Tier 2 (M) — power-user differentiation past *both* competitors
-
-Not macmon catch-up (that's Track M) — genuine new ground, using data pyre
-already half-collects.
-
----
-
-## 6. Tier 3 and beyond
-
-Everything at native-binary/daemon/companion-app scale — standalone compiled
-binary, menu bar companion, iOS/watch companion — is already tracked in
-`advanced.md` Tracks E and H. Don't fork a second version of that plan here.
-One sequencing note worth flagging: once **M1** (sudoless IOReport) lands,
-`advanced.md`'s **E1** (standalone compiled binary) gets meaningfully easier,
-because a native IOReport helper is most of the packaging work a
-single-executable build needs anyway. **Sequence E1 after M1, not before.**
-
----
-
-## 7. Suggested build order
-
-1. **Tier 0** (`advanced.md` P0-1/P0-2) — repair before extending.
-2. **S1 / S2** (`pyre check` + exit code) — cheapest win available, zero
-   dependencies, immediately closes the simple-user gap.
-3. **M4, M7, M6** (`pyre pipe`, `pyre stress`, `--install`) — all XS/S, no
-   architecture changes, closes visible macmon-checklist gaps fast.
-4. **M1** (sudoless IOReport) — the one real spike in this document; do it once,
-   in isolation, before M2/M3/E1 all start depending on it.
-5. **M2, M3, M5** — land on top of M1.
-6. **S3, S4, S5, S6** — simple-user polish; safe to run in parallel with the
-   above since it touches `formatters/`/`render`/config wizard, not
-   `monitors/collectors`.
-7. **P1, P2, P3** — power-user differentiation *after* the macmon checklist is
-   actually closed, not before — shipping novel depth while a competitor's
-   table-stakes feature is still missing is the same credibility gap
-   `parity.md` warns about for btop.
-
----
-
-## 8. Guardrails (same spirit as `advanced.md`, repeated so this file stands alone)
-
-- Every sudo-adjacent feature (fallback powermetrics paths, etc.) must degrade
-  through `pyre doctor`, never crash.
-- **M1 is additive.** The existing powermetrics path must keep working for
-  anyone without the new native helper built/available for their arch (Rosetta,
-  unusual entitlement setups) — don't drop the fallback the day IOReport
-  support lands.
-- No feature in this document should require Full Disk Access, sudo, or any
-  TCC grant *to run pyre at all*.
-- Update Section 1's comparison table as items land — a stale "we beat X"
-  table is worse than no table, same rule `parity.md` already follows for btop.
+## 6. Intelligent Analysis
+- **Smart Battery Predictions**: Use local historical power drain data to provide a more accurate, heuristic-based estimate of battery time remaining, rather than relying solely on the built-in macOS estimate.
+- **Process Profiling**: When a process is flagged in an anomaly digest, automatically capture a brief CPU profile (via `sample` or `spindump`) for deeper post-mortem analysis.

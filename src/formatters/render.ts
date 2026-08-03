@@ -399,6 +399,7 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'process', label: 'Process', key: 'P' },
   { id: 'p2p', label: 'P2P', key: 'R' },
   { id: 'anomalies', label: 'Anomalies', key: 'A' },
+  { id: 'containers', label: 'Containers', key: 'C' },
 ];
 
 /** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */
@@ -620,6 +621,43 @@ function diskTableLines(
   return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
 }
 
+function containersTableLines(
+  containers: { id: string; name: string; cpuPercent: number; memUsage: string; memPercent: number; netIO: string; blockIO: string; pids: number }[],
+  contentWidth: number,
+  borderAccent = THEMES.default.border
+): string[] {
+  const idW = 14, cpuW = 8, memW = 8, memUsgW = 20, netW = 20, blockW = 20, pidsW = 6;
+  const nameW = Math.max(10, contentWidth - idW - cpuW - memW - memUsgW - netW - blockW - pidsW - 7);
+  
+  const head =
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CONTAINER ID ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM USAGE          ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NET I/O            ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' BLOCK I/O          ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PIDS ') +
+    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NAME'.padEnd(nameW + 1));
+    
+  const rows = containers.map(c => {
+    const cpuStr = pctColor(c.cpuPercent)(`${c.cpuPercent.toFixed(1)}`.padEnd(cpuW));
+    const memStr = pctColor(c.memPercent)(`${c.memPercent.toFixed(1)}`.padEnd(memW));
+    
+    return (
+      truncatePlain(c.id, idW - 1).padEnd(idW) +
+      cpuStr +
+      memStr +
+      c.memUsage.padEnd(memUsgW) +
+      c.netIO.padEnd(netW) +
+      c.blockIO.padEnd(blockW) +
+      String(c.pids).padEnd(pidsW) +
+      truncatePlain(c.name, nameW)
+    );
+  });
+  
+  return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
+}
+
 // --- main dashboard ------------------------------------------------------------
 
 function detailPanelTitle(panel: string, trackedPid?: number | null): string {
@@ -635,6 +673,7 @@ function detailPanelTitle(panel: string, trackedPid?: number | null): string {
     tasks: 'Tasks',
     disk: 'Disk',
     process: trackedPid !== undefined && trackedPid !== null ? `Processes (Following PID ${trackedPid})` : 'Processes',
+    containers: 'Containers',
   };
   return map[panel] || panel;
 }
@@ -757,6 +796,9 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
         lines.push(color(` ${timeStr.padEnd(10)} ⚠ ${a.metric.padEnd(8)}: ${valStr.padEnd(12)} (${direction}, σ=${a.zScore.toFixed(1)})`));
       }
       return lines;
+    }
+    case 'containers': {
+      return data.containers && data.containers.length ? containersTableLines(data.containers, width - 4, theme.border) : ['No container data available'];
     }
     default:
       return null;

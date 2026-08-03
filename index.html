@@ -4,313 +4,645 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>pyre — setup</title>
+<meta name="description" content="pyre setup wizard — configure your Mac system monitoring CLI" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
-  /* ---- token system -------------------------------------------------
-     bg     #0a0908  base char
-     coal   #141210  raised surface, one step up from bg
-     line   #211d18  hairline division, never a boxed border
-     ember  #ff6a39  primary signal / accent
-     flame  #ffb130  secondary warm highlight
-     paper  #efe9dc  primary text
-     ash    #746b5e  quiet / secondary text
-     signature: the fire simulation reads as a live ember bed under the
-     wordmark, not a screenshot inside a fake window chrome.
-  ---------------------------------------------------------------------*/
-  :root{
-    --bg: #0a0908;
-    --coal: #141210;
-    --coal-2: #18150f;
-    --line: #211d18;
-    --line-soft: #1a1712;
-    --ember: #ff6a39;
-    --ember-dim: #8a4025;
-    --flame: #ffb130;
-    --paper: #efe9dc;
-    --paper-dim: #9c9384;
-    --ash: #746b5e;
-    --ash-dim: #423c33;
-    --ok: #82c774;
-    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-    --display: 'Space Grotesk', 'JetBrains Mono', sans-serif;
+  /* ── tokens ────────────────────────────────────────────────────────── */
+  :root {
+    --bg:       #08080a;
+    --surface:  #0e0e12;
+    --border:   #1a1a22;
+    --accent:   #ff5f2e;
+    --accent2:  #ff9f1a;
+    --text:     #c8c8d0;
+    --dim:      #555566;
+    --dimmer:   #333340;
+    --ok:       #5fdd7a;
+    --mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   }
-  *{ box-sizing:border-box; margin:0; padding:0; }
-  html{ scroll-behavior:smooth; }
-  body{
-    background: var(--bg); color: var(--paper); font-family: var(--mono);
-    line-height: 1.55; -webkit-font-smoothing: antialiased;
-    min-height: 100vh; overflow-x: hidden;
-    display:flex; flex-direction:column;
-  }
-  a{ color: inherit; }
-  .wrap{ max-width: 720px; margin: 0 auto; padding: 0 28px; width:100%; }
-  ::selection{ background: var(--ember); color:#0a0908; }
 
-  /* ---------------------------- splash --------------------------- */
-  #splash{
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* scanline overlay — subtle CRT feel */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.04) 2px,
+      rgba(0,0,0,0.04) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  ::selection { background: var(--accent); color: var(--bg); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px; width: 100%; }
+
+  /* ── splash screen ─────────────────────────────────────────────────── */
+  #splash {
     position: fixed; inset: 0; z-index: 50;
-    display:flex; flex-direction:column;
     background: var(--bg);
-    transition: opacity .7s ease, visibility .7s ease;
+    display: flex; flex-direction: column;
+    transition: opacity .5s ease, visibility .5s ease;
   }
-  #splash.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+  #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
 
-  .splash-top{
-    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:18px; padding: 40px 24px 0;
-  }
-  .splash-mark{
-    font-family: var(--display); font-weight:700; font-size: clamp(2.4rem, 8vw, 3.6rem);
-    letter-spacing:-0.03em; display:flex; align-items:baseline; gap:14px;
-  }
-  .splash-mark small{
-    font-family: var(--mono); font-weight:400; font-size:0.9rem; color: var(--ash); letter-spacing:0.04em;
-  }
-  .splash-status{ color: var(--paper-dim); font-size:0.8rem; letter-spacing:0.02em; }
-  .splash-status .dots::after{
-    content:''; display:inline-block; width:1em; text-align:left;
-    animation: dots 1.2s steps(4) infinite;
-  }
-  @keyframes dots{ 0%{content:''} 25%{content:'.'} 50%{content:'..'} 75%{content:'...'} 100%{content:''} }
-
-  #fire{ display:block; width:100%; height:34vh; min-height:200px; max-height:340px; background: var(--bg); }
-
-  .splash-bottom{
-    display:flex; flex-direction:column; align-items:center; gap:12px;
-    padding: 22px 24px 34px; border-top: 1px solid var(--line-soft);
-  }
-  .enter-btn{
-    background: var(--ember); border:1px solid var(--ember); color:#180b06;
-    font-family: var(--mono); font-weight:700; font-size:0.85rem; padding:12px 30px; border-radius:2px;
-    cursor:pointer; transition: transform .15s ease, background .15s ease; letter-spacing:0.02em;
-  }
-  .enter-btn:hover{ background: var(--flame); border-color: var(--flame); transform: translateY(-1px); }
-  .skip-link{ font-size:0.74rem; color: var(--ash); text-decoration:none; letter-spacing:0.02em; }
-  .skip-link:hover{ color: var(--ember); }
-
-  /* ---------------------------- wizard shell ---------------------- */
-  #wizard{ opacity:0; transition: opacity .5s ease .1s; flex:1; display:flex; flex-direction:column; }
-  #wizard.show{ opacity:1; }
-
-  nav.top{ padding: 26px 0 0; }
-  nav.top .wrap{ display:flex; align-items:baseline; justify-content:space-between; }
-  .logo{
-    font-family: var(--display); font-weight:700; font-size:1.05rem; letter-spacing:-0.01em;
-    display:flex; gap:9px; align-items:baseline;
-  }
-  .logo span{ font-family: var(--mono); font-weight:400; font-size:0.72rem; color: var(--ash); letter-spacing:0.04em; }
-
-  /* progress: a single hairline with an ember marker — no boxed pips */
-  .steps{ position:relative; margin: 34px 0 0; }
-  .steps .track{ height:1px; background: var(--line); position:relative; }
-  .steps .fill{ position:absolute; top:0; left:0; height:1px; background: var(--ember); transition: width .35s ease; }
-  .steps .labels{ display:flex; justify-content:space-between; margin-top:10px; }
-  .step-pip{ font-size:0.66rem; color: var(--ash-dim); letter-spacing:0.02em; cursor:pointer; transition: color .2s; }
-  .step-pip .bar{ display:none; }
-  .step-pip.active{ color: var(--flame); }
-  .step-pip.done{ color: var(--paper-dim); }
-
-  main{ flex:1; padding: 44px 0 70px; }
-  .panel{ display:none; }
-  .panel.active{ display:block; animation: fadeUp .4s ease; }
-  @keyframes fadeUp{ from{ opacity:0; transform: translateY(10px);} to{opacity:1; transform:none;} }
-
-  .eyebrow{ font-size:0.72rem; color: var(--ember); margin-bottom:12px; letter-spacing:0.06em; text-transform:uppercase; }
-  .ascii-art{
-    font-family: var(--mono); font-size:0.72rem; line-height:1.35; color: var(--ash-dim);
-    white-space:pre; margin: 2px 0 20px; user-select:none;
-  }
-  .ascii-art .hot{ color: var(--ember-dim); }
-  h2{ font-family: var(--display); font-size:1.9rem; font-weight:600; letter-spacing:-0.02em; margin-bottom:14px; }
-  .lead{ color: var(--paper-dim); font-size:0.92rem; max-width: 540px; margin-bottom: 30px; }
-
-  .card{
-    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
-    background: transparent; padding:22px 0; margin-bottom:22px;
-  }
-  .card h3{
-    font-size:0.7rem; color: var(--ash); margin-bottom:16px; letter-spacing:0.08em; text-transform:uppercase;
-    font-weight:500;
+  .splash-inner {
+    flex: 1;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    padding: 40px 20px 0;
   }
 
-  .code-box{
-    background: var(--coal); border-left:2px solid var(--ember-dim);
-    padding:14px 16px; position:relative; margin-bottom: 6px; border-radius:0 3px 3px 0;
+  .splash-logo {
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--dim);
+    white-space: pre;
+    text-align: center;
+    user-select: none;
   }
-  .code-box pre{ font-size:0.82rem; color: var(--flame); overflow-x:auto; white-space:pre; }
-  .code-box pre .dim{ color: var(--ash); }
-  .copy-btn{
-    position:absolute; top:10px; right:10px;
-    background: transparent; border:none; color: var(--ash);
-    font-family: var(--mono); font-size:0.68rem; padding:5px 8px; cursor:pointer;
-    transition: color .15s; letter-spacing:0.03em;
-  }
-  .copy-btn:hover{ color: var(--ember); }
-  .note{ font-size:0.78rem; color: var(--ash); margin-top:10px; }
-  .note b{ color: var(--paper-dim); font-weight:500; }
+  .splash-logo .hot { color: var(--accent); }
 
-  label.field{ display:block; margin-bottom:20px; }
-  label.field .lbl{ display:flex; justify-content:space-between; font-size:0.8rem; color: var(--paper-dim); margin-bottom:9px; }
-  label.field .lbl b{ color: var(--flame); font-weight:700; }
-  input[type="text"], input[type="password"], input[type="number"]{
-    width:100%; background:transparent; border:none; border-bottom:1px solid var(--line); color: var(--paper);
-    font-family: var(--mono); font-size:0.88rem; padding:9px 2px; border-radius:0;
+  .splash-status {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
-  input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus{
-    outline:none; border-color: var(--ember);
-  }
-  input[type="range"]{ width:100%; accent-color: var(--ember); }
+  .cursor-blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
 
-  .toggle-row{
-    display:flex; align-items:center; justify-content:space-between;
-    padding: 14px 0; border-bottom: 1px solid var(--line-soft);
-  }
-  .toggle-row:last-child{ border-bottom:none; }
-  .tls-fields{ display:none; }
-  .tls-fields.visible{ display:block; }
-  .toggle-row .t-label{ font-size:0.85rem; }
-  .toggle-row .t-desc{ font-size:0.75rem; color: var(--ash); margin-top:3px; }
-  .switch{
-    position:relative; width:38px; height:20px; border-radius:10px; background: var(--line);
-    border:none; cursor:pointer; flex-shrink:0; transition: background .2s;
-  }
-  .switch::after{
-    content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%;
-    background: var(--ash); transition: all .2s;
-  }
-  .switch.on{ background: rgba(255,106,57,0.22); }
-  .switch.on::after{ left:20px; background: var(--ember); }
-
-  .theme-grid{ display:grid; grid-template-columns: repeat(4,1fr); gap:1px; background: var(--line); }
-  .theme-swatch{
-    padding:14px 12px; cursor:pointer; transition: background .15s;
+  #fire {
+    display: block;
+    width: 100%;
+    height: 28vh;
+    min-height: 160px;
+    max-height: 280px;
     background: var(--bg);
   }
-  .theme-swatch:hover{ background: var(--coal); }
-  .theme-swatch.selected{ background: var(--coal); box-shadow: inset 0 2px 0 var(--ember); }
-  .theme-swatch .swname{ font-size:0.75rem; margin-bottom:10px; color: var(--paper-dim); }
-  .theme-swatch .dotsrow{ display:flex; gap:5px; }
-  .theme-swatch .dotsrow span{ width:10px; height:10px; border-radius:2px; display:inline-block; }
 
-  .checklist{ font-size:0.85rem; color: var(--paper-dim); }
-  .checklist div{ display:flex; gap:12px; margin-bottom:12px; }
-  .checklist .ok{ color: var(--ok); }
-
-  .actions{ display:flex; justify-content:space-between; margin-top:40px; }
-  .btn{
-    font-family: var(--mono); font-size:0.82rem; padding:12px 24px; border-radius:2px; cursor:pointer;
-    border:1px solid var(--line); background:transparent; color: var(--paper-dim); transition: all .15s;
-    letter-spacing:0.02em;
+  .splash-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 16px 20px 28px;
+    border-top: 1px solid var(--border);
   }
-  .btn.primary{ border-color: var(--ember); color:#180b06; background: var(--ember); font-weight:700; }
-  .btn.primary:hover{ background: var(--flame); border-color: var(--flame); }
-  .btn.ghost:hover{ color: var(--paper); border-color: var(--ash); }
-  .btn:disabled{ opacity:0.3; cursor:default; }
 
-  /* ---------------------------- footer ----------------------------- */
-  footer{ border-top:1px solid var(--line-soft); margin-top:auto; }
-  footer .wrap{
-    padding: 26px 28px; display:flex; flex-wrap:wrap; gap:14px 28px;
-    align-items:center; justify-content:space-between;
+  .enter-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 8px 24px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all .15s;
   }
-  footer .f-brand{ display:flex; align-items:baseline; gap:9px; font-family: var(--display); font-weight:600; font-size:0.9rem; }
-  footer .f-brand span{ font-family: var(--mono); font-weight:400; font-size:0.68rem; color: var(--ash); }
-  footer nav{ display:flex; gap:22px; }
-  footer nav a{ font-size:0.76rem; color: var(--ash); text-decoration:none; transition: color .15s; }
-  footer nav a:hover{ color: var(--ember); }
-  footer .f-meta{ font-size:0.72rem; color: var(--ash-dim); letter-spacing:0.02em; }
+  .enter-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
 
-  @media (max-width: 620px){
-    .theme-grid{ grid-template-columns: repeat(2,1fr); }
-    .steps .labels{ flex-wrap:wrap; gap:6px 14px; }
-    #fire{ height:26vh; min-height:150px; }
-    footer .wrap{ flex-direction:column; align-items:flex-start; }
+  .skip-link {
+    font-size: 10px;
+    color: var(--dimmer);
+    letter-spacing: 0.04em;
+    text-decoration: none;
   }
-  @media (prefers-reduced-motion: reduce){
-    .splash-status .dots::after{ animation:none; content:'...'; }
+  .skip-link:hover { color: var(--dim); text-decoration: none; }
+
+  /* ── wizard shell ──────────────────────────────────────────────────── */
+  #wizard { opacity: 0; transition: opacity .4s ease .1s; flex: 1; display: flex; flex-direction: column; }
+  #wizard.show { opacity: 1; }
+
+  /* top bar */
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  .topbar .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topbar-brand {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+  .topbar-brand span {
+    color: var(--dimmer);
+    font-weight: 300;
+    margin-left: 4px;
+  }
+  .topbar-meta {
+    font-size: 10px;
+    color: var(--dimmer);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── step tabs — TUI tab bar ───────────────────────────────────────── */
+  .tabs {
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs .wrap {
+    display: flex;
+    gap: 0;
+  }
+  .tab {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 10px 16px;
+    color: var(--dimmer);
+    cursor: pointer;
+    border-right: 1px solid var(--border);
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    white-space: nowrap;
+    user-select: none;
+    text-transform: uppercase;
+  }
+  .tab:first-child { border-left: 1px solid var(--border); }
+  .tab:hover { color: var(--dim); background: var(--surface); }
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: var(--surface);
+  }
+  .tab.done { color: var(--dim); }
+  .tab .idx {
+    color: var(--dimmer);
+    margin-right: 6px;
+    font-weight: 300;
+  }
+  .tab.active .idx { color: var(--accent); opacity: .6; }
+
+  /* ── main content ──────────────────────────────────────────────────── */
+  main { flex: 1; padding: 28px 0 60px; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fadeIn .3s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* panel header */
+  .panel-head {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-head .tag {
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .panel-head h2 {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+  .panel-head .desc {
+    font-size: 12px;
+    color: var(--dim);
+    max-width: 520px;
+  }
+
+  /* ascii art block */
+  .ascii-block {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--dimmer);
+    white-space: pre;
+    user-select: none;
+    margin-bottom: 20px;
+    padding: 10px 0;
+  }
+  .ascii-block .hot { color: var(--accent); }
+
+  /* ── card: TUI box ─────────────────────────────────────────────────── */
+  .card {
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+    background: var(--surface);
+  }
+  .card-title {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.01);
+  }
+  .card-body { padding: 14px; }
+
+  /* code box */
+  .code-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 12px 14px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .code-box pre {
+    font-size: 12px;
+    color: var(--accent2);
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.55;
+  }
+  .code-box pre .dim { color: var(--dimmer); }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dimmer);
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 3px 8px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .note {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .note b { color: var(--text); font-weight: 500; }
+
+  /* feature list */
+  .feat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .feat-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .feat-list li:last-child { border-bottom: none; }
+  .feat-list .bullet { color: var(--accent); flex-shrink: 0; }
+  .feat-list b { color: var(--text); font-weight: 500; }
+
+  /* ── form controls ─────────────────────────────────────────────────── */
+  label.field { display: block; margin-bottom: 16px; }
+  label.field .lbl {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  label.field .lbl b { color: var(--accent2); font-weight: 500; }
+
+  input[type="text"],
+  input[type="password"],
+  input[type="number"] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 2px;
+  }
+
+  /* toggle rows */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .t-label { font-size: 12px; color: var(--text); }
+  .t-desc { font-size: 10px; color: var(--dimmer); margin-top: 2px; }
+
+  .switch {
+    position: relative;
+    width: 32px;
+    height: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .2s;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 10px;
+    height: 10px;
+    background: var(--dimmer);
+    transition: all .2s;
+  }
+  .switch.on { border-color: var(--accent); }
+  .switch.on::after { left: 18px; background: var(--accent); }
+
+  /* theme grid */
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+  .theme-swatch {
+    padding: 12px 10px;
+    cursor: pointer;
+    background: var(--surface);
+    transition: background .15s;
+  }
+  .theme-swatch:hover { background: rgba(255,255,255,0.03); }
+  .theme-swatch.selected {
+    background: rgba(255,95,46,0.05);
+    box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .theme-swatch .swname {
+    font-size: 10px;
+    margin-bottom: 8px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .theme-swatch.selected .swname { color: var(--accent); }
+  .theme-swatch .dotsrow { display: flex; gap: 4px; }
+  .theme-swatch .dotsrow span {
+    width: 10px;
+    height: 10px;
+    display: inline-block;
+  }
+
+  /* checklist */
+  .checklist { font-size: 12px; color: var(--dim); }
+  .checklist div {
+    display: flex;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .checklist div:last-child { border-bottom: none; }
+  .checklist .ok { color: var(--ok); }
+
+  /* nav buttons */
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 20px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: all .15s;
+  }
+  .btn:hover { color: var(--text); border-color: var(--dim); }
+  .btn.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn.primary:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn:disabled { opacity: 0.2; cursor: default; }
+
+  /* ── footer ────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    padding: 14px 0;
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--dimmer);
+    letter-spacing: 0.04em;
+  }
+  footer .f-brand { color: var(--dim); }
+  footer .f-brand span { color: var(--dimmer); margin-left: 4px; }
+  footer nav { display: flex; gap: 16px; }
+  footer nav a {
+    color: var(--dimmer);
+    text-decoration: none;
+    transition: color .15s;
+  }
+  footer nav a:hover { color: var(--accent); }
+
+  /* ── responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 620px) {
+    body { font-size: 12px; }
+    .theme-grid { grid-template-columns: repeat(2, 1fr); }
+    .tab { padding: 8px 10px; font-size: 10px; }
+    #fire { height: 22vh; min-height: 120px; }
+    footer .wrap { flex-direction: column; align-items: flex-start; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cursor-blink { animation: none; }
+    body::after { display: none; }
   }
 </style>
 </head>
 <body>
 
+<!-- ═══════════════════ SPLASH ═══════════════════ -->
 <div id="splash">
-  <div class="splash-top">
-    <div class="splash-mark">pyre<small>setup</small></div>
-    <div class="splash-status">warming up sensors<span class="dots"></span></div>
+  <div class="splash-inner">
+    <pre class="splash-logo">             <span class="hot">▄▄▄</span>
+            <span class="hot">█░░░█</span>
+  <span class="hot">▄▄▄▄▄▄▄▄█░░░█▄▄▄▄▄▄▄▄</span>
+  <span class="hot">█</span>  ┌─────────────────┐  <span class="hot">█</span>
+  <span class="hot">█</span>  │   p y r e        │  <span class="hot">█</span>
+  <span class="hot">█</span>  │   ─────────       │  <span class="hot">█</span>
+  <span class="hot">█</span>  │   system monitor  │  <span class="hot">█</span>
+  <span class="hot">█</span>  └─────────────────┘  <span class="hot">█</span>
+  <span class="hot">▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀</span></pre>
+    <div class="splash-status">initializing<span class="cursor-blink">█</span></div>
   </div>
   <canvas id="fire"></canvas>
-  <div class="splash-bottom">
-    <button class="enter-btn" id="enterBtn">continue →</button>
-    <a href="#" class="skip-link" id="skipLink">skip animation</a>
+  <div class="splash-bar">
+    <button class="enter-btn" id="enterBtn">[ enter ]</button>
+    <a href="#" class="skip-link" id="skipLink">skip</a>
   </div>
 </div>
 
+<!-- ═══════════════════ WIZARD ═══════════════════ -->
 <div id="wizard">
-  <nav class="top">
+  <div class="topbar">
     <div class="wrap">
-      <div class="logo">pyre<span>setup</span></div>
+      <div class="topbar-brand">pyre<span>::setup</span></div>
+      <div class="topbar-meta">v5.0.0 · macOS</div>
     </div>
-  </nav>
+  </div>
+
+  <div class="tabs">
+    <div class="wrap">
+      <div class="tab" data-step="0"><span class="idx">0</span>readme</div>
+      <div class="tab" data-step="1"><span class="idx">1</span>theme</div>
+      <div class="tab" data-step="2"><span class="idx">2</span>config</div>
+      <div class="tab" data-step="3"><span class="idx">3</span>p2p</div>
+      <div class="tab" data-step="4"><span class="idx">4</span>launch</div>
+    </div>
+  </div>
 
   <div class="wrap">
-<div class="steps" id="steps">
-      <div class="track"><div class="fill" id="stepsFill"></div></div>
-      <div class="labels">
-        <div class="step-pip" data-step="0">readme</div>
-        <div class="step-pip" data-step="1">appearance</div>
-        <div class="step-pip" data-step="2">behavior</div>
-        <div class="step-pip" data-step="3">p2p server</div>
-        <div class="step-pip" data-step="4">review</div>
-      </div>
-      </div>
-
     <main>
+      <!-- ─── panel 0: readme ─────────────────────── -->
       <section class="panel" data-panel="0">
-        <div class="eyebrow">documentation</div>
-        <pre class="ascii-art" id="anim-sensor">  ┌──────────┐
+        <div class="panel-head">
+          <div class="tag">documentation</div>
+          <h2>pyre overview</h2>
+          <div class="desc">Mac system monitoring CLI — CPU, memory, GPU, disk, battery, thermal, network, P2P streaming, web dashboard, benchmarking.</div>
+        </div>
+
+        <pre class="ascii-block" id="anim-sensor">  ┌──────────┐
   │ <span class="hot">pyre</span> CLI │  no sudo required
   └────┬─────┘
        │ real-time stats
    ────┴────</pre>
-        <h2>pyre Overview & Documentation</h2>
-        <p class="lead">Mac system monitoring CLI for real-time CPU, memory, GPU, disk I/O, battery health, packet monitoring, live dashboards, P2P data streaming, and web monitoring without requiring root privileges.</p>
 
         <div class="card">
-          <h3>KEY FEATURES</h3>
-          <ul style="list-style:none; padding:0; margin:0 0 16px; font-size:0.85rem; color:var(--paper-dim);">
-            <li style="margin-bottom:8px">- <b>Real-time Dashboard:</b> Interactive TUI with mouse support, graphs, and custom panel layouts.</li>
-            <li style="margin-bottom:8px">- <b>Zero Sudo Access Required:</b> Native SMC sensor caching and system APIs provide temperatures and power metrics out-of-the-box.</li>
-            <li style="margin-bottom:8px">- <b>P2P & Remote Fleet:</b> Stream live telemetry over encrypted TCP connections or monitor multiple Macs via <code>pyre fleet</code>.</li>
-            <li style="margin-bottom:8px">- <b>History & Benchmarking:</b> Log metrics to CSV, query historical trends (<code>pyre history</code>), and compare snapshots (<code>pyre diff</code>).</li>
-          </ul>
+          <div class="card-title">features</div>
+          <div class="card-body">
+            <ul class="feat-list">
+              <li><span class="bullet">▸</span><b>Real-time Dashboard</b> — interactive TUI with mouse support, graphs, and custom panel layouts</li>
+              <li><span class="bullet">▸</span><b>Zero Sudo Required</b> — native SMC sensor caching and system APIs provide temperatures and power metrics</li>
+              <li><span class="bullet">▸</span><b>P2P &amp; Remote Fleet</b> — encrypted TCP telemetry streaming or multi-Mac monitoring via <code>pyre fleet</code></li>
+              <li><span class="bullet">▸</span><b>History &amp; Benchmarking</b> — CSV logging, historical trends, snapshot diff, CPU benchmark</li>
+            </ul>
+          </div>
         </div>
 
         <div class="card">
-          <h3>QUICK START COMMANDS</h3>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="quickstart-cmd">copy</button>
-            <pre id="quickstart-cmd"><span class="dim"># Launch interactive live dashboard</span>
+          <div class="card-title">quick start</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="quickstart-cmd">copy</button>
+              <pre id="quickstart-cmd"><span class="dim"># interactive live dashboard</span>
 pyre live
 
-<span class="dim"># Static snapshot overview</span>
+<span class="dim"># static snapshot</span>
 pyre --once
 
-<span class="dim"># Serve live web dashboard on localhost</span>
+<span class="dim"># web dashboard on localhost</span>
 pyre web --port 3000</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">temperature monitoring</div>
+          <div class="card-body">
+            <p class="note" style="margin-top:0; margin-bottom:10px">
+              Pyre reads CPU/GPU/SMC die temperatures via macOS <b style="color:var(--accent)">powermetrics</b>.
+              This requires <b style="color:var(--accent)">passwordless sudo</b>. Without it, pyre falls back to less precise sensor sources.
+            </p>
+            <p class="note" style="margin-bottom:10px">
+              Run <b>once</b> to grant access — no other elevated privileges are granted:
+            </p>
+            <div class="code-box">
+              <button class="copy-btn" data-copy="powermetrics-cmd">copy</button>
+              <pre id="powermetrics-cmd"><span class="dim"># allow powermetrics without password</span>
+echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
+  | sudo tee /etc/sudoers.d/pyre-powermetrics</pre>
+            </div>
+            <p class="note">
+              <b>Why?</b> <code style="color:var(--accent)">powermetrics</code> reads Apple SMC hardware sensors.
+              Without this entry, readings can differ from btop by ~30 °C.
+            </p>
+            <p class="note" style="margin-top:6px">
+              To remove later: <code style="color:var(--text)">sudo rm /etc/sudoers.d/pyre-powermetrics</code>
+            </p>
           </div>
         </div>
       </section>
 
+      <!-- ─── panel 1: theme ──────────────────────── -->
       <section class="panel" data-panel="1">
-        <div class="eyebrow">visuals</div>
-        <pre class="ascii-art" id="anim-theme">  ◆ ◇ <span class="hot">◆</span> ◇
+        <div class="panel-head">
+          <div class="tag">visuals</div>
+          <h2>pick a theme</h2>
+          <div class="desc">Applied on first launch. Change anytime with <b style="color:var(--accent)">c</b> in the dashboard.</div>
+        </div>
+
+        <pre class="ascii-block" id="anim-theme">  ◆ ◇ <span class="hot">◆</span> ◇
   ◇ <span class="hot">◆</span> ◇ ◆
   ◆ ◇ ◆ <span class="hot">◇</span></pre>
-        <h2>Pick a default theme</h2>
-        <p class="lead">Applied the first time pyre opens. You can always change it live with the
-          <b style="color:var(--flame)">c</b> key inside the dashboard.</p>
 
         <div class="theme-grid" id="themeGrid">
           <div class="theme-swatch selected" data-theme="default">
@@ -335,7 +667,7 @@ pyre web --port 3000</pre>
             </div>
           </div>
           <div class="theme-swatch" data-theme="monochrome">
-            <div class="swname">monochrome</div>
+            <div class="swname">mono</div>
             <div class="dotsrow">
               <span style="background:#e5e7eb"></span><span style="background:#9ca3af"></span>
               <span style="background:#6b7280"></span><span style="background:#f3f4f6"></span>
@@ -358,132 +690,162 @@ pyre web --port 3000</pre>
         </div>
       </section>
 
+      <!-- ─── panel 2: behavior ───────────────────── -->
       <section class="panel" data-panel="2">
-        <div class="eyebrow">defaults</div>
-        <pre class="ascii-art" id="anim-gauge">      ╱|
+        <div class="panel-head">
+          <div class="tag">defaults</div>
+          <h2>configure live mode</h2>
+          <div class="desc">Maps to pyre CLI flags. You'll get the exact command on the next screen.</div>
+        </div>
+
+        <pre class="ascii-block" id="anim-gauge">      <span class="hot">╱</span>|
     ╱  │
   ╱ <span class="hot">2s</span> │
  ●────┴────</pre>
-        <h2>Set behavior for live mode</h2>
-        <p class="lead">These map straight to pyre's CLI flags. You'll get the exact command to launch
-          with on the next screen.</p>
-
-        <label class="field">
-          <span class="lbl">Refresh interval <b id="intervalOut">2s</b></span>
-          <input type="range" id="interval" min="1" max="10" step="1" value="2">
-        </label>
-
-        <label class="field">
-          <span class="lbl">Export / log directory</span>
-          <input type="text" id="exportDir" value="./pyre-exports">
-        </label>
 
         <div class="card">
-          <div class="toggle-row">
-            <div>
-              <div class="t-label">Start logging automatically</div>
-              <div class="t-desc">Begin writing a continuous CSV log the moment live mode starts.</div>
-            </div>
-            <div class="switch" id="toggle-autolog"></div>
+          <div class="card-title">parameters</div>
+          <div class="card-body">
+            <label class="field">
+              <span class="lbl">refresh interval <b id="intervalOut">2s</b></span>
+              <input type="range" id="interval" min="1" max="10" step="1" value="2">
+            </label>
+
+            <label class="field">
+              <span class="lbl">export directory</span>
+              <input type="text" id="exportDir" value="./pyre-exports">
+            </label>
           </div>
-          <div class="toggle-row">
-            <div>
-              <div class="t-label">Detailed sensors by default</div>
-              <div class="t-desc">Show the full per-sensor thermal breakdown instead of the summary state.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">toggles</div>
+          <div class="card-body">
+            <div class="toggle-row">
+              <div>
+                <div class="t-label">auto-start CSV logging</div>
+                <div class="t-desc">Begin writing a continuous CSV log when live mode starts</div>
+              </div>
+              <div class="switch" id="toggle-autolog"></div>
             </div>
-            <div class="switch" id="toggle-detailed"></div>
+            <div class="toggle-row">
+              <div>
+                <div class="t-label">detailed sensors by default</div>
+                <div class="t-desc">Show the full per-sensor thermal breakdown</div>
+              </div>
+              <div class="switch" id="toggle-detailed"></div>
+            </div>
           </div>
         </div>
       </section>
 
-<section class="panel" data-panel="3">
-        <div class="eyebrow">p2p server</div>
-        <pre class="ascii-art" id="anim-p2p"> [A]<span class="hot">──────</span>[B]
+      <!-- ─── panel 3: p2p ────────────────────────── -->
+      <section class="panel" data-panel="3">
+        <div class="panel-head">
+          <div class="tag">p2p server</div>
+          <h2>peer-to-peer streaming</h2>
+          <div class="desc">Configure the server, then connect from another machine using the command below.</div>
+        </div>
+
+        <pre class="ascii-block" id="anim-p2p"> [A]<span class="hot">──────</span>[B]
    \          /
     \        /
      [ LAN  ]</pre>
-        <h2>Set up the P2P server</h2>
-        <p class="lead">Configure the server, then connect from another machine using the command shown below.</p>
 
         <div class="card">
-          <h3>SERVER SETTINGS</h3>
-          <label class="field">
-            <span class="lbl">P2P Password <b id="p2pPasswordOut">••••••••</b></span>
-            <input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret password">
-          </label>
-          <label class="field">
-            <span class="lbl">Bind address <b id="p2pHostOut">0.0.0.0</b></span>
-            <input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0 for all interfaces">
-          </label>
-          <label class="field">
-            <span class="lbl">Port <b id="p2pPortOut">9876</b></span>
-            <input type="number" id="p2pPort" value="9876" placeholder="9876">
-          </label>
+          <div class="card-title">server settings</div>
+          <div class="card-body">
+            <label class="field">
+              <span class="lbl">password <b id="p2pPasswordOut">••••••••</b></span>
+              <input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret">
+            </label>
+            <label class="field">
+              <span class="lbl">bind address <b id="p2pHostOut">0.0.0.0</b></span>
+              <input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0">
+            </label>
+            <label class="field">
+              <span class="lbl">port <b id="p2pPortOut">9876</b></span>
+              <input type="number" id="p2pPort" value="9876" placeholder="9876">
+            </label>
+          </div>
         </div>
 
         <div class="card">
-          <h3>CONNECT FROM CLIENT</h3>
-          <p class="lead" style="margin-bottom:14px">On the client machine, use this command to connect to the server.</p>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
-            <pre id="p2p-client-cmd">pyre p2p connect \
+          <div class="card-title">client command</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
+              <pre id="p2p-client-cmd">pyre p2p connect \
   --p2p-host &lt;server-ip&gt; \
   --p2p-port 9876 \
   --p2p-password mysecret</pre>
-          </div>
-          <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok); margin-top:8px">
-            ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP shown above.
-          </div>
-          <div class="note" style="margin-top:8px">
-            Both machines must be on the <b>same local network (same Wi-Fi / subnet)</b>. Never expose this server to the public internet.
+            </div>
+            <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok)">
+              ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP above.
+            </div>
+            <p class="note" style="margin-top:8px">
+              Both machines must be on the <b>same local network</b>. Never expose this server to the public internet.
+            </p>
           </div>
         </div>
       </section>
 
+      <!-- ─── panel 4: review ─────────────────────── -->
       <section class="panel" data-panel="4">
-        <div class="eyebrow">all set</div>
-        <pre class="ascii-art" id="anim-launch">     <span class="hot">▲</span>
+        <div class="panel-head">
+          <div class="tag">ready</div>
+          <h2>launch configuration</h2>
+          <div class="desc">Copy the commands below to start pyre with your settings.</div>
+        </div>
+
+        <pre class="ascii-block" id="anim-launch">     <span class="hot">▲</span>
     ╱ ╲
    ╱ <span class="hot">▓</span> ╲
   ▔▔▔▔▔▔▔  ready</pre>
-        <h2>Your setup, ready to launch</h2>
-        <p class="lead">Copy the commands below to start pyre with everything you just configured.</p>
 
         <div class="card">
-          <h3>LIVE DASHBOARD</h3>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="launch-cmd">copy</button>
-            <pre id="launch-cmd">pyre live --interval 2 --export-dir ./pyre-exports</pre>
+          <div class="card-title">live dashboard</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="launch-cmd">copy</button>
+              <pre id="launch-cmd">pyre live --interval 2 --export-dir ./pyre-exports</pre>
+            </div>
+            <p class="note">Theme (<b id="reviewTheme">default</b>) applied via <b>--theme</b> — change anytime with <b>c</b></p>
           </div>
-          <p class="note">Theme (<b id="reviewTheme">default</b>) is applied via <b>--theme</b> on launch — change it anytime with <b>c</b>.</p>
         </div>
 
         <div class="card">
-          <h3>P2P SERVER</h3>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="p2p-cmd">copy</button>
-            <pre id="p2p-cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret</pre>
+          <div class="card-title">p2p server</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="p2p-cmd">copy</button>
+              <pre id="p2p-cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret</pre>
+            </div>
+            <p class="note">Clients connect with: <b id="p2pConnectCmd">pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-port 9876 --p2p-password mysecret</b></p>
           </div>
-          <p class="note">Clients connect with: <b id="p2pConnectCmd">pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-port 9876 --p2p-password mysecret</b></p>
         </div>
 
         <div class="card">
-          <h3>OPTIONAL: SAVE AS SHELL ALIASES</h3>
-          <div class="code-box">
-            <button class="copy-btn" data-copy="alias-cmd">copy</button>
-            <pre id="alias-cmd">echo 'alias pyre-live="pyre live --interval 2 --export-dir ./pyre-exports"' >> ~/.zshrc
+          <div class="card-title">shell aliases (optional)</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="alias-cmd">copy</button>
+              <pre id="alias-cmd">echo 'alias pyre-live="pyre live --interval 2 --export-dir ./pyre-exports"' >> ~/.zshrc
 echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret"' >> ~/.zshrc</pre>
+            </div>
           </div>
         </div>
 
         <div class="card">
-          <h3>CHECKLIST</h3>
-          <div class="checklist" id="checklist">
-            <div><span id="chk-sudo">○</span> Sensor access command run</div>
-            <div><span id="chk-theme-ok">○</span> Theme selected: <span id="chk-theme">default</span></div>
-            <div><span id="chk-interval-ok">○</span> Refresh interval: <span id="chk-interval">2s</span></div>
-            <div><span id="chk-dir-ok">○</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
-            <div><span id="chk-p2p">○</span> P2P password set</div>
+          <div class="card-title">checklist</div>
+          <div class="card-body">
+            <div class="checklist" id="checklist">
+              <div><span id="chk-sudo">○</span> Sensor access command run</div>
+              <div><span id="chk-theme-ok">○</span> Theme selected: <span id="chk-theme">default</span></div>
+              <div><span id="chk-interval-ok">○</span> Refresh interval: <span id="chk-interval">2s</span></div>
+              <div><span id="chk-dir-ok">○</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
+              <div><span id="chk-p2p">○</span> P2P password set</div>
+            </div>
           </div>
         </div>
       </section>
@@ -497,24 +859,26 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
   <footer>
     <div class="wrap">
-      <div class="f-brand">pyre<span>local-first thermal monitor</span></div>
+      <div class="f-brand">pyre<span>· local-first thermal monitor</span></div>
       <nav>
         <a href="https://github.com/somalip/pyre" onclick="return false;">github</a>
       </nav>
-      <div class="f-meta">setup wizard · runs entirely on your machine · powered by Claude Sonnet 5, and other models</div>
+      <div>setup wizard · runs entirely on your machine</div>
     </div>
   </footer>
 </div>
 
+<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 <script>
+  /* ── fire simulation (splash) ─────────────────────────────────────── */
   (function(){
     const canvas = document.getElementById('fire');
     const ctx = canvas.getContext('2d');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const CHAR_RAMP = [' ', '.', '`', ',', ':', ';', '+', '*', '?', '%', '#', '@'];
     const STOPS = [
-      [0.00,[10,8,7]],[0.14,[35,9,6]],[0.30,[99,18,4]],[0.46,[163,48,4]],
-      [0.62,[214,92,10]],[0.78,[255,153,30]],[0.90,[255,206,80]],[1.00,[255,250,230]],
+      [0.00,[8,8,10]],[0.14,[30,8,6]],[0.30,[90,16,4]],[0.46,[150,42,4]],
+      [0.62,[200,80,10]],[0.78,[255,140,26]],[0.90,[255,190,70]],[1.00,[255,240,220]],
     ];
     function lerp(a,b,t){ return a+(b-a)*t; }
     function paletteColor(t){
@@ -525,7 +889,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
           return `rgb(${Math.round(lerp(c0[0],c1[0],lt))},${Math.round(lerp(c0[1],c1[1],lt))},${Math.round(lerp(c0[2],c1[2],lt))})`;
         }
       }
-      return 'rgb(255,250,230)';
+      return 'rgb(255,240,220)';
     }
     const MAXV=36;
     const PALETTE=[]; for(let i=0;i<=MAXV;i++) PALETTE.push(paletteColor(i/MAXV));
@@ -590,8 +954,8 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     window.addEventListener('keydown', (e)=>{ if(!splash.classList.contains('hide') && (e.key==='Enter'||e.key===' ')) enter(); });
   })();
 
+  /* ── animated ascii art ───────────────────────────────────────────── */
   (function(){
-    // ---- animated ascii art on each wizard panel: small looping frame sequences ----
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const H = s => `<span class="hot">${s}</span>`;
 
@@ -609,7 +973,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
         interval: 260,
         frames: (()=>{
           const base = [['◆','◇','◆','◇'],['◇','◆','◇','◆'],['◆','◇','◆','◇']];
-          const order = [0,1,2,3,7,11,10,9,8,4]; // chase path around the grid
+          const order = [0,1,2,3,7,11,10,9,8,4];
           return order.map(hotIdx=>{
             return base.map((row,ri)=>row.map((ch,ci)=>{
               const idx = ri*4+ci;
@@ -647,14 +1011,15 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     Object.entries(anims).forEach(([id, cfg])=>{
       const el = document.getElementById(id);
       if(!el) return;
-      if(reduceMotion) return; // leave first frame static
+      if(reduceMotion) return;
       let i = 0;
       setInterval(()=>{ i = (i+1) % cfg.frames.length; el.innerHTML = cfg.frames[i]; }, cfg.interval);
     });
   })();
 
+  /* ── wizard logic ─────────────────────────────────────────────────── */
   (function(){
-    // Detect local IP address for P2P quick-start (host candidates only — local LAN IPs)
+    // Detect local IP for P2P
     function detectLocalIP() {
       return new Promise((resolve) => {
         try {
@@ -692,20 +1057,18 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     };
 
     const panels = document.querySelectorAll('.panel');
-    const pips = document.querySelectorAll('.step-pip');
+    const tabs = document.querySelectorAll('.tab');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
     const TOTAL = panels.length;
 
     function render(){
       panels.forEach(p => p.classList.toggle('active', Number(p.dataset.panel) === state.step));
-      pips.forEach(p => {
-        const s = Number(p.dataset.step);
-        p.classList.toggle('active', s === state.step);
-        p.classList.toggle('done', s < state.step);
+      tabs.forEach(t => {
+        const s = Number(t.dataset.step);
+        t.classList.toggle('active', s === state.step);
+        t.classList.toggle('done', s < state.step);
       });
-      const fillEl = document.getElementById('stepsFill');
-      if(fillEl) fillEl.style.width = (state.step/(TOTAL-1))*100 + '%';
       prevBtn.disabled = state.step === 0;
       nextBtn.textContent = state.step === TOTAL - 1 ? 'finish' : 'continue →';
       if(state.step === TOTAL - 1) updateReview();
@@ -737,9 +1100,9 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       document.getElementById('chk-dir-ok').className = 'ok';
       document.getElementById('chk-sudo').textContent = state.sudoDone ? '✓' : '○';
       document.getElementById('chk-sudo').className = state.sudoDone ? 'ok' : '';
-document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
-       document.getElementById('chk-p2p').className = state.p2p.password ? 'ok' : '';
-       document.getElementById('p2p-cmd').textContent = buildP2PCmd();
+      document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
+      document.getElementById('chk-p2p').className = state.p2p.password ? 'ok' : '';
+      document.getElementById('p2p-cmd').textContent = buildP2PCmd();
       document.getElementById('p2pConnectCmd').textContent =
         `pyre p2p connect --p2p-host <server-ip> --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
     }
@@ -754,7 +1117,7 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '�
       if(state.step < TOTAL-1){ state.step++; render(); }
       else { nextBtn.textContent = 'launched ✓'; }
     });
-    pips.forEach(p => p.addEventListener('click', () => { state.step = Number(p.dataset.step); render(); }));
+    tabs.forEach(t => t.addEventListener('click', () => { state.step = Number(t.dataset.step); render(); }));
 
     const sudoToggle = document.getElementById('toggle-sudo-done');
     if (sudoToggle) {
@@ -804,23 +1167,17 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '�
 
     window.__pyreUpdateP2PCommands = function(ip) {
       if (!ip) return;
-      // Server always binds to 0.0.0.0 (all interfaces)
       state.p2p.host = '0.0.0.0';
       p2pHost.value = '0.0.0.0';
       document.getElementById('p2pHostOut').textContent = '0.0.0.0';
       document.getElementById('p2p-client-cmd').textContent =
-        'pyre p2p connect \
-  --p2p-host ' + ip + ' \
-  --p2p-port ' + state.p2p.port + ' \
-  --p2p-password ' + state.p2p.password;
+        'pyre p2p connect \\\n  --p2p-host ' + ip + ' \\\n  --p2p-port ' + state.p2p.port + ' \\\n  --p2p-password ' + state.p2p.password;
       const reviewConnectCmd = document.getElementById('p2pConnectCmd');
       if (reviewConnectCmd) {
         reviewConnectCmd.textContent = 'pyre p2p connect --p2p-host ' + ip + ' --p2p-port ' + state.p2p.port + ' --p2p-password ' + state.p2p.password;
       }
-      // Show auto-detect note
       const note = document.getElementById('p2pAutoDetectNote');
       if (note) note.style.display = 'block';
-      // Update review page server command
       const serverCmd = document.getElementById('p2p-cmd');
       if (serverCmd) {
         serverCmd.textContent = buildP2PCmd();
@@ -846,7 +1203,7 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '�
 
     render();
 
-    // Auto-refresh stats via Server-Sent Events (SSE) stream with polling fallback
+    // Auto-refresh stats via SSE with polling fallback
     function updateDashboardUI(stats) {
       if (!stats) return;
       const cpuEl = document.getElementById('live-cpu-val');
@@ -866,7 +1223,6 @@ document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '�
         }
       };
       evtSource.onerror = function() {
-        // Fallback polling on SSE stream error
         fetch('/api').then(r => r.json()).then(updateDashboardUI).catch(() => {});
       };
     } else {

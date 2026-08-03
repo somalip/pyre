@@ -38,6 +38,7 @@ import { writeConfig } from '../state/config.js';
        splashAnimation: state.splashAnimation,
        visiblePanels: { ...state.visiblePanels },
        notificationsEnabled: state.notificationsEnabled,
+       dockerModeConfirmed: state.dockerModeConfirmed,
     });
   }
 
@@ -175,6 +176,51 @@ function handleInputModeKey(str: string, key: readline.Key) {
           render();
           return;
         }
+      }
+      return;
+    }
+
+    if (state.inputMode === 'docker-alert') {
+      if (isEscKey(key, str)) {
+        state.inputMode = null;
+        state.dockerModeConfirmed = true;
+        render();
+        return;
+      }
+      if (isUpKey(key, str)) {
+        state.dockerSelectionIndex = Math.max(0, state.dockerSelectionIndex - 1);
+        render();
+        return;
+      }
+      if (isDownKey(key, str)) {
+        state.dockerSelectionIndex = Math.min(1, state.dockerSelectionIndex + 1);
+        render();
+        return;
+      }
+      if (isEnterKey(key, str) || str === ' ') {
+        state.dockerModeConfirmed = true;
+        state.inputMode = null;
+        
+        if (state.dockerSelectionIndex === 0) {
+          // Docker Mode
+          state.visiblePanels.battery = false;
+          state.visiblePanels.thermal = false;
+          state.visiblePanels.power = false;
+          state.visiblePanels.gpu = false;
+          state.detailed = false;
+        } else {
+          // Regular TUI
+          state.visiblePanels.battery = true;
+          state.visiblePanels.thermal = true;
+          state.visiblePanels.power = true;
+          state.visiblePanels.gpu = true;
+        }
+        
+        invalidateTableCache();
+        invalidateFrame();
+        persistConfig();
+        render();
+        return;
       }
       return;
     }

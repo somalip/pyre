@@ -21,6 +21,18 @@ export interface StatsData {
    timestamp: string;
    packets: PacketData | null;
    tasks: TaskData[];
+   containers?: ContainerData[];
+}
+
+export interface ContainerData {
+  id: string;
+  name: string;
+  cpuPercent: number;
+  memUsage: string;
+  memPercent: number;
+  netIO: string;
+  blockIO: string;
+  pids: number;
 }
 
 export interface GpuData {

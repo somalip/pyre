@@ -216,6 +216,10 @@ function render() {
     writeFrame(renderCredits(cols, rows));
     return;
   }
+  if (state.inputMode === 'docker-alert') {
+    writeFrame(renderDockerAlert(cols, rows));
+    return;
+  }
   const lines: string[] = [];
   const theme = THEMES[state.currentTheme] || THEMES.default;
 
@@ -561,6 +565,33 @@ function renderCredits(cols: number, rows: number): string[] {
   ];
 
   out.push(...panel('CREDITS', content, cols, chalk.magenta, chalk.dim, rows - 2));
+  return out;
+}
+
+function renderDockerAlert(cols: number, rows: number): string[] {
+  const out: string[] = [];
+  const content = [
+    chalk.bold.red('Docker Container Detected'),
+    '',
+    'Pyre is running inside a container. Some hardware sensors',
+    '(battery, thermal, power) may not be available or relevant.',
+    '',
+    chalk.cyan('Do you wish to continue in Docker mode?'),
+    ''
+  ];
+  
+  const options = ['Yes, use Docker mode (hide hardware sensors)', 'No, launch regular TUI with all features'];
+  for (let i = 0; i < options.length; i++) {
+    const isSelected = i === state.dockerSelectionIndex;
+    const prefix = isSelected ? chalk.cyan.bold('  ▶ ') : '    ';
+    const text = isSelected ? chalk.bgCyan.black(` ${options[i]} `) : chalk.dim(` ${options[i]} `);
+    content.push(prefix + text);
+  }
+  
+  content.push('');
+  content.push(chalk.dim('Press ↑/↓ to select, Enter to confirm, Esc to skip.'));
+
+  out.push(...panel('DOCKER DETECTED', content, cols, chalk.red, chalk.dim, rows - 2));
   return out;
 }
 

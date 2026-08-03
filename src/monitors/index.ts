@@ -10,5 +10,5 @@
  * - `collectors.ts` — individual metric collectors and the orchestrator
  * - `run.ts`   — shared shell-execution helper
  */
-export { collectAll, collectPower, collectPackets, collectTasks } from './collectors.js';
-export type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData } from './types.js';
+export { collectAll, collectPower, collectPackets, collectTasks, collectContainers } from './collectors.js';
+export type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData } from './types.js';

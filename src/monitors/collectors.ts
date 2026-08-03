@@ -15,7 +15,7 @@ import chalk from 'chalk';
 import os from 'node:os';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData } from './types.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData } from './types.js';
 
 const SP_TTL_MS = 10_000;
 const NETSTAT_TTL_MS = 1000;
@@ -127,7 +127,7 @@ function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmp
  * complete {@link StatsData} snapshot.
  */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
-   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks] = await Promise.all([
+   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks, containers] = await Promise.all([
      collectCpu(),
      collectGpu(opts.detailed),
      collectMemory(),
@@ -140,6 +140,7 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      collectPower(),
      collectPackets(),
      collectTasks(),
+     collectContainers(),
    ]);
 
    return {
@@ -161,8 +162,32 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      timestamp: new Date().toISOString(),
      packets,
      tasks,
+     containers,
    };
  }
+
+export async function collectContainers(): Promise<ContainerData[]> {
+  try {
+    const raw = (await run('docker stats --no-stream --format "{{.ID}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}|{{.NetIO}}|{{.BlockIO}}|{{.PIDs}}" 2>/dev/null', '')).trim();
+    if (!raw) return [];
+    
+    return raw.split('\n').map(line => {
+      const parts = line.split('|');
+      return {
+        id: parts[0],
+        name: parts[1],
+        cpuPercent: parseFloat(parts[2].replace('%', '')) || 0,
+        memUsage: parts[3],
+        memPercent: parseFloat(parts[4].replace('%', '')) || 0,
+        netIO: parts[5],
+        blockIO: parts[6],
+        pids: parseInt(parts[7], 10) || 0
+      };
+    });
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Read power-draw metrics (CPU watts, GPU watts, combined)

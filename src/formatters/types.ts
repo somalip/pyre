@@ -40,6 +40,7 @@ export interface VisibleItems {
    tasks?: boolean;
    disk?: boolean;
    process?: boolean;
+   containers?: boolean;
    tree?: boolean;
 }
 
@@ -67,7 +68,7 @@ export interface TableOptions {
     /** Show process tree view instead of flat list. */
     treeView?: boolean;
     /** Active panel for detail/focus view. 'grid' means show all panels. */
-    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies';
+    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies' | 'containers';
     /** Active anomaly alerts from the statistical detector. */
     anomalies?: AnomalyAlert[];
     /** Historical anomaly alerts for the anomalies tab. */

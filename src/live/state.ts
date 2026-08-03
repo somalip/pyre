@@ -23,6 +23,8 @@ export const MENU_OPTIONS = ['Resume Dashboard', 'Settings (Customizer)', 'Readm
 
 const config = readConfig();
 
+const isDockerEnv = fs.existsSync('/.dockerenv') || fs.existsSync('/run/.containerenv');
+
 const state = {
    intervalHandle: null as NodeJS.Timeout | null,
    uiIntervalHandle: null as NodeJS.Timeout | null,
@@ -66,7 +68,7 @@ const state = {
     processScrollOffset: 0,
     trackedPid: null as number | null,
     inspectingProcess: null as any | null,
-    inputMode: null as InputMode,
+    inputMode: (isDockerEnv && !config.dockerModeConfirmed) ? 'docker-alert' as InputMode : null as InputMode,
     inputBuffer: '',
     targetPid: '',
     selectedSignal: 'SIGTERM' as typeof SIGNAL_OPTIONS[number],
@@ -134,6 +136,9 @@ const state = {
         splashAnimation: config.splashAnimation as SplashAnimation,
         menuSelectionIndex: 0,
         readmeScrollOffset: 0,
+        isDocker: isDockerEnv,
+        dockerModeConfirmed: config.dockerModeConfirmed || false,
+        dockerSelectionIndex: 0,
     };
 
 function setStatus(msg: string, ms = 3000) {

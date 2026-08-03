@@ -99,6 +99,33 @@ export async function getSmcMetrics(): Promise<SmcMetrics> {
     }
   }
 
+  // 2b. AppleSmartBattery fallback — works without sudo on all MacBooks
+  // VirtualTemperature reflects the SoC/die temperature; Temperature is
+  // the battery cell temperature.  Both are reported in centi-Celsius
+  // (e.g. 3539 → 35.39 °C).
+  if (result.temps['cpu_die'] === undefined) {
+    try {
+      const battRaw = await run('ioreg -r -n AppleSmartBattery 2>/dev/null', '');
+      if (battRaw) {
+        // Prefer VirtualTemperature (closer to die temp) over Temperature (battery cell)
+        const virtMatch = battRaw.match(/"VirtualTemperature"\s*=\s*(\d+)/);
+        const cellMatch = battRaw.match(/"Temperature"\s*=\s*(\d+)/);
+        const rawVirt = virtMatch ? parseFloat(virtMatch[1]) : undefined;
+        const rawCell = cellMatch ? parseFloat(cellMatch[1]) : undefined;
+        // Convert centi-Celsius to Celsius (e.g. 3085 → 30.85 → 30.9)
+        const virtC = rawVirt !== undefined ? Math.round(rawVirt / 10) / 10 : undefined;
+        const cellC = rawCell !== undefined ? Math.round(rawCell / 10) / 10 : undefined;
+        if (virtC !== undefined && virtC >= 15 && virtC <= 115) {
+          result.temps['cpu_die'] = virtC;
+        } else if (cellC !== undefined && cellC >= 15 && cellC <= 115) {
+          result.temps['cpu_die'] = cellC;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // 3. Linux /sys/class/thermal or /sys/class/hwmon fallback
   if (result.temps['cpu_die'] === undefined) {
     try {

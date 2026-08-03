@@ -41,6 +41,7 @@ export interface PyreConfig {
   watchdogMem?: number;
   webhookUrl?: string;
   alertCmd?: string;
+  dockerModeConfirmed?: boolean;
   visiblePanels?: {
     cpu?: boolean;
     mem?: boolean;
@@ -83,6 +84,7 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   splashAnimation: 'classic',
   webhookUrl: '',
   alertCmd: '',
+  dockerModeConfirmed: false,
   visiblePanels: {
     cpu: true,
     mem: true,

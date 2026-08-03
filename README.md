@@ -440,6 +440,14 @@ timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_pa
 - **Node.js 18+**
 - **Optional:** `sudo` for `powermetrics` detailed temperatures in `--detailed` mode
 
+  To enable password‑less access for `powermetrics` (required for accurate sensor readings), run:
+
+  ```bash
+  echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/pyre-powermetrics
+  ```
+
+  This adds a single sudoers entry granting `pyre` the ability to execute `powermetrics` without a password prompt. Remove it later with `sudo rm /etc/sudoers.d/pyre-powermetrics`.
+
 ## Project Structure
 
 ```
