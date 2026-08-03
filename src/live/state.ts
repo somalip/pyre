@@ -51,6 +51,7 @@ const state = {
        tasks: config.visiblePanels.tasks,
        disk: config.visiblePanels.disk,
        process: config.visiblePanels.process,
+       containers: config.visiblePanels.containers,
      } as VisibleItems,
      panelLayout: config.panelLayout || ['mem', 'disk', 'net'],
     logging: false,
@@ -94,6 +95,7 @@ const state = {
        'Toggle Tasks',
        'Toggle Disk',
        'Toggle Processes',
+       'Toggle Containers',
        'Toggle Tree View',
      ],
      CPU_ALERT_PCT: config.cpuAlertPct,
@@ -105,7 +107,7 @@ const state = {
      webhookUrl: config.webhookUrl || '',
      alertCmd: config.alertCmd || '',
       alerted: false,
-      activePanel: 'grid' as 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies',
+      activePanel: 'grid' as 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies' | 'containers',
        mouseEnabled: config.mouseEnabled,
          PANEL_TABS: [
            { id: 'cpu', label: 'CPU', key: '1' },
@@ -119,6 +121,7 @@ const state = {
            { id: 'tasks', label: 'Tasks', key: '9' },
            { id: 'disk', label: 'Disk', key: '0' },
            { id: 'process', label: 'Process', key: 'P' },
+           { id: 'containers', label: 'Containers', key: 'C' },
            { id: 'p2p', label: 'P2P', key: 'R' },
            { id: 'anomalies', label: 'Anomalies', key: 'A' },
          ],
@@ -162,6 +165,7 @@ function getToggleKey(opt: string): keyof VisibleItems | null {
     'Toggle Tasks': 'tasks',
     'Toggle Disk': 'disk',
     'Toggle Processes': 'process',
+    'Toggle Containers': 'containers',
     'Toggle Tree View': 'tree',
   };
   return map[opt] ?? null;

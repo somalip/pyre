@@ -54,6 +54,7 @@ export interface PyreConfig {
     tasks?: boolean;
     disk?: boolean;
     process?: boolean;
+    containers?: boolean;
     tree?: boolean;
   };
   panelLayout?: string[];
@@ -97,6 +98,7 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
     tasks: true,
     disk: true,
     process: true,
+    containers: true,
     tree: false,
   },
   panelLayout: ['mem', 'disk', 'net'],

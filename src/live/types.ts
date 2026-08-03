@@ -26,7 +26,7 @@ type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads'
 
 type GraphMode = 'spark' | 'bar';
 
-type ActivePanel = 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p';
+type ActivePanel = 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'containers';
 
 export type { InputMode, SortMode, GraphMode, ActivePanel, ThemeName };
 

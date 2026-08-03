@@ -586,6 +586,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           render();
           return;
         }
+        case 'C': {
+          state.activePanel = state.activePanel === 'containers' ? 'grid' : 'containers';
+          setStatus(state.activePanel === 'grid' ? 'Grid view' : 'Containers panel');
+          render();
+          return;
+        }
       }
 
       switch (key.name) {
@@ -763,7 +769,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   }
 
   function tabKeyToId(str: string): string | null {
-    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'r': 'p2p', 'A': 'anomalies' };
+    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'C': 'containers', 'r': 'p2p', 'A': 'anomalies' };
     return map[str] ?? null;
   }
 
