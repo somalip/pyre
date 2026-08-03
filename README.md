@@ -1,6 +1,6 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, P2P live data streaming, web dashboard, SSH monitoring, and micro-benchmarking.
+Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, P2P live data streaming, web dashboard, SSH monitoring, micro-benchmarking, and Blender render tracking.
 
 ![Version](https://img.shields.io/badge/version-5.0.0-blue)
 ![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
@@ -28,6 +28,7 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 - **Interactive live dashboard** — full-screen TUI with keyboard-driven controls, mouse support, configurable panel layout, and tab-based panel navigation
 - **Snapshot export** — JSON, CSV, TSV, HTML, or Markdown output formats
 - **Continuous CSV logging & Anomaly Digest** — automatic per-tick logging and statistical spike analysis (`pyre anomalies`)
+- **Blender render tracking** — automatically detects running Blender background renders, tracks elapsed time, frame progress, completion percentage, render engine, and blend file; fully loggable via CSV/JSON/Markdown exports
 - **Visual themes & custom themes** — six built-in color themes plus user-defined JSON theme support in `~/.config/pyre/themes/`
 - **Persistent configuration & Profiles** — save themes and thresholds in `~/.config/pyre/config.json`, plus atomic profile management (`pyre profile`)
 - **Alert system & webhooks** — configurable threshold alerts with terminal bell, desktop notifications, webhook POST payload execution (`--webhook-url`), and custom shell command execution (`--alert-cmd`)
@@ -132,6 +133,7 @@ These options apply to both static snapshots and `pyre live`, except where noted
 | `pyre doctor` | Run system diagnostics (permissions, Gatekeeper, SIP, XProtect, P2P network) |
 | `pyre extensions` | System Extensions inspector (`systemextensionsctl list`) |
 | `pyre brew` | Homebrew health panel (installed formulae, outdated count, Cellar disk size, doctor summary) |
+| `pyre blender` | Track active Blender background renders: PID, blend file, engine, frame progress, elapsed time, and completion status |
 | `pyre update` | Check npm registry for latest `pyre-cli` release |
 | `pyre profile <save\|load\|list> [name]` | Atomic configuration profile management (`~/.config/pyre/profiles/`) |
 | `pyre config <show\|reset>` | View or reset persistent configuration file (`~/.config/pyre/config.json`) |
@@ -314,6 +316,8 @@ Run with `pyre live`.
 | `←` / `→` / `Tab` | Cycle to previous / next panel tab |
 | `1`–`9`, `0` | Jump to panel by number (cpu, mem, gpu, power, battery, thermal, network, packets, tasks, disk) |
 | `P` | Toggle process panel |
+| `C` | Toggle containers panel |
+| `B` | Toggle Blender render tracker panel |
 | `Esc` | Close customizer or clear filter/kill input |
 
 ### UI Customizer
@@ -321,7 +325,7 @@ Run with `pyre live`.
 Press `c` to open the customizer overlay. From there:
 
 - Cycle through six built-in themes (Default, Dracula, Cyberpunk, Monochrome, Nord, Gruvbox) — `↑`/`↓` or `j`/`k` to navigate, `Enter`/`Space` to select
-- Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes) on or off
+- Toggle individual panels (CPU, Memory, GPU, Power, Battery, Thermal, Network, Packets, Tasks, Disk, Processes, Containers, Blender) on or off
 - Switch graph mode between sparkline and bar charts
 - Toggle process tree view
 - Toggle temperature unit between Celsius and Fahrenheit

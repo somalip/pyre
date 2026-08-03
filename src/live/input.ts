@@ -586,12 +586,18 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
           render();
           return;
         }
-        case 'C': {
-          state.activePanel = state.activePanel === 'containers' ? 'grid' : 'containers';
-          setStatus(state.activePanel === 'grid' ? 'Grid view' : 'Containers panel');
-          render();
-          return;
-        }
+         case 'C': {
+           state.activePanel = state.activePanel === 'containers' ? 'grid' : 'containers';
+           setStatus(state.activePanel === 'grid' ? 'Grid view' : 'Containers panel');
+           render();
+           return;
+         }
+         case 'B': {
+           state.activePanel = state.activePanel === 'blender' ? 'grid' : 'blender';
+           setStatus(state.activePanel === 'grid' ? 'Grid view' : 'Blender panel');
+           render();
+           return;
+         }
       }
 
       switch (key.name) {
@@ -768,16 +774,16 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     process.once('SIGINT', () => stopLive());
   }
 
-  function tabKeyToId(str: string): string | null {
-    const map: Record<string, string> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'C': 'containers', 'r': 'p2p', 'A': 'anomalies' };
+  function tabKeyToId(str: string): ActivePanel | null {
+    const map: Record<string, ActivePanel> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'C': 'containers', 'r': 'p2p', 'A': 'anomalies', 'B': 'blender' };
     return map[str] ?? null;
   }
 
   function cycleTab(direction: number) {
-    const tabs = state.PANEL_TABS.map(t => t.id);
+    const tabs = state.PANEL_TABS.map(t => t.id) as string[];
     const current = state.activePanel === 'grid' ? -1 : tabs.indexOf(state.activePanel);
     const next = (current + direction + tabs.length) % tabs.length;
-    state.activePanel = tabs[next];
+    state.activePanel = tabs[next] as typeof state.activePanel;
     setStatus(`Panel: ${state.activePanel.toUpperCase()}`);
     render();
   }

@@ -152,6 +152,14 @@ export function formatHtml(data: StatsData): string {
     sections.push(`<h2>Processes</h2>\n<table>\n  ${rows(procRows).trim()}\n</table>`);
   }
 
+  if (data.blenderRenders && data.blenderRenders.length) {
+    const blenderRows = data.blenderRenders.map(r => ({
+      label: `PID ${r.pid}`,
+      value: `${r.blendFile} · ${r.renderEngine} · ${r.currentFrame}/${r.totalFrames} frames · ${r.completionPercent}% · ${r.status} · ${r.elapsedSec}s`,
+    }));
+    sections.push(`<h2>Blender Renders</h2>\n<table>\n  ${rows(blenderRows).trim()}\n</table>`);
+  }
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -429,6 +437,17 @@ export function formatMarkdown(data: StatsData): string {
     lines.push('');
   }
 
+  if (data.blenderRenders && data.blenderRenders.length) {
+    lines.push('## Blender Renders');
+    lines.push('');
+    lines.push('| PID | Blend File | Engine | Frames | Completion | Status | Elapsed |');
+    lines.push('|---|---|---|---|---|---|---|');
+    for (const r of data.blenderRenders) {
+      lines.push(`| ${r.pid} | ${mdCell(r.blendFile)} | ${mdCell(r.renderEngine)} | ${r.currentFrame}/${r.totalFrames} | ${r.completionPercent}% | ${r.status} | ${r.elapsedSec}s |`);
+    }
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
@@ -518,6 +537,21 @@ export function formatCsv(data: StatsData): string {
    rows.push(['process', `threads=${p.pid}`, String(p.threads)]);
    rows.push(['process', `runtime=${p.pid}`, String(p.runtime)]);
    rows.push(['process', `command=${p.pid}`, p.command]);
+ }
+
+ for (const r of data.blenderRenders || []) {
+   rows.push(['blender', `pid=${r.pid}`, `${r.pid}`]);
+   rows.push(['blender', `blend_file=${r.pid}`, r.blendFile]);
+   rows.push(['blender', `engine=${r.pid}`, r.renderEngine]);
+   rows.push(['blender', `frame_start=${r.pid}`, String(r.frameStart)]);
+   rows.push(['blender', `frame_end=${r.pid}`, String(r.frameEnd)]);
+   rows.push(['blender', `current_frame=${r.pid}`, String(r.currentFrame)]);
+   rows.push(['blender', `total_frames=${r.pid}`, String(r.totalFrames)]);
+   rows.push(['blender', `completion_pct=${r.pid}`, String(r.completionPercent)]);
+   rows.push(['blender', `status=${r.pid}`, r.status]);
+   rows.push(['blender', `elapsed_sec=${r.pid}`, String(r.elapsedSec)]);
+   rows.push(['blender', `output_path=${r.pid}`, r.outputPath]);
+   if (r.sampleCount !== undefined) rows.push(['blender', `samples=${r.pid}`, String(r.sampleCount)]);
  }
  return rows.map(r => r.map(item => `"${String(item).replace(/"/g, '""')}"`).join(',')).join('\n');
 }

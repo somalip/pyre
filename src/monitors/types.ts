@@ -22,6 +22,7 @@ export interface StatsData {
    packets: PacketData | null;
    tasks: TaskData[];
    containers?: ContainerData[];
+   blenderRenders?: BlenderRenderData[];
 }
 
 export interface ContainerData {
@@ -57,9 +58,9 @@ export interface GpuData {
    rxRate: number;
    txRate: number;
    connections: number;
-   topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[];
+   topProcesses: NetworkProcess[];
    /** Every process with an open network connection (unlike topProcesses, not truncated). */
-   allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[];
+   allProcesses: NetworkProcess[];
    interfaces: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[];
  }
 
@@ -156,13 +157,23 @@ export interface NetworkData {
   topProcesses?: NetworkProcess[];
 }
 
+export interface NetworkConnection {
+  protocol: string;
+  local: string;
+  remote: string;
+  state: string;
+  rxBytes: number;
+  txBytes: number;
+}
+
 export interface NetworkProcess {
   pid: number;
   command: string;
   rxBytes: number;
   txBytes: number;
-  rxPackets: number;
-  txPackets: number;
+  rxPackets?: number;
+  txPackets?: number;
+  connections?: NetworkConnection[];
 }
 
 export interface ProcessData {
@@ -176,4 +187,19 @@ export interface ProcessData {
    threads: number;
    runtime: number;
    isGpuOrMlAttributed?: boolean;
+}
+
+export interface BlenderRenderData {
+  pid: number;
+  blendFile: string;
+  renderEngine: string;
+  frameStart: number;
+  frameEnd: number;
+  currentFrame: number;
+  totalFrames: number;
+  elapsedSec: number;
+  completionPercent: number;
+  status: 'rendering' | 'finalizing' | 'loading' | 'idle' | 'unknown';
+  outputPath: string;
+  sampleCount?: number;
 }

@@ -82,32 +82,33 @@ program
     .option('--port <port>', 'Port number for web server mode', '3000');
 
 program.addHelpText('after', `
-Commands:
-  live                           Interactive live dashboard
-  check                          One-line plain-English health summary
-  pipe                           Continuous newline-delimited JSON stream for scripting
-  stress                         Synthetic CPU/GPU load generator
-  ui                             Launch the native macOS UI dashboard
-  web                            Serve an auto-refreshing live web portal
-  ssh <host>                     Stream live stats from a remote Mac over SSH
-  fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple Macs
-  bench <cmd>                    Log CPU, memory, network, power draw, and estimate kWh cost
-  benchmark                      Run a 1-minute CPU benchmark calculating digits of PI
-  anomalies                      Compute z-score anomalies and print plain-language digest
-  doctor                         Run system diagnostics
-  extensions                     System Extensions inspector
-  brew                           Homebrew health panel
-  update                         Check for pyre-cli updates
-  profile <save|load|list>       Atomic configuration profile management
-  config <show|reset>            View or reset persistent configuration file
-  history                        Graph historical resource trends from CSV logs
-  diff <file1> <file2>           Compare two saved snapshot files side-by-side
-  info                           Concise hardware summary
-  completions <shell>            Generate shell auto-completion scripts
-  xbar                           Generate an xbar / SwiftBar menu bar plugin script
-  p2p <server|connect>           Start a P2P server or connect to one
-  server                         Print commands for starting P2P server/client
-`);
+ Commands:
+   live                           Interactive live dashboard
+   check                          One-line plain-English health summary
+   pipe                           Continuous newline-delimited JSON stream for scripting
+   stress                         Synthetic CPU/GPU load generator
+   ui                             Launch the native macOS UI dashboard
+   web                            Serve an auto-refreshing live web portal
+   ssh <host>                     Stream live stats from a remote Mac over SSH
+   fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple Macs
+   bench <cmd>                    Log CPU, memory, network, power draw, and estimate kWh cost
+   benchmark                      Run a 1-minute CPU benchmark calculating digits of PI
+   anomalies                      Compute z-score anomalies and print plain-language digest
+   doctor                         Run system diagnostics
+   extensions                     System Extensions inspector
+   brew                           Homebrew health panel
+   update                         Check for pyre-cli updates
+   profile <save|load|list>       Atomic configuration profile management
+   config <show|reset>            View or reset persistent configuration file
+   history                        Graph historical resource trends from CSV logs
+   diff <file1> <file2>           Compare two saved snapshot files side-by-side
+   info                           Concise hardware summary
+   completions <shell>            Generate shell auto-completion scripts
+   xbar                           Generate an xbar / SwiftBar menu bar plugin script
+   p2p <server|connect>           Start a P2P server or connect to one
+   server                         Print commands for starting P2P server/client
+   blender                        Track active Blender render jobs and their progress
+ `);
 
 program.parse(process.argv);
 
@@ -230,6 +231,32 @@ async function main() {
   if (cmd === 'extensions') {
     const { printExtensionsReport } = await import('./extensions.js');
     await printExtensionsReport();
+    return;
+  }
+
+  if (cmd === 'blender') {
+    const { collectBlenderRenders } = await import('./monitors/blender.js');
+    const renders = await collectBlenderRenders();
+    if (!renders.length) {
+      console.log(chalk.dim('No active Blender renders detected.'));
+      return;
+    }
+    const lines: string[] = [];
+    lines.push(chalk.bold('  Blender Render Tracker'));
+    lines.push('');
+    for (const r of renders) {
+      const statusColor = r.status === 'rendering' ? chalk.green : r.status === 'finalizing' ? chalk.yellow : r.status === 'loading' ? chalk.cyan : chalk.dim;
+      lines.push(`  PID:         ${r.pid}`);
+      lines.push(`  Blend File:  ${r.blendFile}`);
+      lines.push(`  Engine:      ${r.renderEngine}`);
+      lines.push(`  Frames:      ${r.currentFrame} / ${r.totalFrames}  (${r.completionPercent}%)`);
+      lines.push(`  Elapsed:     ${r.elapsedSec}s`);
+      lines.push(`  Status:      ${statusColor(r.status)}`);
+      lines.push(`  Output:      ${r.outputPath}`);
+      if (r.sampleCount !== undefined) lines.push(`  Samples:     ${r.sampleCount}`);
+      lines.push('');
+    }
+    console.log(lines.join('\n'));
     return;
   }
 

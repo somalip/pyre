@@ -24,6 +24,7 @@ export interface ThemeColors {
    disk: (s: string) => string;
    graphs: (s: string) => string;
    process: (s: string) => string;
+   blender: (s: string) => string;
 }
 
 export type { StatsData };
@@ -41,6 +42,7 @@ export interface VisibleItems {
    disk?: boolean;
    process?: boolean;
    containers?: boolean;
+   blender?: boolean;
    tree?: boolean;
 }
 
@@ -68,7 +70,7 @@ export interface TableOptions {
     /** Show process tree view instead of flat list. */
     treeView?: boolean;
     /** Active panel for detail/focus view. 'grid' means show all panels. */
-    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies' | 'containers';
+    activePanel?: 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'anomalies' | 'containers' | 'blender';
     /** Active anomaly alerts from the statistical detector. */
     anomalies?: AnomalyAlert[];
     /** Historical anomaly alerts for the anomalies tab. */

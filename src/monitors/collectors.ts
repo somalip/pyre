@@ -15,7 +15,9 @@ import chalk from 'chalk';
 import os from 'node:os';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData } from './types.js';
+import { resolveIp } from './dns_cache.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData } from './types.js';
+import { collectBlenderRenders } from './blender.js';
 
 const SP_TTL_MS = 10_000;
 const NETSTAT_TTL_MS = 1000;
@@ -127,7 +129,7 @@ function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmp
  * complete {@link StatsData} snapshot.
  */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
-   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks, containers] = await Promise.all([
+   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks, containers, blenderRenders] = await Promise.all([
      collectCpu(),
      collectGpu(opts.detailed),
      collectMemory(),
@@ -141,6 +143,7 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      collectPackets(),
      collectTasks(),
      collectContainers(),
+     collectBlenderRenders(),
    ]);
 
    return {
@@ -163,6 +166,7 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      packets,
      tasks,
      containers,
+     blenderRenders,
    };
  }
 
@@ -911,31 +915,83 @@ export async function collectPackets(): Promise<PacketData | null> {
      }
 
      let connections = 0;
+     let allProcesses: NetworkProcess[] = [];
+     
      try {
-       const tcpConns = (await run('netstat -an | grep ESTABLISHED | wc -l', '0', 2000)).trim();
-       connections = parseInt(tcpConns) || 0;
-     } catch {
-       connections = 0;
-     }
-
-     let topProcesses: { pid: number; command: string; rxBytes: number; txBytes: number }[] = [];
-     let allProcesses: { pid: number; command: string; rxBytes: number; txBytes: number; rxPackets?: number; txPackets?: number }[] = [];
-       try {
-          const lsof = (await run('lsof -i -n -P 2>/dev/null | tail -n +2 | awk \'{print $1, $2}\' | sort | uniq -c | sort -rn', '', 2000)).trim();
-         const lsofLines = lsof.split('\n');
-         topProcesses = lsofLines.map(line => {
-           const parts = line.trim().split(/\s+/);
-           if (parts.length >= 3) {
-             return { pid: parseInt(parts[2]) || 0, command: parts[1], rxBytes: 0, txBytes: parseInt(parts[0]) || 0 };
+       const nettop = (await run('nettop -L 1 -J bytes_in,bytes_out,state 2>/dev/null', '', 2000)).trim();
+       const rows = nettop.split('\n');
+       
+       let currentProc: NetworkProcess | null = null;
+       
+       for (const row of rows) {
+         if (!row || row.startsWith(',state,')) continue;
+         
+         const cols = row.split(',');
+         const nameCol = cols[0];
+         
+         // If it doesn't contain <->, it's a process row
+         if (!nameCol.includes('<->')) {
+           if (currentProc) {
+             if (currentProc.connections && currentProc.connections.length > 0) {
+               allProcesses.push(currentProc);
+             }
            }
-           return { pid: 0, command: '', rxBytes: 0, txBytes: 0 };
-         }).filter(p => p.pid > 0);
-
-         allProcesses = topProcesses;
+           
+           // Extract PID and Name (e.g., "syslogd.369")
+           const lastDot = nameCol.lastIndexOf('.');
+           let pid = 0;
+           let command = nameCol;
+           if (lastDot > 0) {
+             const possiblePid = parseInt(nameCol.substring(lastDot + 1));
+             if (!isNaN(possiblePid)) {
+               pid = possiblePid;
+               command = nameCol.substring(0, lastDot);
+             }
+           }
+           
+           const rx = parseInt(cols[2]) || 0;
+           const tx = parseInt(cols[3]) || 0;
+           
+           currentProc = { pid, command, rxBytes: rx, txBytes: tx, connections: [] };
+         } else {
+           // Connection row
+           if (currentProc) {
+             const state = cols[1];
+             const rx = parseInt(cols[2]) || 0;
+             const tx = parseInt(cols[3]) || 0;
+             if (state === 'Established') connections++;
+             
+             // Parse endpoints (e.g. "tcp4 172.16.0.2:49844<->17.242.13.5:5223")
+             const spaceIdx = nameCol.indexOf(' ');
+             const protocol = spaceIdx > 0 ? nameCol.substring(0, spaceIdx) : '';
+             const endpoints = spaceIdx > 0 ? nameCol.substring(spaceIdx + 1) : nameCol;
+             const arrowIdx = endpoints.indexOf('<->');
+             let local = '';
+             let remote = '';
+             if (arrowIdx > 0) {
+               local = endpoints.substring(0, arrowIdx);
+               remote = endpoints.substring(arrowIdx + 3);
+               
+               // Attempt DNS resolution on remote IP
+               remote = resolveIp(remote);
+             } else {
+               local = endpoints;
+             }
+             
+             // Ignore purely local communication if you want, but for now include all
+             currentProc.connections!.push({ protocol, local, remote, state, rxBytes: rx, txBytes: tx });
+           }
+         }
+       }
+       if (currentProc && currentProc.connections && currentProc.connections.length > 0) {
+         allProcesses.push(currentProc);
+       }
      } catch {
-       topProcesses = [];
        allProcesses = [];
      }
+     
+     // Sort processes by total bandwidth (tx + rx) to get top processes
+     const topProcesses = [...allProcesses].sort((a, b) => (b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes));
 
       return {
         totalPackets: totalRxPackets + totalTxPackets,

@@ -26,6 +26,7 @@ export interface ThemeColors {
    disk: (s: string) => string;
    graphs: (s: string) => string;
    process: (s: string) => string;
+   blender: (s: string) => string;
 }
 
 export const BUILTIN_THEMES: Record<string, ThemeColors> = {
@@ -41,6 +42,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
      disk: chalk.hex('#f472b6'),
      graphs: chalk.hex('#22d3ee'),
      process: chalk.hex('#e5e7eb'),
+     blender: chalk.hex('#f97316'),
    },
    dracula: {
      border: chalk.hex('#6272a4'),
@@ -54,6 +56,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
      disk: chalk.hex('#ff5555'),
      graphs: chalk.hex('#8be9fd'),
      process: chalk.hex('#f8f8f2'),
+     blender: chalk.hex('#ffb86c'),
    },
    cyberpunk: {
      border: chalk.hex('#ff0055'),
@@ -67,6 +70,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
      disk: chalk.hex('#ff007f'),
      graphs: chalk.hex('#00ffcc'),
      process: chalk.hex('#ffffff'),
+     blender: chalk.hex('#ff6600'),
    },
     monochrome: {
       border: chalk.gray,
@@ -80,6 +84,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
       disk: chalk.white.bold,
       graphs: chalk.white.bold,
       process: chalk.white.bold,
+      blender: chalk.white.bold,
     },
     nord: {
       border: chalk.hex('#4c566a'),
@@ -93,6 +98,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
       disk: chalk.hex('#b48ead'),
       graphs: chalk.hex('#88c0d0'),
       process: chalk.hex('#eceff4'),
+      blender: chalk.hex('#d08770'),
     },
     gruvbox: {
       border: chalk.hex('#928374'),
@@ -106,6 +112,7 @@ export const BUILTIN_THEMES: Record<string, ThemeColors> = {
       disk: chalk.hex('#d3869b'),
       graphs: chalk.hex('#fb4934'),
       process: chalk.hex('#ebdbb2'),
+      blender: chalk.hex('#fe8019'),
     },
   };
 
@@ -134,6 +141,7 @@ export function loadCustomThemes(): Record<string, ThemeColors> {
               disk: buildColor(data.disk),
               graphs: buildColor(data.graphs),
               process: buildColor(data.process),
+              blender: buildColor(data.blender),
             };
           } catch {
             // ignore bad theme file

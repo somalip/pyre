@@ -13,6 +13,7 @@ import chalk from 'chalk';
 import { sparkline, multiRowSparkline, brailleGraph, multiRowBrailleGraph } from '../sparkline.js';
 import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
+import type { BlenderRenderData } from '../monitors/types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
 
 
@@ -348,7 +349,8 @@ function packetCard(data: StatsData, contentWidth: number): string[] | null {
   lines.push(statRow('TX', `${data.packets.txPackets} pkt`));
   lines.push(statRow('Conns', `${data.packets.connections} TCP`));
   if (data.packets.topProcesses && data.packets.topProcesses.length) {
-    lines.push(statRow('Top Proc', truncatePlain(data.packets.topProcesses[0].command, contentWidth - 10)));
+    const topProc = data.packets.topProcesses[0];
+    lines.push(statRow('Top Proc', `${truncatePlain(topProc.command, contentWidth - 25)} (${formatBytes(topProc.rxBytes + topProc.txBytes)})`));
   }
   if (data.packets.allProcesses && data.packets.allProcesses.length > 1) {
     lines.push(statRow('Net Procs', `${data.packets.allProcesses.length} processes`));
@@ -392,14 +394,14 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'power', label: 'Power', key: '4' },
   { id: 'battery', label: 'Battery', key: '5' },
   { id: 'thermal', label: 'Thermal', key: '6' },
-  { id: 'network', label: 'Network', key: '7' },
-  { id: 'packets', label: 'Packets', key: '8' },
-  { id: 'tasks', label: 'Tasks', key: '9' },
-  { id: 'disk', label: 'Disk', key: '0' },
-  { id: 'process', label: 'Process', key: 'P' },
+  { id: 'packets', label: 'Conns', key: '7' },
+  { id: 'tasks', label: 'Tasks', key: '8' },
+  { id: 'disk', label: 'Disk', key: '9' },
+  { id: 'process', label: 'Process', key: '0' },
   { id: 'p2p', label: 'P2P', key: 'R' },
   { id: 'anomalies', label: 'Anomalies', key: 'A' },
   { id: 'containers', label: 'Containers', key: 'C' },
+  { id: 'blender', label: 'Blender', key: 'B' },
 ];
 
 /** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */
@@ -626,36 +628,51 @@ function containersTableLines(
   contentWidth: number,
   borderAccent = THEMES.default.border
 ): string[] {
-  const idW = 14, cpuW = 8, memW = 8, memUsgW = 20, netW = 20, blockW = 20, pidsW = 6;
-  const nameW = Math.max(10, contentWidth - idW - cpuW - memW - memUsgW - netW - blockW - pidsW - 7);
-  
-  const head =
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CONTAINER ID ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM USAGE          ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NET I/O            ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' BLOCK I/O          ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PIDS ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NAME'.padEnd(nameW + 1));
-    
-  const rows = containers.map(c => {
-    const cpuStr = pctColor(c.cpuPercent)(`${c.cpuPercent.toFixed(1)}`.padEnd(cpuW));
-    const memStr = pctColor(c.memPercent)(`${c.memPercent.toFixed(1)}`.padEnd(memW));
-    
-    return (
-      truncatePlain(c.id, idW - 1).padEnd(idW) +
-      cpuStr +
-      memStr +
-      c.memUsage.padEnd(memUsgW) +
-      c.netIO.padEnd(netW) +
-      c.blockIO.padEnd(blockW) +
-      String(c.pids).padEnd(pidsW) +
-      truncatePlain(c.name, nameW)
-    );
-  });
-  
-  return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
+   const idW = 14, cpuW = 8, memW = 8, memUsgW = 20, netW = 20, blockW = 20, pidsW = 6;
+   const nameW = Math.max(10, contentWidth - idW - cpuW - memW - memUsgW - netW - blockW - pidsW - 7);
+   
+   const head =
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CONTAINER ID ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM USAGE          ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NET I/O            ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' BLOCK I/O          ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PIDS ') +
+     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NAME'.padEnd(nameW + 1));
+     
+   const rows = containers.map(c => {
+     const cpuStr = pctColor(c.cpuPercent)(`${c.cpuPercent.toFixed(1)}`.padEnd(cpuW));
+     const memStr = pctColor(c.memPercent)(`${c.memPercent.toFixed(1)}`.padEnd(memW));
+     
+     return (
+       truncatePlain(c.id, idW - 1).padEnd(idW) +
+       cpuStr +
+       memStr +
+       c.memUsage.padEnd(memUsgW) +
+       c.netIO.padEnd(netW) +
+       c.blockIO.padEnd(blockW) +
+       String(c.pids).padEnd(pidsW) +
+       truncatePlain(c.name, nameW)
+     );
+   });
+   
+   return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
+ }
+
+function blenderCard(renders: BlenderRenderData[], contentWidth: number, theme: ThemeColors): string[] {
+  if (!renders.length) return ['No active Blender renders detected'];
+  const lines: string[] = [];
+  for (const r of renders.slice(0, 8)) {
+    const statusColor = r.status === 'rendering' ? chalk.green : r.status === 'finalizing' ? chalk.yellow : r.status === 'loading' ? chalk.cyan : chalk.dim;
+    const pctStr = `${r.completionPercent}%`;
+    const barW = Math.max(4, contentWidth - 28);
+    const bar = gaugeBar(r.completionPercent, barW);
+    lines.push(`${theme.blender(`PID ${r.pid}`)} ${truncatePlain(r.blendFile, 18)} ${r.renderEngine}`);
+    lines.push(`  Fra ${String(r.currentFrame).padStart(4)}/${r.totalFrames}  ${bar}  ${pctStr}`);
+    lines.push(`  ${r.elapsedSec}s elapsed · ${statusColor(r.status)}${r.sampleCount !== undefined ? ` · ${r.sampleCount} spp` : ''}`);
+  }
+  return lines;
 }
 
 // --- main dashboard ------------------------------------------------------------
@@ -674,6 +691,7 @@ function detailPanelTitle(panel: string, trackedPid?: number | null): string {
     disk: 'Disk',
     process: trackedPid !== undefined && trackedPid !== null ? `Processes (Following PID ${trackedPid})` : 'Processes',
     containers: 'Containers',
+    blender: 'Blender Renders',
   };
   return map[panel] || panel;
 }
@@ -708,24 +726,71 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
     case 'network':
       return networkCard(data, contentWidth);
     case 'packets': {
-      if (!data.packets) return ['No packet data available'];
+      if (!data.packets || !data.packets.allProcesses || !data.packets.allProcesses.length) {
+        return ['No advanced network tracking data available.'];
+      }
+    
       const lines: string[] = [];
-      lines.push(statRow('Total', `${data.packets.totalPackets} pkt`));
-      lines.push(statRow('RX', `${data.packets.rxPackets} pkt`));
-      lines.push(statRow('TX', `${data.packets.txPackets} pkt`));
-      lines.push(statRow('Conns', `${data.packets.connections} TCP`));
-      if (data.packets.interfaces && data.packets.interfaces.length) {
-        lines.push(statRow('Ifaces', `${data.packets.interfaces.length} active`));
-        for (const iface of data.packets.interfaces.slice(0, 8)) {
-          lines.push(statRow(`  ${iface.iface}`, `RX ${formatBytes(iface.rxBytes)} / TX ${formatBytes(iface.txBytes)}`));
+      const pWidth = 8;
+      const cmdWidth = 15;
+      const protoWidth = 5;
+      const stateWidth = 11;
+      const rxWidth = 10;
+      const txWidth = 10;
+      
+      const remaining = Math.max(20, width - (pWidth + cmdWidth + protoWidth + stateWidth + rxWidth + txWidth + 7 * 2));
+      const localWidth = Math.floor(remaining * 0.4);
+      const remoteWidth = remaining - localWidth;
+    
+      const header = 
+        chalk.bold('PID'.padEnd(pWidth)) + '  ' +
+        chalk.bold('COMMAND'.padEnd(cmdWidth)) + '  ' +
+        chalk.bold('PROTO'.padEnd(protoWidth)) + '  ' +
+        chalk.bold('LOCAL'.padEnd(localWidth)) + '  ' +
+        chalk.bold('REMOTE'.padEnd(remoteWidth)) + '  ' +
+        chalk.bold('STATE'.padEnd(stateWidth)) + '  ' +
+        chalk.bold('RX'.padStart(rxWidth)) + '  ' +
+        chalk.bold('TX'.padStart(txWidth));
+        
+      lines.push(header);
+      lines.push(chalk.dim('─'.repeat(width)));
+    
+      for (const proc of data.packets.allProcesses) {
+        if (!proc.connections || proc.connections.length === 0) continue;
+        
+        const summaryCmd = truncatePlain(proc.command, cmdWidth + protoWidth + localWidth + remoteWidth + stateWidth + 8);
+        const summaryRx = formatBytes(proc.rxBytes).padStart(rxWidth);
+        const summaryTx = formatBytes(proc.txBytes).padStart(txWidth);
+        
+        lines.push(
+          chalk.cyan(proc.pid.toString().padEnd(pWidth)) + '  ' +
+          chalk.cyan(summaryCmd.padEnd(width - pWidth - rxWidth - txWidth - 6)) + '  ' +
+          chalk.yellow(summaryRx) + '  ' +
+          chalk.yellow(summaryTx)
+        );
+        
+        for (const conn of proc.connections) {
+          const cProto = chalk.dim(truncatePlain(conn.protocol, protoWidth).padEnd(protoWidth));
+          const cLocal = chalk.dim(truncatePlain(conn.local, localWidth).padEnd(localWidth));
+          const cRemote = truncatePlain(conn.remote, remoteWidth).padEnd(remoteWidth);
+          
+          const cStateStr = conn.state === 'Established' ? chalk.green('ESTABLISHED'.padEnd(stateWidth)) : chalk.dim(truncatePlain(conn.state, stateWidth).padEnd(stateWidth));
+          const cRx = chalk.dim(formatBytes(conn.rxBytes).padStart(rxWidth));
+          const cTx = chalk.dim(formatBytes(conn.txBytes).padStart(txWidth));
+          
+          lines.push(
+            ' '.repeat(pWidth) + '  ' +
+            ' '.repeat(cmdWidth) + '  ' +
+            cProto + '  ' +
+            cLocal + '  ' +
+            cRemote + '  ' +
+            cStateStr + '  ' +
+            cRx + '  ' +
+            cTx
+          );
         }
       }
-      if (data.packets.allProcesses && data.packets.allProcesses.length) {
-        lines.push(statRow('Net Procs', `${data.packets.allProcesses.length} total`));
-        for (const proc of data.packets.allProcesses.slice(0, 10)) {
-          lines.push(statRow(`  ${proc.pid}`, `${truncatePlain(proc.command, 20)}  TX ${formatBytes(proc.txBytes)}`));
-        }
-      }
+    
       return lines;
     }
     case 'tasks':
@@ -799,6 +864,10 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
     }
     case 'containers': {
       return data.containers && data.containers.length ? containersTableLines(data.containers, width - 4, theme.border) : ['No container data available'];
+    }
+    case 'blender': {
+      const renders = data.blenderRenders && data.blenderRenders.length ? data.blenderRenders : [];
+      return blenderCard(renders, contentWidth, theme);
     }
     default:
       return null;
@@ -1076,7 +1145,7 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
       lines.push(gaugeRow('GPU', data.gpu.utilization, contentWidth));
     }
     const tempC = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die;
-    if (tempC !== undefined) {
+    if (tempC != null) {
       const tempStr = formatTempUnit(tempC, opts.tempUnit);
       lines.push(statRow('Temp', thermalColor(data.thermal.pressureLevel)(tempStr)));
     }

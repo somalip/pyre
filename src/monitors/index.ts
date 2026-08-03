@@ -11,4 +11,5 @@
  * - `run.ts`   — shared shell-execution helper
  */
 export { collectAll, collectPower, collectPackets, collectTasks, collectContainers } from './collectors.js';
-export type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData } from './types.js';
+export { collectBlenderRenders } from './blender.js';
+export type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, BlenderRenderData } from './types.js';
