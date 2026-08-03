@@ -11,15 +11,15 @@
 <style>
   /* ── tokens ────────────────────────────────────────────────────────── */
   :root {
-    --bg:       #08080a;
-    --surface:  #0e0e12;
-    --border:   #1a1a22;
+    --bg:       #000000;
+    --surface:  #080808;
+    --border:   #1a1a1a;
     --accent:   #ff5f2e;
-    --accent2:  #ff9f1a;
-    --text:     #c8c8d0;
-    --dim:      #555566;
-    --dimmer:   #333340;
-    --ok:       #5fdd7a;
+    --accent2:  #ffa07a;
+    --text:     #f0f0f0;
+    --dim:      #888888;
+    --dimmer:   #444444;
+    --ok:       #10b981;
     --mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   }
 
@@ -37,22 +37,6 @@
     flex-direction: column;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
-  }
-
-  /* scanline overlay — subtle CRT feel */
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.04) 2px,
-      rgba(0,0,0,0.04) 4px
-    );
-    pointer-events: none;
-    z-index: 9999;
   }
 
   ::selection { background: var(--accent); color: var(--bg); }
@@ -74,24 +58,22 @@
     flex: 1;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 12px;
+    gap: 16px;
     padding: 40px 20px 0;
   }
 
-  .splash-logo {
-    font-size: 11px;
-    line-height: 1.25;
-    color: var(--dim);
-    white-space: pre;
-    text-align: center;
-    user-select: none;
+  .splash-title {
+    font-size: 28px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    text-transform: lowercase;
   }
-  .splash-logo .hot { color: var(--accent); }
 
   .splash-status {
-    font-size: 11px;
+    font-size: 10px;
     color: var(--dim);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
   }
   .cursor-blink { animation: blink 1s step-end infinite; }
@@ -112,7 +94,6 @@
     justify-content: center;
     gap: 16px;
     padding: 16px 20px 28px;
-    border-top: 1px solid var(--border);
   }
 
   .enter-btn {
@@ -126,6 +107,7 @@
     cursor: pointer;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    border-radius: 4px;
     transition: all .15s;
   }
   .enter-btn:hover {
@@ -142,13 +124,26 @@
   .skip-link:hover { color: var(--dim); text-decoration: none; }
 
   /* ── wizard shell ──────────────────────────────────────────────────── */
-  #wizard { opacity: 0; transition: opacity .4s ease .1s; flex: 1; display: flex; flex-direction: column; }
+  #wizard-container {
+    opacity: 0; transition: opacity .4s ease .1s; 
+    flex: 1; display: flex; flex-direction: column; 
+    align-items: center; padding: 40px 20px;
+  }
+  #wizard-container.show { opacity: 1; }
+  #wizard { 
+    flex: 1; display: flex; flex-direction: column; 
+    width: 100%; max-width: 720px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    position: relative;
+  }
   #wizard.show { opacity: 1; }
 
   /* top bar */
   .topbar {
     border-bottom: 1px solid var(--border);
-    padding: 12px 0;
+    padding: 16px 0;
   }
   .topbar .wrap {
     display: flex;
@@ -156,19 +151,18 @@
     justify-content: space-between;
   }
   .topbar-brand {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
     letter-spacing: 0.04em;
   }
   .topbar-brand span {
-    color: var(--dimmer);
-    font-weight: 300;
-    margin-left: 4px;
+    color: var(--accent);
+    margin-left: 2px;
   }
   .topbar-meta {
     font-size: 10px;
-    color: var(--dimmer);
+    color: var(--dim);
     letter-spacing: 0.04em;
   }
 
@@ -182,35 +176,31 @@
   .tabs::-webkit-scrollbar { display: none; }
   .tabs .wrap {
     display: flex;
-    gap: 0;
+    gap: 20px;
   }
   .tab {
     font-size: 11px;
     letter-spacing: 0.04em;
-    padding: 10px 16px;
-    color: var(--dimmer);
+    padding: 14px 0;
+    color: var(--dim);
     cursor: pointer;
-    border-right: 1px solid var(--border);
     border-bottom: 2px solid transparent;
     transition: all .15s;
     white-space: nowrap;
     user-select: none;
     text-transform: uppercase;
   }
-  .tab:first-child { border-left: 1px solid var(--border); }
-  .tab:hover { color: var(--dim); background: var(--surface); }
+  .tab:hover { color: var(--text); }
   .tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
-    background: var(--surface);
   }
   .tab.done { color: var(--dim); }
   .tab .idx {
     color: var(--dimmer);
     margin-right: 6px;
-    font-weight: 300;
   }
-  .tab.active .idx { color: var(--accent); opacity: .6; }
+  .tab.active .idx { color: var(--accent); }
 
   /* ── main content ──────────────────────────────────────────────────── */
   main { flex: 1; padding: 28px 0 60px; }
@@ -244,39 +234,31 @@
     max-width: 520px;
   }
 
-  /* ascii art block */
-  .ascii-block {
-    font-size: 11px;
-    line-height: 1.3;
-    color: var(--dimmer);
-    white-space: pre;
-    user-select: none;
-    margin-bottom: 20px;
-    padding: 10px 0;
-  }
-  .ascii-block .hot { color: var(--accent); }
-
   /* ── card: TUI box ─────────────────────────────────────────────────── */
   .card {
     border: 1px solid var(--border);
-    margin-bottom: 16px;
-    background: var(--surface);
+    border-radius: 6px;
+    margin-bottom: 20px;
+    background: var(--bg);
+    overflow: hidden;
   }
   .card-title {
     font-size: 10px;
-    color: var(--dim);
+    color: var(--text);
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    padding: 8px 14px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--border);
-    background: rgba(255,255,255,0.01);
+    background: var(--surface);
+    font-weight: bold;
   }
   .card-body { padding: 14px; }
 
   /* code box */
   .code-box {
-    background: var(--bg);
+    background: #050505;
     border: 1px solid var(--border);
+    border-radius: 4px;
     padding: 12px 14px;
     position: relative;
     margin-bottom: 4px;
@@ -296,13 +278,14 @@
     right: 8px;
     background: transparent;
     border: 1px solid var(--border);
-    color: var(--dimmer);
+    color: var(--dim);
     font-family: var(--mono);
     font-size: 9px;
     padding: 3px 8px;
     cursor: pointer;
     letter-spacing: 0.06em;
     text-transform: uppercase;
+    border-radius: 3px;
     transition: all .15s;
   }
   .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
@@ -324,7 +307,7 @@
     color: var(--dim);
   }
   .feat-list li {
-    padding: 6px 0;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
     display: flex;
     gap: 10px;
@@ -353,17 +336,37 @@
     width: 100%;
     background: var(--bg);
     border: 1px solid var(--border);
+    border-radius: 4px;
     color: var(--text);
     font-family: var(--mono);
     font-size: 12px;
-    padding: 8px 10px;
+    padding: 8px 12px;
+    transition: border-color .15s;
   }
-  input:focus { outline: none; border-color: var(--accent); }
+  input:focus { outline: none; border-color: var(--accent); background: rgba(255, 95, 46, 0.02); }
+  
+  .input-wrap {
+    position: relative;
+    width: 100%;
+  }
 
   input[type="range"] {
+    -webkit-appearance: none;
     width: 100%;
-    accent-color: var(--accent);
-    height: 2px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    height: 8px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
   }
 
   /* toggle rows */
@@ -371,54 +374,59 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 0;
+    padding: 12px 0;
     border-bottom: 1px solid var(--border);
   }
   .toggle-row:last-child { border-bottom: none; }
   .t-label { font-size: 12px; color: var(--text); }
-  .t-desc { font-size: 10px; color: var(--dimmer); margin-top: 2px; }
+  .t-desc { font-size: 10px; color: var(--dim); margin-top: 2px; }
 
   .switch {
-    position: relative;
-    width: 32px;
+    font-size: 14px;
+    color: var(--dim);
+    cursor: pointer;
+    user-select: none;
+    font-weight: bold;
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+  }
+  .switch::before {
+    content: '';
+    display: inline-block;
+    width: 16px;
     height: 16px;
     border: 1px solid var(--border);
+    border-radius: 4px;
     background: var(--bg);
-    cursor: pointer;
-    flex-shrink: 0;
-    transition: all .2s;
+    margin-right: 6px;
+    box-sizing: border-box;
+    transition: all .15s;
   }
-  .switch::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 10px;
-    height: 10px;
-    background: var(--dimmer);
-    transition: all .2s;
+  .switch.on::before {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 2px var(--bg);
   }
-  .switch.on { border-color: var(--accent); }
-  .switch.on::after { left: 18px; background: var(--accent); }
 
   /* theme grid */
   .theme-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
+    gap: 8px;
   }
   .theme-swatch {
-    padding: 12px 10px;
+    padding: 14px 12px;
     cursor: pointer;
-    background: var(--surface);
-    transition: background .15s;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all .15s;
   }
-  .theme-swatch:hover { background: rgba(255,255,255,0.03); }
+  .theme-swatch:hover { border-color: var(--dim); }
   .theme-swatch.selected {
-    background: rgba(255,95,46,0.05);
-    box-shadow: inset 0 -2px 0 var(--accent);
+    border-color: var(--accent);
+    background: var(--surface);
   }
   .theme-swatch .swname {
     font-size: 10px;
@@ -432,6 +440,7 @@
   .theme-swatch .dotsrow span {
     width: 10px;
     height: 10px;
+    border-radius: 50%;
     display: inline-block;
   }
 
@@ -440,7 +449,7 @@
   .checklist div {
     display: flex;
     gap: 10px;
-    padding: 6px 0;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
   }
   .checklist div:last-child { border-bottom: none; }
@@ -461,12 +470,14 @@
     cursor: pointer;
     border: 1px solid var(--border);
     background: transparent;
-    color: var(--dim);
+    color: var(--text);
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    border-radius: 4px;
     transition: all .15s;
+    font-weight: bold;
   }
-  .btn:hover { color: var(--text); border-color: var(--dim); }
+  .btn:hover { color: var(--bg); background: var(--text); border-color: var(--text); }
   .btn.primary {
     border-color: var(--accent);
     color: var(--accent);
@@ -481,7 +492,7 @@
   footer {
     border-top: 1px solid var(--border);
     margin-top: auto;
-    padding: 14px 0;
+    padding: 16px 0;
   }
   footer .wrap {
     display: flex;
@@ -490,14 +501,14 @@
     align-items: center;
     justify-content: space-between;
     font-size: 10px;
-    color: var(--dimmer);
+    color: var(--dim);
     letter-spacing: 0.04em;
   }
-  footer .f-brand { color: var(--dim); }
-  footer .f-brand span { color: var(--dimmer); margin-left: 4px; }
+  footer .f-brand { color: var(--text); font-weight: 500; }
+  footer .f-brand span { color: var(--dim); margin-left: 4px; }
   footer nav { display: flex; gap: 16px; }
   footer nav a {
-    color: var(--dimmer);
+    color: var(--dim);
     text-decoration: none;
     transition: color .15s;
   }
@@ -507,14 +518,13 @@
   @media (max-width: 620px) {
     body { font-size: 12px; }
     .theme-grid { grid-template-columns: repeat(2, 1fr); }
-    .tab { padding: 8px 10px; font-size: 10px; }
+    .tab { padding: 12px 0; font-size: 10px; }
     #fire { height: 22vh; min-height: 120px; }
     footer .wrap { flex-direction: column; align-items: flex-start; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .cursor-blink { animation: none; }
-    body::after { display: none; }
   }
 </style>
 </head>
@@ -523,15 +533,7 @@
 <!-- ═══════════════════ SPLASH ═══════════════════ -->
 <div id="splash">
   <div class="splash-inner">
-    <pre class="splash-logo">             <span class="hot">▄▄▄</span>
-            <span class="hot">█░░░█</span>
-  <span class="hot">▄▄▄▄▄▄▄▄█░░░█▄▄▄▄▄▄▄▄</span>
-  <span class="hot">█</span>  ┌─────────────────┐  <span class="hot">█</span>
-  <span class="hot">█</span>  │   p y r e        │  <span class="hot">█</span>
-  <span class="hot">█</span>  │   ─────────       │  <span class="hot">█</span>
-  <span class="hot">█</span>  │   system monitor  │  <span class="hot">█</span>
-  <span class="hot">█</span>  └─────────────────┘  <span class="hot">█</span>
-  <span class="hot">▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀</span></pre>
+    <h1 class="splash-title">pyre</h1>
     <div class="splash-status">initializing<span class="cursor-blink">█</span></div>
   </div>
   <canvas id="fire"></canvas>
@@ -542,7 +544,8 @@
 </div>
 
 <!-- ═══════════════════ WIZARD ═══════════════════ -->
-<div id="wizard">
+<div id="wizard-container">
+  <div id="wizard">
   <div class="topbar">
     <div class="wrap">
       <div class="topbar-brand">pyre<span>::setup</span></div>
@@ -552,11 +555,11 @@
 
   <div class="tabs">
     <div class="wrap">
-      <div class="tab" data-step="0"><span class="idx">0</span>readme</div>
-      <div class="tab" data-step="1"><span class="idx">1</span>theme</div>
-      <div class="tab" data-step="2"><span class="idx">2</span>config</div>
-      <div class="tab" data-step="3"><span class="idx">3</span>p2p</div>
-      <div class="tab" data-step="4"><span class="idx">4</span>launch</div>
+      <div class="tab" data-step="0"><span class="idx">[0]</span>readme</div>
+      <div class="tab" data-step="1"><span class="idx">[1]</span>theme</div>
+      <div class="tab" data-step="2"><span class="idx">[2]</span>config</div>
+      <div class="tab" data-step="3"><span class="idx">[3]</span>p2p</div>
+      <div class="tab" data-step="4"><span class="idx">[4]</span>launch</div>
     </div>
   </div>
 
@@ -569,12 +572,6 @@
           <h2>pyre overview</h2>
           <div class="desc">Mac system monitoring CLI — CPU, memory, GPU, disk, battery, thermal, network, P2P streaming, web dashboard, benchmarking.</div>
         </div>
-
-        <pre class="ascii-block" id="anim-sensor">  ┌──────────┐
-  │ <span class="hot">pyre</span> CLI │  no sudo required
-  └────┬─────┘
-       │ real-time stats
-   ────┴────</pre>
 
         <div class="card">
           <div class="card-title">features</div>
@@ -640,10 +637,6 @@ echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
           <div class="desc">Applied on first launch. Change anytime with <b style="color:var(--accent)">c</b> in the dashboard.</div>
         </div>
 
-        <pre class="ascii-block" id="anim-theme">  ◆ ◇ <span class="hot">◆</span> ◇
-  ◇ <span class="hot">◆</span> ◇ ◆
-  ◆ ◇ ◆ <span class="hot">◇</span></pre>
-
         <div class="theme-grid" id="themeGrid">
           <div class="theme-swatch selected" data-theme="default">
             <div class="swname">default</div>
@@ -698,11 +691,6 @@ echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
           <div class="desc">Maps to pyre CLI flags. You'll get the exact command on the next screen.</div>
         </div>
 
-        <pre class="ascii-block" id="anim-gauge">      <span class="hot">╱</span>|
-    ╱  │
-  ╱ <span class="hot">2s</span> │
- ●────┴────</pre>
-
         <div class="card">
           <div class="card-title">parameters</div>
           <div class="card-body">
@@ -713,7 +701,7 @@ echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
 
             <label class="field">
               <span class="lbl">export directory</span>
-              <input type="text" id="exportDir" value="./pyre-exports">
+              <div class="input-wrap"><input type="text" id="exportDir" value="./pyre-exports"></div>
             </label>
           </div>
         </div>
@@ -747,25 +735,20 @@ echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
           <div class="desc">Configure the server, then connect from another machine using the command below.</div>
         </div>
 
-        <pre class="ascii-block" id="anim-p2p"> [A]<span class="hot">──────</span>[B]
-   \          /
-    \        /
-     [ LAN  ]</pre>
-
         <div class="card">
           <div class="card-title">server settings</div>
           <div class="card-body">
             <label class="field">
               <span class="lbl">password <b id="p2pPasswordOut">••••••••</b></span>
-              <input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret">
+              <div class="input-wrap"><input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret"></div>
             </label>
             <label class="field">
               <span class="lbl">bind address <b id="p2pHostOut">0.0.0.0</b></span>
-              <input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0">
+              <div class="input-wrap"><input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0"></div>
             </label>
             <label class="field">
               <span class="lbl">port <b id="p2pPortOut">9876</b></span>
-              <input type="number" id="p2pPort" value="9876" placeholder="9876">
+              <div class="input-wrap"><input type="number" id="p2pPort" value="9876" placeholder="9876"></div>
             </label>
           </div>
         </div>
@@ -797,11 +780,6 @@ echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
           <h2>launch configuration</h2>
           <div class="desc">Copy the commands below to start pyre with your settings.</div>
         </div>
-
-        <pre class="ascii-block" id="anim-launch">     <span class="hot">▲</span>
-    ╱ ╲
-   ╱ <span class="hot">▓</span> ╲
-  ▔▔▔▔▔▔▔  ready</pre>
 
         <div class="card">
           <div class="card-title">live dashboard</div>
@@ -866,6 +844,7 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       <div>setup wizard · runs entirely on your machine</div>
     </div>
   </footer>
+  </div>
 </div>
 
 <!-- ═══════════════════ SCRIPTS ═══════════════════ -->
@@ -945,76 +924,13 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     const splash = document.getElementById('splash');
     const wizard = document.getElementById('wizard');
     function enter(){
-      splash.classList.add('hide'); wizard.classList.add('show');
+      splash.classList.add('hide'); document.getElementById('wizard-container').classList.add('show');
       if (window.__pyreLocalIP && window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
     }
     document.getElementById('enterBtn').addEventListener('click', enter);
     document.getElementById('skipLink').addEventListener('click', (e)=>{ e.preventDefault(); enter(); });
     setTimeout(enter, 4200);
     window.addEventListener('keydown', (e)=>{ if(!splash.classList.contains('hide') && (e.key==='Enter'||e.key===' ')) enter(); });
-  })();
-
-  /* ── animated ascii art ───────────────────────────────────────────── */
-  (function(){
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const H = s => `<span class="hot">${s}</span>`;
-
-    const anims = {
-      'anim-sensor': {
-        interval: 420,
-        frames: [3,4,5,6,5,4].map((n,i)=>{
-          const bar = H('▓'.repeat(n)) + ' '.repeat(6-n);
-          const temp = [60,61,62,63,62,61][i];
-          const cursor = i%2===0 ? '_' : ' ';
-          return `  ┌──────────┐\n  │ ${bar}   │  ${temp}°C\n  └────┬─────┘\n       │ sudo${cursor}\n   ────┴────`;
-        })
-      },
-      'anim-theme': {
-        interval: 260,
-        frames: (()=>{
-          const base = [['◆','◇','◆','◇'],['◇','◆','◇','◆'],['◆','◇','◆','◇']];
-          const order = [0,1,2,3,7,11,10,9,8,4];
-          return order.map(hotIdx=>{
-            return base.map((row,ri)=>row.map((ch,ci)=>{
-              const idx = ri*4+ci;
-              return idx===hotIdx ? H(ch) : ch;
-            }).join(' ')).join('\n');
-          }).map(s=>'  '+s.split('\n').join('\n  '));
-        })()
-      },
-      'anim-gauge': {
-        interval: 500,
-        frames: [
-          `      ${H('╱')}|\n    ╱  │\n  ╱ 2s │\n ●────┴────`,
-          `      │${H('|')}\n    │  │\n  │ 2s │\n ●────┴────`,
-          `      |${H('╲')}\n    │  ╲\n  │ 2s ╲\n ●────┴────`,
-          `      │${H('|')}\n    │  │\n  │ 2s │\n ●────┴────`,
-        ]
-      },
-      'anim-p2p': {
-        interval: 260,
-        frames: [0,1,2,3,4,5].map(pos=>{
-          const dash = '─'.repeat(6);
-          const withDot = dash.slice(0,pos) + '●' + dash.slice(pos+1);
-          return ` [A]${H(withDot)}[B]\n   \\          /\n    \\        /\n     [ LAN  ]`;
-        })
-      },
-      'anim-launch': {
-        interval: 380,
-        frames: ['▓','▒','░','▒'].map((f,i)=>{
-          const dots = '.'.repeat(i%4);
-          return `     ${H('▲')}\n    ╱ ╲\n   ╱ ${H(f)} ╲\n  ▔▔▔▔▔▔▔  ready${dots}`;
-        })
-      }
-    };
-
-    Object.entries(anims).forEach(([id, cfg])=>{
-      const el = document.getElementById(id);
-      if(!el) return;
-      if(reduceMotion) return;
-      let i = 0;
-      setInterval(()=>{ i = (i+1) % cfg.frames.length; el.innerHTML = cfg.frames[i]; }, cfg.interval);
-    });
   })();
 
   /* ── wizard logic ─────────────────────────────────────────────────── */

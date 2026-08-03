@@ -607,7 +607,7 @@ export async function collectMemory(): Promise<MemoryData> {
   };
 }
 
-let prevDiskIoSample: { ts: number } | null = null;
+let prevDiskIoSample: { totalBytes: number; ts: number } | null = null;
 let cachedDiskIo: { readBytesSec: number; writeBytesSec: number; ts: number } | null = null;
 
 async function getDiskIoRates(): Promise<{ readBytesSec: number; writeBytesSec: number }> {
@@ -616,22 +616,23 @@ async function getDiskIoRates(): Promise<{ readBytesSec: number; writeBytesSec: 
     return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
   }
   try {
-    const raw = (await run('iostat -d -c 2 1 2', '', 3000)).trim();
-    const blocks = raw.split(/\n\s*\n/).filter(Boolean);
-    const targetBlock = blocks.length > 1 ? blocks[1] : blocks[0];
-    if (targetBlock) {
-      const lines = targetBlock.trim().split('\n');
-      if (lines.length >= 2) {
-        const dataLine = lines[lines.length - 1].trim();
-        const parts = dataLine.split(/\s+/);
-        if (parts.length >= 3) {
-          const mbSec = parseFloat(parts[2]);
-          if (!isNaN(mbSec)) {
-            const bytesSec = Math.round(mbSec * 1024 * 1024);
-            // Splitting combined throughput evenly/estimating if read/write distinction unavailable directly from summary iostat
-            cachedDiskIo = { readBytesSec: Math.round(bytesSec * 0.6), writeBytesSec: Math.round(bytesSec * 0.4), ts: now };
-            return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
+    const raw = (await run('iostat -Id -c 1', '', 1000)).trim();
+    const lines = raw.split('\n');
+    if (lines.length >= 3) {
+      const dataLine = lines[lines.length - 1].trim();
+      const parts = dataLine.split(/\s+/);
+      if (parts.length >= 3) {
+        const totalMb = parseFloat(parts[2]);
+        if (!isNaN(totalMb)) {
+          const totalBytes = totalMb * 1024 * 1024;
+          let bytesSec = 0;
+          if (prevDiskIoSample && prevDiskIoSample.ts > 0) {
+            const dt = Math.max((now - prevDiskIoSample.ts) / 1000, 0.001);
+            bytesSec = Math.max(0, (totalBytes - prevDiskIoSample.totalBytes) / dt);
           }
+          prevDiskIoSample = { totalBytes, ts: now };
+          cachedDiskIo = { readBytesSec: Math.round(bytesSec * 0.6), writeBytesSec: Math.round(bytesSec * 0.4), ts: now };
+          return { readBytesSec: cachedDiskIo.readBytesSec, writeBytesSec: cachedDiskIo.writeBytesSec };
         }
       }
     }
@@ -1045,109 +1046,130 @@ export async function collectProcesses(limit?: number): Promise<ProcessData[]> {
   }
 }
 
+function parseBytes(str: string): number {
+  if (!str) return 0;
+  const match = str.trim().match(/([\d.]+)\s*([KMGTPE]?)i?B?/i);
+  if (!match) return 0;
+  let val = parseFloat(match[1]);
+  const unit = match[2].toUpperCase();
+  if (unit === 'K') val *= 1024;
+  else if (unit === 'M') val *= 1024 * 1024;
+  else if (unit === 'G') val *= 1024 * 1024 * 1024;
+  else if (unit === 'T') val *= 1024 * 1024 * 1024 * 1024;
+  return Math.round(val);
+}
+
 export async function collectPackets(): Promise<PacketData | null> {
-   try {
-     const netStat = await cachedNetstatIb();
-     const lines = netStat.split('\n').slice(1);
-     let totalRxPackets = 0;
-     let totalTxPackets = 0;
-     let totalRxBytes = 0;
-     let totalTxBytes = 0;
-     const ifaceStats: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[] = [];
+  try {
+    const netStat = await cachedNetstatIb();
+    const lines = netStat.split('\n').slice(1);
+    let totalRxPackets = 0;
+    let totalTxPackets = 0;
+    let totalRxBytes = 0;
+    let totalTxBytes = 0;
+    const ifaceStats: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[] = [];
 
-     for (const line of lines) {
-       const parts = line.split(/\s+/);
-       if (parts.length >= 11 && parts[0] && !parts[0].startsWith('Name')) {
-         const iface = parts[0];
-         const rxPackets = parseInt(parts[4]) || 0;
-         const rxBytes = parseInt(parts[5]) || 0;
-         const txPackets = parseInt(parts[6]) || 0;
-         const txBytes = parseInt(parts[7]) || 0;
-         totalRxPackets += rxPackets;
-         totalTxPackets += txPackets;
-         totalRxBytes += rxBytes;
-         totalTxBytes += txBytes;
-         if (iface && !iface.includes('lo')) {
-           ifaceStats.push({ iface, rxPackets, txPackets, rxBytes, txBytes });
-         }
-       }
-     }
+    for (const line of lines) {
+      const parts = line.split(/\s+/);
+      if (parts.length >= 11 && parts[0] && !parts[0].startsWith('Name')) {
+        const iface = parts[0];
+        const rxPackets = parseInt(parts[4]) || 0;
+        const rxBytes = parseInt(parts[5]) || 0;
+        const txPackets = parseInt(parts[6]) || 0;
+        const txBytes = parseInt(parts[7]) || 0;
+        totalRxPackets += rxPackets;
+        totalTxPackets += txPackets;
+        totalRxBytes += rxBytes;
+        totalTxBytes += txBytes;
+        if (iface && !iface.includes('lo')) {
+          ifaceStats.push({ iface, rxPackets, txPackets, rxBytes, txBytes });
+        }
+      }
+    }
 
-     let connections = 0;
-     let allProcesses: NetworkProcess[] = [];
-     
-     try {
-       const nettop = (await run('nettop -L 1 -J bytes_in,bytes_out,state 2>/dev/null', '', 2000)).trim();
-       const rows = nettop.split('\n');
-       
-       let currentProc: NetworkProcess | null = null;
-       
-       for (const row of rows) {
-         if (!row || row.startsWith(',state,')) continue;
-         
-         const cols = row.split(',');
-         const nameCol = cols[0];
-         
-         // If it doesn't contain <->, it's a process row
-         if (!nameCol.includes('<->')) {
-           if (currentProc) {
-             if (currentProc.connections && currentProc.connections.length > 0) {
-               allProcesses.push(currentProc);
-             }
-           }
-           
-           // Extract PID and Name (e.g., "syslogd.369")
-           const lastDot = nameCol.lastIndexOf('.');
-           let pid = 0;
-           let command = nameCol;
-           if (lastDot > 0) {
-             const possiblePid = parseInt(nameCol.substring(lastDot + 1));
-             if (!isNaN(possiblePid)) {
-               pid = possiblePid;
-               command = nameCol.substring(0, lastDot);
-             }
-           }
-           
-           const rx = parseInt(cols[2]) || 0;
-           const tx = parseInt(cols[3]) || 0;
-           
-           currentProc = { pid, command, rxBytes: rx, txBytes: tx, connections: [] };
-         } else {
-           // Connection row
-           if (currentProc) {
-             const state = cols[1];
-             const rx = parseInt(cols[2]) || 0;
-             const tx = parseInt(cols[3]) || 0;
-             if (state === 'Established') connections++;
-             
-             // Parse endpoints (e.g. "tcp4 172.16.0.2:49844<->17.242.13.5:5223")
-             const spaceIdx = nameCol.indexOf(' ');
-             const protocol = spaceIdx > 0 ? nameCol.substring(0, spaceIdx) : '';
-             const endpoints = spaceIdx > 0 ? nameCol.substring(spaceIdx + 1) : nameCol;
-             const arrowIdx = endpoints.indexOf('<->');
-             let local = '';
-             let remote = '';
-             if (arrowIdx > 0) {
-               local = endpoints.substring(0, arrowIdx);
-               remote = endpoints.substring(arrowIdx + 3);
-               
-               // Attempt DNS resolution on remote IP
-               remote = resolveIp(remote);
-             } else {
-               local = endpoints;
-             }
-             
-             // Ignore purely local communication if you want, but for now include all
-             currentProc.connections!.push({ protocol, local, remote, state, rxBytes: rx, txBytes: tx });
-           }
-         }
-       }
-       if (currentProc && currentProc.connections && currentProc.connections.length > 0) {
-         allProcesses.push(currentProc);
-       }
-     } catch {
-       allProcesses = [];
-     }
+    let connections = 0;
+    let allProcesses: NetworkProcess[] = [];
+    
+    try {
+      const nettop = (await run('script -q /dev/null nettop -l 1 -J bytes_in,bytes_out,state 2>/dev/null', '', 2000)).trim();
+      const rows = nettop.split('\n');
+      
+      let currentProc: NetworkProcess | null = null;
+      
+      for (const row of rows) {
+        if (!row || row.includes('bytes_in')) continue;
+        
+        const parts = row.trimStart().split(/\s{2,}/);
+        const nameCol = parts[0];
+        
+        // If it doesn't contain <->, it's a process row
+        if (!nameCol.includes('<->')) {
+          if (currentProc) {
+            if (currentProc.connections && currentProc.connections.length > 0) {
+              allProcesses.push(currentProc);
+            }
+          }
+          
+          // Extract PID and Name (e.g., "syslogd.369")
+          const lastDot = nameCol.lastIndexOf('.');
+          let pid = 0;
+          let command = nameCol;
+          if (lastDot > 0) {
+            const possiblePid = parseInt(nameCol.substring(lastDot + 1));
+            if (!isNaN(possiblePid)) {
+              pid = possiblePid;
+              command = nameCol.substring(0, lastDot);
+            }
+          }
+          
+          const rx = parseBytes(parts[1]);
+          const tx = parseBytes(parts[2]);
+          
+          currentProc = { pid, command, rxBytes: rx, txBytes: tx, connections: [] };
+        } else {
+          // Connection row
+          if (currentProc) {
+            let state = '';
+            let rx = 0;
+            let tx = 0;
+            if (parts.length >= 4) {
+              state = parts[1];
+              rx = parseBytes(parts[2]);
+              tx = parseBytes(parts[3]);
+            } else if (parts.length === 3) {
+              rx = parseBytes(parts[1]);
+              tx = parseBytes(parts[2]);
+            }
+            if (state === 'Established') connections++;
+            
+            // Parse endpoints (e.g. "tcp4 172.16.0.2:49844<->17.242.13.5:5223")
+            const spaceIdx = nameCol.indexOf(' ');
+            const protocol = spaceIdx > 0 ? nameCol.substring(0, spaceIdx) : '';
+            const endpoints = spaceIdx > 0 ? nameCol.substring(spaceIdx + 1) : nameCol;
+            const arrowIdx = endpoints.indexOf('<->');
+            let local = '';
+            let remote = '';
+            if (arrowIdx > 0) {
+              local = endpoints.substring(0, arrowIdx);
+              remote = endpoints.substring(arrowIdx + 3);
+              
+              // Attempt DNS resolution on remote IP
+              remote = resolveIp(remote);
+            } else {
+              local = endpoints;
+            }
+            
+            // Ignore purely local communication if you want, but for now include all
+            currentProc.connections!.push({ protocol, local, remote, state, rxBytes: rx, txBytes: tx });
+          }
+        }
+      }
+      if (currentProc && currentProc.connections && currentProc.connections.length > 0) {
+        allProcesses.push(currentProc);
+      }
+    } catch {
+      allProcesses = [];
+    }
      
       // Sort processes by total bandwidth (tx + rx) to get top processes
       const topProcesses = [...allProcesses].sort((a, b) => (b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes));
