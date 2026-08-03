@@ -16,7 +16,7 @@ import os from 'node:os';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
 import { resolveIp } from './dns_cache.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData } from './types.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData, ProtocolStats, ConnectionStateStats, RemoteHostInfo } from './types.js';
 import { collectBlenderRenders } from './blender.js';
 
 const SP_TTL_MS = 10_000;
@@ -31,6 +31,8 @@ let spBatteryCache: { raw: string; ts: number } | null = null;
 let netstatIbCache: { raw: string; ts: number } | null = null;
 let routeCache: { iface: string; ip: string; ts: number } | null = null;
 const sysctlCache = new Map<string, { value: string; ts: number }>();
+
+let prevNetSample: { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number; ts: number } | null = null;
 
 async function cachedSysctl(key: string, fallback: string): Promise<string> {
   const now = Date.now();
@@ -858,9 +860,166 @@ export async function collectNetwork(): Promise<NetworkData> {
       }
     }
 
-    return { interface: iface, ip, rxBytes, txBytes, rxPackets, txPackets };
+    const now = Date.now();
+    let rxRate = 0;
+    let txRate = 0;
+    if (prevNetSample && prevNetSample.ts > 0) {
+      const dt = Math.max((now - prevNetSample.ts) / 1000, 0.001);
+      rxRate = Math.max(0, (rxBytes - prevNetSample.rxBytes) / dt);
+      txRate = Math.max(0, (txBytes - prevNetSample.txBytes) / dt);
+    }
+    prevNetSample = { rxBytes, txBytes, rxPackets, txPackets, ts: now };
+
+    const protocolStats = await getProtocolStats();
+    const connectionStates = await getConnectionStates();
+    const listeningPorts = await getListeningPorts();
+    const establishedConnections = connectionStates.established;
+    const topRemoteHosts = await getTopRemoteHosts();
+
+    return {
+      interface: iface,
+      ip,
+      rxBytes,
+      txBytes,
+      rxPackets,
+      txPackets,
+      rxRate,
+      txRate,
+      connections: establishedConnections,
+      protocols: protocolStats,
+      connectionStates,
+      listeningPorts,
+      establishedConnections,
+      topRemoteHosts,
+    };
   } catch {
-    return { interface: 'unknown', ip: '0.0.0.0', rxBytes: 0, txBytes: 0, rxPackets: 0, txPackets: 0 };
+    return {
+      interface: 'unknown',
+      ip: '0.0.0.0',
+      rxBytes: 0,
+      txBytes: 0,
+      rxPackets: 0,
+      txPackets: 0,
+      rxRate: 0,
+      txRate: 0,
+      connections: 0,
+      protocols: { tcp: { connections: 0, rxBytes: 0, txBytes: 0 }, udp: { connections: 0, rxBytes: 0, txBytes: 0 } },
+      connectionStates: { established: 0, listening: 0, timeWait: 0, closeWait: 0, other: 0 },
+      listeningPorts: [],
+      establishedConnections: 0,
+      topRemoteHosts: [],
+    };
+  }
+}
+
+async function getProtocolStats(): Promise<ProtocolStats> {
+  try {
+    const raw = await run("netstat -n -p tcp 2>/dev/null | tail -n +3 | awk '{print $1}' | sort | uniq -c", '');
+    const tcpConnections = (await run("netstat -n -p tcp 2>/dev/null | tail -n +3 | wc -l", '0')).trim();
+    const udpConnections = (await run("netstat -n -p udp 2>/dev/null | tail -n +3 | wc -l", '0')).trim();
+    
+    let tcpRxBytes = 0;
+    let tcpTxBytes = 0;
+    let udpRxBytes = 0;
+    let udpTxBytes = 0;
+    
+    try {
+      const netstat = await cachedNetstatIb();
+      for (const line of netstat.split('\n')) {
+        const parts = line.split(/\s+/);
+        if (parts.length >= 9 && parts[0] && !parts[0].startsWith('Name')) {
+          const iface = parts[0];
+          if (iface.includes('lo')) continue;
+          const rx = parseInt(parts[5]) || 0;
+          const tx = parseInt(parts[7]) || 0;
+          tcpRxBytes += rx;
+          tcpTxBytes += tx;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    
+    return {
+      tcp: {
+        connections: parseInt(tcpConnections) || 0,
+        rxBytes: tcpRxBytes,
+        txBytes: tcpTxBytes,
+      },
+      udp: {
+        connections: parseInt(udpConnections) || 0,
+        rxBytes: udpRxBytes,
+        txBytes: udpTxBytes,
+      },
+    };
+  } catch {
+    return { tcp: { connections: 0, rxBytes: 0, txBytes: 0 }, udp: { connections: 0, rxBytes: 0, txBytes: 0 } };
+  }
+}
+
+async function getConnectionStates(): Promise<ConnectionStateStats> {
+  try {
+    const raw = await run("netstat -n -p tcp 2>/dev/null | tail -n +3 | awk '{print $6}' | sort | uniq -c", '');
+    const lines = raw.split('\n').filter(Boolean);
+    const stats: ConnectionStateStats = { established: 0, listening: 0, timeWait: 0, closeWait: 0, other: 0 };
+    
+    for (const line of lines) {
+      const match = line.match(/(\d+)\s+(\S+)/);
+      if (!match) continue;
+      const count = parseInt(match[1]);
+      const state = match[2].toUpperCase();
+      
+      if (state.includes('ESTABLISHED')) stats.established += count;
+      else if (state.includes('LISTEN')) stats.listening += count;
+      else if (state.includes('TIME_WAIT')) stats.timeWait += count;
+      else if (state.includes('CLOSE_WAIT')) stats.closeWait += count;
+      else stats.other += count;
+    }
+    
+    return stats;
+  } catch {
+    return { established: 0, listening: 0, timeWait: 0, closeWait: 0, other: 0 };
+  }
+}
+
+async function getListeningPorts(): Promise<number[]> {
+  try {
+    const raw = await run("netstat -n -p tcp 2>/dev/null | grep LISTEN | awk '{print $4}' | rev | cut -d. -f1 | rev", '');
+    const ports = raw.split('\n')
+      .map(p => parseInt(p, 10))
+      .filter(p => !isNaN(p) && p > 0);
+    return [...new Set(ports)].sort((a, b) => a - b);
+  } catch {
+    return [];
+  }
+}
+
+async function getTopRemoteHosts(): Promise<RemoteHostInfo[]> {
+  try {
+    const raw = await run("netstat -n -p tcp 2>/dev/null | tail -n +3 | grep ESTABLISHED | awk '{print $5}' | rev | cut -d. -f1 | rev", '');
+    const ports = raw.split('\n').filter(Boolean);
+    const hostMap = new Map<string, { count: number; bytes: number }>();
+    
+    for (const port of ports) {
+      const host = port.split(':')[0];
+      if (!host || host === '127.0.0.1' || host === '::1') continue;
+      const existing = hostMap.get(host) || { count: 0, bytes: 0 };
+      hostMap.set(host, { count: existing.count + 1, bytes: existing.bytes });
+    }
+    
+    const result: RemoteHostInfo[] = [];
+    for (const [host, info] of hostMap.entries()) {
+      result.push({
+        host,
+        ip: host,
+        bytesTransferred: info.bytes,
+        connectionCount: info.count,
+      });
+    }
+    
+    return result.sort((a, b) => b.connectionCount - a.connectionCount).slice(0, 10);
+  } catch {
+    return [];
   }
 }
 
@@ -990,24 +1149,31 @@ export async function collectPackets(): Promise<PacketData | null> {
        allProcesses = [];
      }
      
-     // Sort processes by total bandwidth (tx + rx) to get top processes
-     const topProcesses = [...allProcesses].sort((a, b) => (b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes));
+      // Sort processes by total bandwidth (tx + rx) to get top processes
+      const topProcesses = [...allProcesses].sort((a, b) => (b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes));
+      
+      const protocolStats = await getProtocolStats();
+      const connectionStates = await getConnectionStates();
+      const listeningPorts = await getListeningPorts();
 
-      return {
-        totalPackets: totalRxPackets + totalTxPackets,
-        rxPackets: totalRxPackets,
-        txPackets: totalTxPackets,
-        rxRate: 0,
-        txRate: 0,
-        connections,
-        topProcesses,
-        interfaces: ifaceStats,
-        allProcesses,
-      };
-   } catch {
-     return null;
-   }
- }
+       return {
+         totalPackets: totalRxPackets + totalTxPackets,
+         rxPackets: totalRxPackets,
+         txPackets: totalTxPackets,
+         rxRate: 0,
+         txRate: 0,
+         connections,
+         topProcesses,
+         interfaces: ifaceStats,
+         allProcesses,
+         protocolStats,
+         connectionStates,
+         listeningPorts,
+       };
+    } catch {
+      return null;
+    }
+  }
 
 export async function collectTasks(limit = 12): Promise<TaskData[]> {
    try {

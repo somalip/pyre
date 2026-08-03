@@ -111,21 +111,38 @@ export function formatHtml(data: StatsData): string {
 <table>
   ${rows([
     { label: 'Interface', value: `${data.network.interface} (${data.network.ip})` },
-    { label: 'RX', value: `${formatBytes(data.network.rxBytes)} / ${data.network.rxPackets} pkt` },
-    { label: 'TX', value: `${formatBytes(data.network.txBytes)} / ${data.network.txPackets} pkt` },
+    { label: 'RX', value: `${formatBytes(data.network.rxBytes)} · ${formatBytes(data.network.rxRate)}/s` },
+    { label: 'TX', value: `${formatBytes(data.network.txBytes)} · ${formatBytes(data.network.txRate)}/s` },
+    ...(data.network.protocols ? [
+      { label: 'TCP', value: `${data.network.protocols.tcp.connections} conns` },
+      { label: 'UDP', value: `${data.network.protocols.udp.connections} conns` },
+    ] : []),
+    ...(data.network.connectionStates ? [
+      { label: 'Active', value: `${data.network.connectionStates.established} ESTABLISHED` },
+      { label: 'Listening', value: `${data.network.connectionStates.listening}` },
+    ] : []),
+    ...(data.network.listeningPorts && data.network.listeningPorts.length ? [
+      { label: 'Ports', value: data.network.listeningPorts.slice(0, 8).join(', ') },
+    ] : []),
   ]).trim()}
 </table>`);
 
   if (data.packets) {
-    sections.push(`<h2>Packets</h2>
-<table>
-  ${rows([
-    { label: 'Total', value: `${data.packets.totalPackets} pkt` },
-    { label: 'RX', value: `${data.packets.rxPackets} pkt` },
-    { label: 'TX', value: `${data.packets.txPackets} pkt` },
-    { label: 'Connections', value: `${data.packets.connections} TCP` },
-  ]).trim()}
-</table>`);
+    const packetRows: { label: string; value: string }[] = [
+      { label: 'Total', value: `${data.packets.totalPackets} pkt` },
+      { label: 'RX', value: `${data.packets.rxPackets} pkt` },
+      { label: 'TX', value: `${data.packets.txPackets} pkt` },
+      { label: 'Connections', value: `${data.packets.connections} TCP` },
+    ];
+    if (data.packets.protocolStats) {
+      packetRows.push({ label: 'TCP', value: `${data.packets.protocolStats.tcp.connections} conns` });
+      packetRows.push({ label: 'UDP', value: `${data.packets.protocolStats.udp.connections} conns` });
+    }
+    if (data.packets.connectionStates) {
+      packetRows.push({ label: 'ESTABLISHED', value: `${data.packets.connectionStates.established}` });
+      packetRows.push({ label: 'LISTENING', value: `${data.packets.connectionStates.listening}` });
+    }
+    sections.push(`<h2>Packets</h2>\n<table>\n  ${rows(packetRows).trim()}\n</table>`);
   }
 
   if (data.tasks.length) {
@@ -388,8 +405,19 @@ export function formatMarkdown(data: StatsData): string {
   lines.push('| Property | Value |');
   lines.push('|---|---|');
   lines.push(`| Interface | ${mdCell(`${data.network.interface} (${data.network.ip})`)} |`);
-  lines.push(`| RX | ${mdCell(`${formatBytes(data.network.rxBytes)} / ${data.network.rxPackets} pkt`)} |`);
-  lines.push(`| TX | ${mdCell(`${formatBytes(data.network.txBytes)} / ${data.network.txPackets} pkt`)} |`);
+  lines.push(`| RX | ${mdCell(`${formatBytes(data.network.rxBytes)} · ${formatBytes(data.network.rxRate)}/s`)} |`);
+  lines.push(`| TX | ${mdCell(`${formatBytes(data.network.txBytes)} · ${formatBytes(data.network.txRate)}/s`)} |`);
+  if (data.network.protocols) {
+    lines.push(`| TCP | ${mdCell(`${data.network.protocols.tcp.connections} conns`)} |`);
+    lines.push(`| UDP | ${mdCell(`${data.network.protocols.udp.connections} conns`)} |`);
+  }
+  if (data.network.connectionStates) {
+    lines.push(`| Active | ${mdCell(`${data.network.connectionStates.established} ESTABLISHED`)} |`);
+    lines.push(`| Listening | ${mdCell(`${data.network.connectionStates.listening}`)} |`);
+  }
+  if (data.network.listeningPorts && data.network.listeningPorts.length) {
+    lines.push(`| Ports | ${mdCell(data.network.listeningPorts.slice(0, 8).join(', '))} |`);
+  }
   lines.push('');
 
   if (data.packets) {
@@ -401,6 +429,14 @@ export function formatMarkdown(data: StatsData): string {
     lines.push(`| RX | ${mdCell(`${data.packets.rxPackets} pkt`)} |`);
     lines.push(`| TX | ${mdCell(`${data.packets.txPackets} pkt`)} |`);
     lines.push(`| Connections | ${mdCell(`${data.packets.connections} TCP`)} |`);
+    if (data.packets.protocolStats) {
+      lines.push(`| TCP | ${mdCell(`${data.packets.protocolStats.tcp.connections} conns`)} |`);
+      lines.push(`| UDP | ${mdCell(`${data.packets.protocolStats.udp.connections} conns`)} |`);
+    }
+    if (data.packets.connectionStates) {
+      lines.push(`| ESTABLISHED | ${mdCell(`${data.packets.connectionStates.established}`)} |`);
+      lines.push(`| LISTENING | ${mdCell(`${data.packets.connectionStates.listening}`)} |`);
+    }
     lines.push('');
   }
 
@@ -484,9 +520,16 @@ export function formatCsv(data: StatsData): string {
     ['thermal', 'cpuTempF', data.thermal.temperatures?.cpu_die != null ? String(celsiusToFahrenheit(data.thermal.temperatures.cpu_die)) : ''],
     ['network', 'rxBytes', String(data.network.rxBytes)],
     ['network', 'txBytes', String(data.network.txBytes)],
+    ['network', 'rxRate', String(data.network.rxRate)],
+    ['network', 'txRate', String(data.network.txRate)],
     ['network', 'rxPackets', String(data.network.rxPackets)],
     ['network', 'txPackets', String(data.network.txPackets)],
     ['network', 'connections', data.network.connections ? String(data.network.connections) : ''],
+    ['network', 'tcpConns', data.network.protocols ? String(data.network.protocols.tcp.connections) : ''],
+    ['network', 'udpConns', data.network.protocols ? String(data.network.protocols.udp.connections) : ''],
+    ['network', 'established', data.network.connectionStates ? String(data.network.connectionStates.established) : ''],
+    ['network', 'listening', data.network.connectionStates ? String(data.network.connectionStates.listening) : ''],
+    ['network', 'listeningPorts', data.network.listeningPorts ? data.network.listeningPorts.slice(0, 10).join(';') : ''],
     ['battery', 'level', data.battery ? String(data.battery.level) : ''],
     ['battery', 'powerSource', data.battery ? data.battery.powerSource : ''],
     ['battery', 'condition', data.battery?.condition ?? ''],
@@ -511,6 +554,16 @@ export function formatCsv(data: StatsData): string {
     rows.push(['packets', 'rxPackets', String(data.packets.rxPackets)]);
     rows.push(['packets', 'txPackets', String(data.packets.txPackets)]);
     rows.push(['packets', 'connections', String(data.packets.connections)]);
+    if (data.packets.protocolStats) {
+      rows.push(['packets', 'tcpConns', String(data.packets.protocolStats.tcp.connections)]);
+      rows.push(['packets', 'udpConns', String(data.packets.protocolStats.udp.connections)]);
+    }
+    if (data.packets.connectionStates) {
+      rows.push(['packets', 'established', String(data.packets.connectionStates.established)]);
+      rows.push(['packets', 'listening', String(data.packets.connectionStates.listening)]);
+      rows.push(['packets', 'timeWait', String(data.packets.connectionStates.timeWait)]);
+      rows.push(['packets', 'closeWait', String(data.packets.connectionStates.closeWait)]);
+    }
     for (const iface of data.packets.interfaces || []) {
       rows.push(['packets_iface', iface.iface, `${iface.rxPackets},${iface.txPackets},${iface.rxBytes},${iface.txBytes}`]);
     }

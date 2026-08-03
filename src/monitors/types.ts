@@ -51,18 +51,20 @@ export interface GpuData {
    combinedWatts?: number;
  }
 
- export interface PacketData {
-   totalPackets: number;
-   rxPackets: number;
-   txPackets: number;
-   rxRate: number;
-   txRate: number;
-   connections: number;
-   topProcesses: NetworkProcess[];
-   /** Every process with an open network connection (unlike topProcesses, not truncated). */
-   allProcesses: NetworkProcess[];
-   interfaces: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[];
- }
+export interface PacketData {
+  totalPackets: number;
+  rxPackets: number;
+  txPackets: number;
+  rxRate: number;
+  txRate: number;
+  connections: number;
+  topProcesses: NetworkProcess[];
+  allProcesses: NetworkProcess[];
+  interfaces: { iface: string; rxPackets: number; txPackets: number; rxBytes: number; txBytes: number }[];
+  protocolStats?: ProtocolStats;
+  connectionStates?: ConnectionStateStats;
+  listeningPorts?: number[];
+}
 
  export interface TaskData {
    pid: number;
@@ -151,10 +153,47 @@ export interface NetworkData {
   txBytes: number;
   rxPackets: number;
   txPackets: number;
+  rxRate: number;
+  txRate: number;
   rxPacketsPerSec?: number;
   txPacketsPerSec?: number;
   connections?: number;
   topProcesses?: NetworkProcess[];
+  protocols?: ProtocolStats;
+  connectionStates?: ConnectionStateStats;
+  listeningPorts?: number[];
+  establishedConnections?: number;
+  topRemoteHosts?: RemoteHostInfo[];
+}
+
+export interface ProtocolStats {
+  tcp: { connections: number; rxBytes: number; txBytes: number };
+  udp: { connections: number; rxBytes: number; txBytes: number };
+}
+
+export interface ConnectionStateStats {
+  established: number;
+  listening: number;
+  timeWait: number;
+  closeWait: number;
+  other: number;
+}
+
+export interface RemoteHostInfo {
+  host: string;
+  ip: string;
+  country?: string;
+  city?: string;
+  asn?: string;
+  bytesTransferred: number;
+  connectionCount: number;
+}
+
+export interface DnsQuery {
+  timestamp: number;
+  domain: string;
+  type: string;
+  process: string;
 }
 
 export interface NetworkConnection {
@@ -164,6 +203,10 @@ export interface NetworkConnection {
   state: string;
   rxBytes: number;
   txBytes: number;
+  remoteHost?: string;
+  country?: string;
+  city?: string;
+  asn?: string;
 }
 
 export interface NetworkProcess {
@@ -171,6 +214,8 @@ export interface NetworkProcess {
   command: string;
   rxBytes: number;
   txBytes: number;
+  rxRate?: number;
+  txRate?: number;
   rxPackets?: number;
   txPackets?: number;
   connections?: NetworkConnection[];

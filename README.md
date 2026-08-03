@@ -21,6 +21,7 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 - **Disk I/O throughput & space** — read/write speed per volume and mounted volume space usage
 - **Battery & power health** — level, power source, condition, charge cycles, max capacity, health trends, estimated time to empty, discharge rate, power draw in watts
 - **Packet monitor** — network packet counts, packet rates, active TCP connections, top network processes
+- **Advanced network monitoring** — real-time bandwidth rates (RX/TX bytes/sec), protocol breakdown (TCP/UDP), connection state analysis (ESTABLISHED, LISTENING, TIME_WAIT, CLOSE_WAIT), listening port detection, top remote hosts, per-process network I/O tracking, and GlassWire-style modern TUI panel with sparkline graphs
 - **Task list** — running tasks/applications sorted by CPU with PID, user, memory, state, and runtime
 - **Thermal state** — CPU temperature via `pmset` and `powermetrics` (sudo for detailed readings)
 - **Network** — RX/TX bytes and per-second rates

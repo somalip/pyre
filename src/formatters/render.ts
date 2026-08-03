@@ -334,11 +334,102 @@ function thermalCard(data: StatsData, contentWidth: number): string[] {
 
 function networkCard(data: StatsData, contentWidth: number): string[] {
   const valW = Math.max(6, contentWidth - 8);
-  return [
-    statRow('Iface', truncatePlain(`${data.network.interface} (${data.network.ip})`, valW)),
-    statRow('RX', `${formatBytes(data.network.rxBytes)} / ${data.network.rxPackets} pkt`),
-    statRow('TX', `${formatBytes(data.network.txBytes)} / ${data.network.txPackets} pkt`),
-  ];
+  const lines: string[] = [];
+  lines.push(statRow('Iface', truncatePlain(`${data.network.interface} (${data.network.ip})`, valW)));
+  const rxTotal = formatBytes(data.network.rxBytes);
+  const txTotal = formatBytes(data.network.txBytes);
+  const rxRateStr = formatBytes(data.network.rxRate);
+  const txRateStr = formatBytes(data.network.txRate);
+  lines.push(statRow('RX', `${rxTotal} · ${rxRateStr}/s`));
+  lines.push(statRow('TX', `${txTotal} · ${txRateStr}/s`));
+  
+  const totalBytes = data.network.rxBytes + data.network.txBytes;
+  if (totalBytes > 0) {
+    const rxPct = Math.round((data.network.rxBytes / totalBytes) * 100);
+    const barW = Math.max(4, contentWidth - 20);
+    const rxBar = gaugeBar(rxPct, barW);
+    lines.push(statRow('RX/TX', `${rxBar} ${rxPct}%`));
+  }
+  
+  if (data.network.protocols) {
+    const p = data.network.protocols;
+    const totalConns = (p.tcp.connections || 0) + (p.udp.connections || 0);
+    if (totalConns > 0) {
+      const tcpPct = Math.round((p.tcp.connections / totalConns) * 100);
+      lines.push(statRow('TCP', `${p.tcp.connections} conns · ${gaugeBar(tcpPct, Math.max(4, contentWidth - 20))} ${tcpPct}%`));
+      lines.push(statRow('UDP', `${p.udp.connections} conns`));
+    }
+  }
+  if (data.network.connectionStates) {
+    const cs = data.network.connectionStates;
+    const total = cs.established + cs.listening + cs.timeWait + cs.closeWait + cs.other;
+    if (total > 0) {
+      const estPct = Math.round((cs.established / total) * 100);
+      lines.push(statRow('Active', `${cs.established} ESTABLISHED · ${estPct}%`));
+      lines.push(statRow('Listen', `${cs.listening} LISTEN`));
+      if (cs.timeWait > 0) lines.push(statRow('TimeWait', `${cs.timeWait}`));
+      if (cs.closeWait > 0) lines.push(statRow('CloseWait', `${cs.closeWait}`));
+    }
+  }
+  if (data.network.listeningPorts && data.network.listeningPorts.length > 0) {
+    const ports = data.network.listeningPorts.slice(0, 8).join(', ');
+    lines.push(statRow('Ports', truncatePlain(ports, valW)));
+  }
+  if (data.network.topRemoteHosts && data.network.topRemoteHosts.length > 0) {
+    for (const host of data.network.topRemoteHosts.slice(0, 3)) {
+      lines.push(statRow('Host', truncatePlain(`${host.host} (${host.connectionCount})`, valW)));
+    }
+  }
+  return lines;
+}
+
+function networkDetailCard(data: StatsData, width: number, theme: ThemeColors): string[] {
+  const contentWidth = width - 4;
+  const lines = networkCard(data, contentWidth);
+  
+  if (data.packets && data.packets.allProcesses && data.packets.allProcesses.length > 0) {
+    lines.push('');
+    lines.push(chalk.bold('PROCESSES & BANDWIDTH USAGE:'));
+    lines.push(chalk.dim('─'.repeat(contentWidth)));
+    
+    const pWidth = 8;
+    const rxWidth = 12;
+    const txWidth = 12;
+    const totalWidth = 12;
+    const cmdWidth = Math.max(15, contentWidth - (pWidth + rxWidth + txWidth + totalWidth + 4 * 2));
+    
+    lines.push(
+      chalk.bold('PID'.padEnd(pWidth)) + '  ' +
+      chalk.bold('COMMAND'.padEnd(cmdWidth)) + '  ' +
+      chalk.bold('RX'.padStart(rxWidth)) + '  ' +
+      chalk.bold('TX'.padStart(txWidth)) + '  ' +
+      chalk.bold('TOTAL'.padStart(totalWidth))
+    );
+    
+    const sorted = [...data.packets.allProcesses]
+      .sort((a, b) => (b.rxBytes + b.txBytes) - (a.rxBytes + a.txBytes));
+      
+    for (const proc of sorted) {
+      if (proc.rxBytes + proc.txBytes === 0) continue;
+      const rxStr = formatBytes(proc.rxBytes).padStart(rxWidth);
+      const txStr = formatBytes(proc.txBytes).padStart(txWidth);
+      const totalStr = formatBytes(proc.rxBytes + proc.txBytes).padStart(totalWidth);
+      const cmdStr = truncatePlain(proc.command, cmdWidth).padEnd(cmdWidth);
+      
+      lines.push(
+        chalk.cyan(proc.pid.toString().padEnd(pWidth)) + '  ' +
+        cmdStr + '  ' +
+        chalk.yellow(rxStr) + '  ' +
+        chalk.yellow(txStr) + '  ' +
+        chalk.bold(totalStr)
+      );
+    }
+  } else {
+    lines.push('');
+    lines.push(chalk.dim('No active network process data available.'));
+  }
+  
+  return lines;
 }
 
 function packetCard(data: StatsData, contentWidth: number): string[] | null {
@@ -348,6 +439,16 @@ function packetCard(data: StatsData, contentWidth: number): string[] | null {
   lines.push(statRow('RX', `${data.packets.rxPackets} pkt`));
   lines.push(statRow('TX', `${data.packets.txPackets} pkt`));
   lines.push(statRow('Conns', `${data.packets.connections} TCP`));
+  if (data.packets.protocolStats) {
+    const ps = data.packets.protocolStats;
+    lines.push(statRow('TCP', `${ps.tcp.connections} conns`));
+    lines.push(statRow('UDP', `${ps.udp.connections} conns`));
+  }
+  if (data.packets.connectionStates) {
+    const cs = data.packets.connectionStates;
+    lines.push(statRow('ESTAB', `${cs.established}`));
+    lines.push(statRow('LISTEN', `${cs.listening}`));
+  }
   if (data.packets.topProcesses && data.packets.topProcesses.length) {
     const topProc = data.packets.topProcesses[0];
     lines.push(statRow('Top Proc', `${truncatePlain(topProc.command, contentWidth - 25)} (${formatBytes(topProc.rxBytes + topProc.txBytes)})`));
@@ -724,7 +825,7 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
     case 'thermal':
       return thermalCard(data, contentWidth);
     case 'network':
-      return networkCard(data, contentWidth);
+      return networkDetailCard(data, width, theme);
     case 'packets': {
       if (!data.packets || !data.packets.allProcesses || !data.packets.allProcesses.length) {
         return ['No advanced network tracking data available.'];
