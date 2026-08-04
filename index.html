@@ -43,23 +43,27 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
 
-  .wrap { max-width: 680px; margin: 0 auto; padding: 0 20px; width: 100%; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 32px; width: 100%; }
 
   /* ── splash screen ─────────────────────────────────────────────────── */
   #splash {
     position: fixed; inset: 0; z-index: 50;
     background: var(--bg);
     display: flex; flex-direction: column;
+    justify-content: space-between;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
     transition: opacity .5s ease, visibility .5s ease;
   }
   #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
 
   .splash-inner {
-    flex: 1;
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    gap: 16px;
-    padding: 40px 20px 0;
+    gap: 8px;
+    padding: 32px 20px 0;
+    z-index: 2;
   }
 
   .splash-title {
@@ -82,9 +86,9 @@
   #fire {
     display: block;
     width: 100%;
-    height: 28vh;
-    min-height: 160px;
-    max-height: 280px;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
     background: var(--bg);
   }
 
@@ -94,6 +98,7 @@
     justify-content: center;
     gap: 16px;
     padding: 16px 20px 28px;
+    z-index: 2;
   }
 
   .enter-btn {
@@ -125,20 +130,37 @@
 
   /* ── wizard shell ──────────────────────────────────────────────────── */
   #wizard-container {
-    opacity: 0; transition: opacity .4s ease .1s; 
-    flex: 1; display: flex; flex-direction: column; 
-    align-items: center; padding: 40px 20px;
+    opacity: 0; transform: translateY(10px);
+    transition: opacity .5s ease .1s, transform .5s ease .1s;
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; padding: 32px 24px 0;
+    width: 100%;
   }
-  #wizard-container.show { opacity: 1; }
-  #wizard { 
-    flex: 1; display: flex; flex-direction: column; 
-    width: 100%; max-width: 720px;
+  #wizard-container.show { opacity: 1; transform: none; }
+  #wizard {
+    flex: 1; display: flex; flex-direction: column;
+    width: 100%; max-width: 1200px;
+    min-height: calc(100vh - 32px);
     border: 1px solid var(--border);
     border-radius: 8px;
     background: var(--surface);
     position: relative;
+    overflow: hidden;
   }
   #wizard.show { opacity: 1; }
+
+  /* faint ascii texture skimming the wizard shell */
+  #wizard::after {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.035) 1px, transparent 0);
+    background-size: 22px 22px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 0%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 0%, transparent 75%);
+    z-index: 0;
+  }
+  #wizard > * { position: relative; z-index: 1; }
 
   /* top bar */
   .topbar {
@@ -172,11 +194,13 @@
     padding: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    position: relative;
   }
   .tabs::-webkit-scrollbar { display: none; }
   .tabs .wrap {
     display: flex;
     gap: 20px;
+    position: relative;
   }
   .tab {
     font-size: 11px;
@@ -185,28 +209,51 @@
     color: var(--dim);
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    transition: all .15s;
+    transition: color .15s;
     white-space: nowrap;
     user-select: none;
     text-transform: uppercase;
+    position: relative;
   }
   .tab:hover { color: var(--text); }
   .tab.active {
     color: var(--accent);
-    border-bottom-color: var(--accent);
   }
   .tab.done { color: var(--dim); }
   .tab .idx {
     color: var(--dimmer);
     margin-right: 6px;
+    transition: color .15s;
   }
   .tab.active .idx { color: var(--accent); }
 
-  /* ── main content ──────────────────────────────────────────────────── */
-  main { flex: 1; padding: 28px 0 60px; }
+  /* sliding underline indicator, positioned via JS */
+  .tab-indicator {
+    position: absolute;
+    bottom: -1px;
+    height: 2px;
+    background: var(--accent);
+    transition: left .28s cubic-bezier(.2,.7,.3,1), width .28s cubic-bezier(.2,.7,.3,1);
+    left: 0; width: 0;
+  }
+
+  /* ── main content ────────────────────────────────────────────────    */
+  main { flex: 1; padding: 32px 0 60px; }
   .panel { display: none; }
-  .panel.active { display: block; animation: fadeIn .3s ease; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .panel.active { display: block; animation: panelIn .38s cubic-bezier(.2,.7,.3,1); }
+  @keyframes panelIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* stagger direct children of an active panel for a subtle cascade */
+  .panel.active > * { animation: itemIn .4s cubic-bezier(.2,.7,.3,1) backwards; }
+  @keyframes itemIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .panel.active > *:nth-child(1) { animation-delay: .02s; }
+  .panel.active > *:nth-child(2) { animation-delay: .07s; }
+  .panel.active > *:nth-child(3) { animation-delay: .12s; }
+  .panel.active > *:nth-child(4) { animation-delay: .17s; }
+  .panel.active > *:nth-child(5) { animation-delay: .22s; }
 
   /* panel header */
   .panel-head {
@@ -241,7 +288,9 @@
     margin-bottom: 20px;
     background: var(--bg);
     overflow: hidden;
+    transition: border-color .2s ease, transform .2s ease;
   }
+  .card:hover { border-color: var(--dim); }
   .card-title {
     font-size: 10px;
     color: var(--text);
@@ -412,8 +461,8 @@
   /* theme grid */
   .theme-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
   }
   .theme-swatch {
     padding: 14px 12px;
@@ -421,13 +470,19 @@
     background: var(--bg);
     border: 1px solid var(--border);
     border-radius: 6px;
-    transition: all .15s;
+    transition: border-color .15s, transform .15s, background .15s;
   }
-  .theme-swatch:hover { border-color: var(--dim); }
+  .theme-swatch:hover { border-color: var(--dim); transform: translateY(-2px); }
   .theme-swatch.selected {
     border-color: var(--accent);
     background: var(--surface);
+    transform: translateY(-2px);
   }
+  .theme-swatch .dotsrow span { transition: transform .15s ease; }
+  .theme-swatch:hover .dotsrow span:nth-child(1) { transform: scale(1.15); }
+  .theme-swatch:hover .dotsrow span:nth-child(2) { transform: scale(1.15); transition-delay: .03s; }
+  .theme-swatch:hover .dotsrow span:nth-child(3) { transform: scale(1.15); transition-delay: .06s; }
+  .theme-swatch:hover .dotsrow span:nth-child(4) { transform: scale(1.15); transition-delay: .09s; }
   .theme-swatch .swname {
     font-size: 10px;
     margin-bottom: 8px;
@@ -477,7 +532,8 @@
     transition: all .15s;
     font-weight: bold;
   }
-  .btn:hover { color: var(--bg); background: var(--text); border-color: var(--text); }
+  .btn:hover { color: var(--bg); background: var(--text); border-color: var(--text); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
   .btn.primary {
     border-color: var(--accent);
     color: var(--accent);
@@ -486,7 +542,7 @@
     background: var(--accent);
     color: var(--bg);
   }
-  .btn:disabled { opacity: 0.2; cursor: default; }
+  .btn:disabled { opacity: 0.2; cursor: default; transform: none; }
 
   /* ── footer ────────────────────────────────────────────────────────── */
   footer {
@@ -517,18 +573,36 @@
   /* ── responsive ────────────────────────────────────────────────────── */
   @media (max-width: 620px) {
     body { font-size: 12px; }
+    .wrap { padding: 0 18px; }
+    #wizard-container { padding: 16px 12px 0; }
+    #wizard { min-height: calc(100vh - 16px); border-radius: 0; }
     .theme-grid { grid-template-columns: repeat(2, 1fr); }
     .tab { padding: 12px 0; font-size: 10px; }
-    #fire { height: 22vh; min-height: 120px; }
     footer .wrap { flex-direction: column; align-items: flex-start; }
+  }
+
+  @media (min-width: 900px) {
+    .panel[data-panel="0"] .card,
+    .panel[data-panel="2"] .card { max-width: 760px; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .cursor-blink { animation: none; }
   }
+
+  /* ── ambient ascii backdrop ───────────────────────────────────────── */
+  #bgArt {
+    position: fixed; inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    opacity: .5;
+  }
+  @media (prefers-reduced-motion: reduce) { #bgArt { display: none; } }
 </style>
 </head>
 <body>
+
+<canvas id="bgArt"></canvas>
 
 <!-- ═══════════════════ SPLASH ═══════════════════ -->
 <div id="splash">
@@ -560,6 +634,7 @@
       <div class="tab" data-step="2"><span class="idx">[2]</span>config</div>
       <div class="tab" data-step="3"><span class="idx">[3]</span>p2p</div>
       <div class="tab" data-step="4"><span class="idx">[4]</span>launch</div>
+      <div class="tab-indicator" id="tabIndicator"></div>
     </div>
   </div>
 
@@ -849,6 +924,57 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
 
 <!-- ═══════════════════ SCRIPTS ═══════════════════ -->
 <script>
+  /* ── ambient ascii backdrop (whole page) ──────────────────────────── */
+  (function(){
+    const canvas = document.getElementById('bgArt');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+    const CHARS = '.:+*·°'.split('');
+    let cols, rows, cellW = 16, cellH = 16, drops, dpr;
+
+    function setup(){
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cols = Math.ceil(window.innerWidth / cellW);
+      rows = Math.ceil(window.innerHeight / cellH);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textBaseline = 'top';
+      drops = new Array(cols).fill(0).map(() => -Math.floor(Math.random() * rows));
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = 'rgba(255, 95, 46, 0.16)';
+      for (let i = 0; i < cols; i++) {
+        const y = drops[i];
+        if (y >= 0 && y < rows) {
+          const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+          ctx.fillText(ch, i * cellW, y * cellH);
+        }
+        drops[i]++;
+        if (drops[i] * cellH > window.innerHeight + Math.random() * 800) {
+          drops[i] = -Math.floor(Math.random() * rows);
+        }
+      }
+    }
+
+    let last = 0;
+    function loop(ts){
+      if (ts - last > 140) { draw(); last = ts; }
+      requestAnimationFrame(loop);
+    }
+    setup();
+    requestAnimationFrame(loop);
+    let rt;
+    window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(setup, 200); });
+  })();
+
   /* ── fire simulation (splash) ─────────────────────────────────────── */
   (function(){
     const canvas = document.getElementById('fire');
@@ -978,6 +1104,14 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
     const nextBtn = document.getElementById('nextBtn');
     const TOTAL = panels.length;
 
+    const tabIndicator = document.getElementById('tabIndicator');
+    function moveIndicator(){
+      const active = document.querySelector('.tab.active');
+      if (!active || !tabIndicator) return;
+      tabIndicator.style.left = active.offsetLeft + 'px';
+      tabIndicator.style.width = active.offsetWidth + 'px';
+    }
+
     function render(){
       panels.forEach(p => p.classList.toggle('active', Number(p.dataset.panel) === state.step));
       tabs.forEach(t => {
@@ -988,7 +1122,9 @@ echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-p
       prevBtn.disabled = state.step === 0;
       nextBtn.textContent = state.step === TOTAL - 1 ? 'finish' : 'continue →';
       if(state.step === TOTAL - 1) updateReview();
+      requestAnimationFrame(moveIndicator);
     }
+    window.addEventListener('resize', moveIndicator);
 
     function buildP2PCmd(){
       const p = state.p2p;
