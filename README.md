@@ -523,6 +523,52 @@ npm install
 | `npm run dev` | Run directly via `tsx` (no build step) |
 | `npm test` | Verify the built binary responds to `--help` |
 
+## Roadmap
+
+Proposed features for upcoming versions, organized by effort and impact.
+
+### Tier 1 — High Impact, Achievable
+
+| Feature | Description |
+|---|---|
+| **AI Anomaly Explanation** (`pyre explain`) | Translate z-score spikes into plain-English diagnoses using a local (Ollama) or API-based LLM |
+| **S.M.A.R.T. Disk Health** (`pyre smart`) | Display SSD/HDD wear level, reallocated sectors, power-on hours, and remaining lifespan via `smartctl` |
+| **Docker / Container Panel** | Show running Docker/OrbStack containers with CPU%, memory, network I/O, and status — toggle with `C` in the live dashboard |
+| **Fan Speed Monitoring** | Display current RPM for all system fans via SMC readings in the Thermal panel |
+| **Log Replay Mode** (`pyre replay`) | Load a historical CSV log and play it back inside the interactive TUI with scrubbing controls |
+| **Multi-Channel Alert Integrations** | Native Slack, Discord, Pushover, and ntfy.sh alert targets with pre-configured payload templates (extends `--webhook-url`) |
+| **Prometheus Exporter** | Expose a `/metrics` endpoint in Prometheus text format — `src/prometheus.ts` is already stubbed |
+
+### Tier 2 — Strong Differentiation
+
+| Feature | Description |
+|---|---|
+| **Plugin System** | User-authored metric collectors as JS scripts in `~/.config/pyre/plugins/` rendered as custom dashboard panels |
+| **Per-App Network Usage** (`pyre netusage`) | Real-time and cumulative network I/O broken down per application, backed by `nettop` (parser already in repo) |
+| **Configurable Dashboard Grid** | Define custom panel layout, order, and sizing in `~/.config/pyre/config.json` |
+| **Smart Battery Predictor** | Use accumulated power-drain history from CSV logs to produce a personalized, heuristic battery time-remaining estimate |
+| **REST API Mode** (`pyre serve`) | Expose all metrics as structured JSON REST endpoints (`GET /api/cpu`, `/api/all`, etc.) with optional API key auth |
+| **Process CPU Profiling** (`pyre profile-proc <pid>`) | Capture a 5-second `sample`/`spindump` for a misbehaving process and render an annotated call-tree summary |
+| **Watchdog Rules Engine** (`pyre watchdog`) | Persistent daemon that monitors metrics and executes configurable rules — e.g. "if CPU > 90% for 5 min → kill `photoanalysisd` → notify Slack" |
+| **Build System Tracker** (`pyre build`) | First-class tracking for `xcodebuild`, `cargo`, `make`, `bazel` — extends the existing Blender render tracker pattern |
+
+### Tier 3 — Big Bets
+
+| Feature | Description |
+|---|---|
+| **Network Topology Mapper** (`pyre topo`) | Visualize LAN peers, active connections, and routing hops as an ASCII diagram; auto-detects pyre-capable peers |
+| **Cloud Sync** (`pyre sync`) | Sync config profiles, alert thresholds, and anomaly history across multiple Macs via iCloud Drive or a custom S3/WebDAV backend |
+
+### Quality of Life
+
+| Feature | Description |
+|---|---|
+| **Gaming / Performance Mode Profile** | `pyre live --profile gaming` — GPU + Thermal + Power panels only, 1 s interval, bar graph mode, minimal overlay |
+| **iOS Shortcut Integration** | Documented iOS Shortcut that runs `pyre check --plain` over SSH and displays a summary notification |
+| **Setup Wizard Polish** (`pyre setup`) | Guided first-run experience for `powermetrics` sudo, alert thresholds, theme selection, and webhook setup |
+
+---
+
 ## License
 
 MIT
