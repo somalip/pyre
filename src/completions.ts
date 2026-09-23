@@ -116,3 +116,38 @@ complete -c pyre -l sort -x -a "cpu mem pid user command state threads runtime" 
 complete -c pyre -l temp-unit -x -a "c f" -d "Temperature unit"
 `;
 }
+
+export function generatePowerShellCompletions(): string {
+  return `# PowerShell completion for pyre
+Register-ArgumentCompleter -Native -CommandName pyre -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $commands = @('live', 'check', 'pipe', 'stress', 'ui', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain')
+    $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
+
+    $elements = $commandAst.CommandElements
+    if ($elements.Count -le 2) {
+        $commands | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+            [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+        }
+    }
+    $options | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_)
+    }
+}
+`;
+}
+
+export function printCompletions(shell: string): void {
+  const s = (shell || '').toLowerCase();
+  if (s === 'bash') {
+    console.log(generateBashCompletions());
+  } else if (s === 'fish') {
+    console.log(generateFishCompletions());
+  } else if (s === 'powershell' || s === 'pwsh') {
+    console.log(generatePowerShellCompletions());
+  } else {
+    console.log(generateZshCompletions());
+  }
+}
+
+

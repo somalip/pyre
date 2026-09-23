@@ -17,6 +17,7 @@ export interface SmcMetrics {
   temps: Record<string, number>;
   power: { cpu?: number; gpu?: number; combined?: number };
   freq: Record<string, number>;
+  fans: Array<{ id: number; rpm: number; minRpm?: number; maxRpm?: number }>;
 }
 
 let smcCache: { data: SmcMetrics; ts: number } | null = null;
@@ -35,7 +36,7 @@ export async function getSmcMetrics(): Promise<SmcMetrics> {
   const now = Date.now();
   if (smcCache && now - smcCache.ts < 4000) return smcCache.data;
 
-  const result: SmcMetrics = { temps: {}, power: {}, freq: {} };
+  const result: SmcMetrics = { temps: {}, power: {}, freq: {}, fans: [] };
   try {
     // 1. Try non-interactive powermetrics if passwordless sudo is available
     const pm = (
@@ -73,6 +74,25 @@ export async function getSmcMetrics(): Promise<SmcMetrics> {
 
       const cpuFreq = pm.match(/CPU HW active frequency:\s*([\d.]+)/i);
       if (cpuFreq) result.freq['cpu'] = parseFloat(cpuFreq[1]);
+
+      // Fan speed parsing — matches "Fan N speed: XXXX rpm" or "Fan N target: XXXX rpm"
+      const fanMatches = pm.matchAll(/Fan\s+(\d+)\s+speed:\s*(\d+)\s*rpm/gi);
+      for (const m of fanMatches) {
+        const id = parseInt(m[1], 10);
+        const rpm = parseInt(m[2], 10);
+        if (!isNaN(id) && !isNaN(rpm)) {
+          result.fans.push({ id, rpm });
+        }
+      }
+      // Also try "Fan N" format without "speed" keyword
+      if (result.fans.length === 0) {
+        const fanMatches2 = pm.matchAll(/Fan\s+(\d+):\s*(\d+)\s*rpm/gi);
+        for (const m of fanMatches2) {
+          const id = parseInt(m[1], 10);
+          const rpm = parseInt(m[2], 10);
+          if (!isNaN(id) && !isNaN(rpm)) result.fans.push({ id, rpm });
+        }
+      }
     }
   } catch {
     // ignore powermetrics failure

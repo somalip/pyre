@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>pyre — setup</title>
+<meta name="description" content="pyre setup wizard — configure your Mac system monitoring CLI" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ── tokens ────────────────────────────────────────────────────────── */
+  :root {
+    --bg:       #000000;
+    --surface:  #080808;
+    --surface2: #0f0f0f;
+    --border:   #1a1a1a;
+    --accent:   #ff5f2e;
+    --accent2:  #ffa07a;
+    --text:     #f0f0f0;
+    --dim:      #888888;
+    --dimmer:   #444444;
+    --ok:       #10b981;
+    --mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  /* Themes */
+  body[data-theme="cyberpunk"] {
+    --accent: #00ffcc; --accent2: #ff007f;
+    --bg: #06060c; --surface: #0c0d14; --surface2: #141624; --border: #1e2238;
+  }
+  body[data-theme="dracula"] {
+    --accent: #bd93f9; --accent2: #ff79c6;
+    --bg: #0b0a12; --surface: #12101c; --surface2: #1c192c; --border: #26223b;
+  }
+  body[data-theme="nord"] {
+    --accent: #88c0d0; --accent2: #81a1c1;
+    --bg: #0a0e14; --surface: #101720; --surface2: #16202d; --border: #1f2d3d;
+  }
+  body[data-theme="matrix"] {
+    --accent: #00ff66; --accent2: #55ff99;
+    --bg: #020803; --surface: #041206; --surface2: #09210c; --border: #0e3314;
+  }
+  body[data-theme="gruvbox"] {
+    --accent: #fb4934; --accent2: #fabd2f;
+    --bg: #0c0b0a; --surface: #141210; --surface2: #1e1b18; --border: #2d2621;
+  }
+  body[data-theme="monochrome"] {
+    --accent: #e5e7eb; --accent2: #9ca3af;
+    --bg: #050505; --surface: #0e0e0e; --surface2: #161616; --border: #222222;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    position: relative;
+    transition: background .2s ease;
+  }
+
+  ::selection { background: var(--accent); color: var(--bg); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 24px; width: 100%; position: relative; }
+
+  /* ── ambient ascii rising embers canvas ────────────────────────────── */
+  #bgEmbers {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+  }
+  @media (prefers-reduced-motion: reduce) { #bgEmbers { display: none; } }
+
+  /* ── splash screen ─────────────────────────────────────────────────── */
+  #splash {
+    position: fixed; inset: 0; z-index: 50;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    transition: opacity .4s ease, visibility .4s ease;
+  }
+  #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+
+  .splash-inner {
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 8px;
+    padding: 36px 20px 0;
+    z-index: 2;
+    text-align: center;
+  }
+
+  .splash-ascii-flame {
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--accent);
+    white-space: pre;
+    user-select: none;
+  }
+
+  .splash-title {
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    text-transform: lowercase;
+    margin-top: 4px;
+  }
+
+  .splash-status {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+  }
+  .cursor-blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  #fire {
+    display: block;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    background: var(--bg);
+    cursor: crosshair;
+  }
+
+  .splash-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 20px 28px;
+    z-index: 2;
+  }
+  .splash-btn-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .enter-btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 8px 24px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    transition: all .15s;
+  }
+  .enter-btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .skip-link {
+    font-size: 10px;
+    color: var(--dimmer);
+    letter-spacing: 0.04em;
+    text-decoration: none;
+  }
+  .skip-link:hover { color: var(--dim); text-decoration: none; }
+
+  .fire-hint {
+    font-size: 10px;
+    color: var(--dimmer);
+    letter-spacing: 0.05em;
+  }
+
+  /* ── wizard shell ──────────────────────────────────────────────────── */
+  #wizard-container {
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .4s ease, transform .4s ease;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+  #wizard-container.show { opacity: 1; transform: none; }
+
+  /* top bar */
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .topbar .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .topbar-brand {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    cursor: pointer;
+  }
+  .topbar-brand span {
+    color: var(--accent);
+    margin-left: 2px;
+  }
+  .topbar-meta {
+    font-size: 10.5px;
+    color: var(--dim);
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ok);
+    box-shadow: 0 0 6px var(--ok);
+    display: inline-block;
+  }
+
+  /* step tabs with sliding ember line */
+  .tabs {
+    border-bottom: 1px solid var(--border);
+    padding: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    position: relative;
+    background: var(--bg);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs .wrap {
+    display: flex;
+    gap: 24px;
+    position: relative;
+  }
+  .tab {
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    padding: 14px 0;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    text-transform: lowercase;
+    transition: color .15s;
+    position: relative;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active {
+    color: var(--accent);
+  }
+  .tab.done { color: var(--dim); }
+  .tab .idx {
+    color: var(--dimmer);
+    margin-right: 6px;
+  }
+  .tab.active .idx { color: var(--accent); }
+
+  /* Sliding glowing ember line */
+  .tab-indicator {
+    position: absolute;
+    bottom: -1px;
+    height: 2px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent), 0 0 16px var(--accent);
+    transition: left .24s cubic-bezier(.2,.8,.2,1), width .24s cubic-bezier(.2,.8,.2,1);
+    pointer-events: none;
+  }
+
+  /* ── main content ──────────────────────────────────────────────────── */
+  main {
+    flex: 1;
+    padding: 32px 0 60px;
+    position: relative;
+  }
+
+  .panel {
+    display: none;
+  }
+  .panel.active {
+    display: block;
+    animation: panelHeatIn .25s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+
+  @keyframes panelHeatIn {
+    0% {
+      opacity: 0.2;
+      transform: translateY(4px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* panel header */
+  .panel-head {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-head .tag {
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .panel-head h2 {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+  }
+  .panel-head .desc {
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  /* ── cards ─────────────────────────────────────────────────────────── */
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 20px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .card-title {
+    font-size: 10px;
+    color: var(--text);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-body { padding: 14px; }
+
+  /* code box */
+  .code-box {
+    background: #000000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    position: relative;
+    margin-bottom: 4px;
+  }
+  .code-box pre {
+    font-size: 12px;
+    color: var(--accent2);
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.55;
+    padding-right: 60px;
+  }
+  .code-box pre .dim { color: var(--dimmer); }
+  .code-box pre .cmd { color: var(--accent); font-weight: 500; }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 3px 8px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 3px;
+    transition: all .15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .note {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 8px;
+    line-height: 1.5;
+  }
+  .note b { color: var(--text); font-weight: 500; }
+  .note code {
+    background: #000;
+    border: 1px solid var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  /* feature list */
+  .feat-list {
+    list-style: none;
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .feat-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .feat-list li:last-child { border-bottom: none; }
+  .feat-list .bullet { color: var(--accent); flex-shrink: 0; }
+  .feat-list b { color: var(--text); font-weight: 500; }
+
+  /* ASCII Architecture Banner */
+  .ascii-arch {
+    background: #000000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: clamp(8px, 1.35vw, 11px);
+    line-height: 1.25;
+    color: var(--accent2);
+    overflow-x: auto;
+    white-space: pre;
+    margin-bottom: 18px;
+    user-select: none;
+  }
+
+  /* ── form controls ─────────────────────────────────────────────────── */
+  label.field { display: block; margin-bottom: 16px; }
+  label.field .lbl {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  label.field .lbl b { color: var(--accent2); font-weight: 500; }
+
+  input[type="text"],
+  input[type="password"],
+  input[type="number"] {
+    width: 100%;
+    background: #000000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    transition: border-color .15s;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    background: var(--border);
+    border-radius: 3px;
+    height: 6px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg);
+  }
+
+  /* toggle rows */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toggle-row:last-child { border-bottom: none; }
+  .t-label { font-size: 12px; color: var(--text); }
+  .t-desc { font-size: 10.5px; color: var(--dim); margin-top: 2px; }
+
+  .switch {
+    width: 36px;
+    height: 18px;
+    background: var(--border);
+    border-radius: 99px;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition: all .15s;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after {
+    left: 20px;
+    background: #000;
+  }
+
+  /* ── theme grid ────────────────────────────────────────────────────── */
+  .theme-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .theme-swatch {
+    padding: 12px;
+    cursor: pointer;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: all .15s;
+  }
+  .theme-swatch:hover { border-color: var(--dim); }
+  .theme-swatch.selected {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .theme-swatch .swname {
+    font-size: 10px;
+    margin-bottom: 8px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .theme-swatch.selected .swname { color: var(--accent); font-weight: bold; }
+  .theme-swatch .dotsrow { display: flex; gap: 4px; }
+  .theme-swatch .dotsrow span {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  }
+
+  /* Mini terminal preview */
+  .live-terminal-preview {
+    background: #000000;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    font-size: clamp(8.5px, 1.25vw, 11px);
+    line-height: 1.35;
+    color: var(--dim);
+    overflow-x: auto;
+    white-space: pre;
+    user-select: none;
+  }
+  .live-terminal-preview .acc { color: var(--accent); font-weight: 500; }
+  .live-terminal-preview .ok  { color: var(--ok); }
+  .live-terminal-preview .hi  { color: var(--text); }
+
+  /* ── checklist ─────────────────────────────────────────────────────── */
+  .checklist { font-size: 12px; color: var(--dim); }
+  .checklist div {
+    display: flex;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .checklist div:last-child { border-bottom: none; }
+  .checklist .ok { color: var(--ok); font-weight: 500; }
+
+  /* ── nav buttons ───────────────────────────────────────────────────── */
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 20px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    transition: all .15s;
+    font-weight: bold;
+  }
+  .btn:hover:not(:disabled) { color: var(--bg); background: var(--text); border-color: var(--text); }
+  .btn.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn.primary:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn:disabled { opacity: 0.2; cursor: default; }
+
+  /* ── footer ────────────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+    padding: 16px 0;
+    font-size: 10.5px;
+    color: var(--dim);
+    background: rgba(0, 0, 0, 0.7);
+  }
+  footer .wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  footer .f-brand { color: var(--text); font-weight: 500; }
+  footer .f-brand span { color: var(--dim); margin-left: 4px; }
+  footer nav { display: flex; gap: 16px; }
+  footer nav a { color: var(--dim); text-decoration: none; }
+  footer nav a:hover { color: var(--accent); }
+
+  /* ── mobile ────────────────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    body { font-size: 12px; }
+    .wrap { padding: 0 16px; }
+    .tabs .wrap { gap: 16px; }
+    .tab { font-size: 10.5px; padding: 12px 0; }
+    .theme-grid { grid-template-columns: repeat(2, 1fr); }
+    footer .wrap { flex-direction: column; align-items: flex-start; }
+    .actions {
+      position: sticky;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 12px 16px;
+      margin: 20px -16px 0;
+      border-top: 1px solid var(--border);
+      z-index: 20;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- Ambient Rising ASCII Embers Canvas -->
+<canvas id="bgEmbers"></canvas>
+
+<!-- ═══════════════════ SPLASH ═══════════════════ -->
+<div id="splash">
+  <div class="splash-inner">
+    <!-- Clean ASCII Flame Banner -->
+    <pre class="splash-ascii-flame">
+       (  .  )
+       )\___/(   pyre
+      (_______)  v5.0.0</pre>
+    <div class="splash-status">setup wizard<span class="cursor-blink">_</span></div>
+  </div>
+
+  <canvas id="fire"></canvas>
+
+  <div class="splash-bar">
+    <div class="splash-btn-row">
+      <button class="enter-btn" id="enterBtn">enter</button>
+      <a href="#" class="skip-link" id="skipLink">skip</a>
+    </div>
+    <div class="fire-hint">drag or tap to kindle flames</div>
+  </div>
+</div>
+
+<!-- ═══════════════════ WIZARD ═══════════════════ -->
+<div id="wizard-container">
+  <div class="topbar">
+    <div class="wrap">
+      <div class="topbar-brand" id="topbarLogo" title="Click to view intro flame">pyre<span>::setup</span></div>
+      <div class="topbar-meta">
+        <span id="liveMetric"><span class="pulse-dot"></span> local</span>
+        <span>v5.0.0 · macOS</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="wrap">
+      <div class="tab active" data-step="0"><span class="idx">[0]</span>readme</div>
+      <div class="tab" data-step="1"><span class="idx">[1]</span>theme</div>
+      <div class="tab" data-step="2"><span class="idx">[2]</span>config</div>
+      <div class="tab" data-step="3"><span class="idx">[3]</span>p2p</div>
+      <div class="tab" data-step="4"><span class="idx">[4]</span>launch</div>
+      <div class="tab-indicator" id="tabIndicator"></div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <main>
+      <!-- ─── panel 0: readme ─────────────────────── -->
+      <section class="panel active" data-panel="0">
+        <div class="panel-head">
+          <div class="tag">overview</div>
+          <h2>pyre system monitor</h2>
+          <div class="desc">Mac system monitoring CLI — CPU, memory, GPU, disk, battery, thermal, network, P2P streaming, web dashboard, benchmarking.</div>
+        </div>
+
+        <!-- Handcrafted ASCII architecture diagram -->
+        <pre class="ascii-arch">
+┌────────────────┐    IPC / SMC    ┌─────────────────┐
+│  powermetrics  ├────────────────►│  pyre collector │
+│  SMC hardware  │                 │  (zero-priv fallback)
+└────────────────┘                 └────────┬────────┘
+                                            │
+                    ┌───────────────────────┴───────────────────────┐
+                    ▼                                               ▼
+            ┌───────────────┐                               ┌───────────────┐
+            │  interactive  │                               │ encrypted tcp │
+            │ terminal TUI  │                               │ &amp; web stream  │
+            └───────────────┘                               └───────────────┘</pre>
+
+        <!-- Embedded Interactive Fire Hearth Card -->
+        <div class="card">
+          <div class="card-title">
+            <span>interactive fire</span>
+            <span style="font-weight:400; color:var(--dim); font-size:9.5px;">drag or tap to kindle flames</span>
+          </div>
+          <div class="card-body" style="padding:0; overflow:hidden;">
+            <canvas id="hearthFire" style="display:block; width:100%; height:140px; background:#000; cursor:crosshair;"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">features</div>
+          <div class="card-body">
+            <ul class="feat-list">
+              <li><span class="bullet">▸</span><span><b>Real-time Dashboard</b> — interactive TUI with mouse support, graphs, and custom panel layouts</span></li>
+              <li><span class="bullet">▸</span><span><b>Zero Sudo Required</b> — native SMC sensor caching and system APIs provide temperatures and power metrics</span></li>
+              <li><span class="bullet">▸</span><span><b>P2P &amp; Remote Fleet</b> — encrypted TCP telemetry streaming or multi-Mac monitoring via <code>pyre fleet</code></span></li>
+              <li><span class="bullet">▸</span><span><b>History &amp; Benchmarking</b> — CSV logging, historical trends, snapshot diff, CPU benchmark</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">quick start</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="quickstart-cmd">copy</button>
+              <pre id="quickstart-cmd"><span class="dim"># interactive live dashboard</span>
+<span class="cmd">pyre live</span>
+
+<span class="dim"># static snapshot</span>
+<span class="cmd">pyre --once</span>
+
+<span class="dim"># web dashboard on localhost</span>
+<span class="cmd">pyre web --port 3000</span></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">temperature monitoring</div>
+          <div class="card-body">
+            <p class="note" style="margin-top:0; margin-bottom:10px">
+              Pyre reads CPU/GPU/SMC die temperatures via macOS <b style="color:var(--accent)">powermetrics</b>.
+              This requires <b style="color:var(--accent)">passwordless sudo</b>. Without it, pyre falls back to less precise sensor sources.
+            </p>
+            <p class="note" style="margin-bottom:10px">
+              Run <b>once</b> to grant access — no other elevated privileges are granted:
+            </p>
+            <div class="code-box">
+              <button class="copy-btn" data-copy="powermetrics-cmd">copy</button>
+              <pre id="powermetrics-cmd"><span class="dim"># allow powermetrics without password</span>
+echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
+  | sudo tee /etc/sudoers.d/pyre-powermetrics</pre>
+            </div>
+            <div class="toggle-row" style="margin-top:8px;">
+              <div>
+                <div class="t-label">mark access configured</div>
+                <div class="t-desc">Checks off hardware sensor permission in final review</div>
+              </div>
+              <div class="switch" id="toggle-sudo-done"></div>
+            </div>
+            <p class="note" style="margin-top:8px">
+              To revoke later: <code>sudo rm /etc/sudoers.d/pyre-powermetrics</code>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── panel 1: theme ──────────────────────── -->
+      <section class="panel" data-panel="1">
+        <div class="panel-head">
+          <div class="tag">visuals</div>
+          <h2>pick a theme</h2>
+          <div class="desc">Applied on first launch. Change anytime with <b style="color:var(--accent)">c</b> in the dashboard.</div>
+        </div>
+
+        <div class="theme-grid" id="themeGrid">
+          <div class="theme-swatch selected" data-theme="default">
+            <div class="swname">default</div>
+            <div class="dotsrow">
+              <span style="background:#ff5f2e"></span><span style="background:#ffa07a"></span>
+              <span style="background:#0f0f0f"></span><span style="background:#10b981"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="dracula">
+            <div class="swname">dracula</div>
+            <div class="dotsrow">
+              <span style="background:#bd93f9"></span><span style="background:#ff79c6"></span>
+              <span style="background:#12101c"></span><span style="background:#50fa7b"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="cyberpunk">
+            <div class="swname">cyberpunk</div>
+            <div class="dotsrow">
+              <span style="background:#00ffcc"></span><span style="background:#ff007f"></span>
+              <span style="background:#0c0d14"></span><span style="background:#ffe600"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="nord">
+            <div class="swname">nord</div>
+            <div class="dotsrow">
+              <span style="background:#88c0d0"></span><span style="background:#81a1c1"></span>
+              <span style="background:#101720"></span><span style="background:#a3be8c"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="matrix">
+            <div class="swname">matrix</div>
+            <div class="dotsrow">
+              <span style="background:#00ff66"></span><span style="background:#55ff99"></span>
+              <span style="background:#041206"></span><span style="background:#185c27"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="gruvbox">
+            <div class="swname">gruvbox</div>
+            <div class="dotsrow">
+              <span style="background:#fb4934"></span><span style="background:#fabd2f"></span>
+              <span style="background:#141210"></span><span style="background:#b8bb26"></span>
+            </div>
+          </div>
+          <div class="theme-swatch" data-theme="monochrome">
+            <div class="swname">monochrome</div>
+            <div class="dotsrow">
+              <span style="background:#e5e7eb"></span><span style="background:#9ca3af"></span>
+              <span style="background:#0e0e0e"></span><span style="background:#444444"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">live tui preview — <span id="curThemeLabel" style="color:var(--accent)">default</span></div>
+          <div class="card-body" style="padding:10px;">
+            <pre class="live-terminal-preview" id="liveTerminalPreview">
+┌─ pyre live ──────────────────────────────────────────────────────────────┐
+│ CPU  [<span class="acc">████████████████░░░░░░░░</span>]  64%  Apple M3 Max (14C)      <span class="ok">44°C</span>        │
+│ MEM  [<span class="acc">██████████████████░░░░░░</span>]  18.4 GB / 36.0 GB       Pressure: <span class="ok">Normal</span> │
+│ GPU  [<span class="acc">████████░░░░░░░░░░░░░░░░</span>]  28%  Metal Cores             <span class="ok">39°C</span>        │
+│ PWR  [<span class="acc">■■■■■■■■□□□□□□□□</span>]  14.8W Total (CPU: 9.2W · GPU: 3.8W)             │
+│ NET  ▲ 1.4 MB/s  ▼ 8.9 MB/s    DISK  R: 45 MB/s  W: 120 MB/s             │
+└──────────────────────────────────────────────────────────────────────────┘</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── panel 2: behavior ───────────────────── -->
+      <section class="panel" data-panel="2">
+        <div class="panel-head">
+          <div class="tag">defaults</div>
+          <h2>configure live mode</h2>
+          <div class="desc">Maps to pyre CLI flags. You'll get the exact command on the next screen.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">parameters</div>
+          <div class="card-body">
+            <label class="field">
+              <span class="lbl">refresh interval <b id="intervalOut">2s</b></span>
+              <input type="range" id="interval" min="1" max="10" step="1" value="2">
+            </label>
+
+            <label class="field" style="margin-bottom:0;">
+              <span class="lbl">export directory</span>
+              <input type="text" id="exportDir" value="./pyre-exports">
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">toggles</div>
+          <div class="card-body">
+            <div class="toggle-row">
+              <div>
+                <div class="t-label">auto-start CSV logging</div>
+                <div class="t-desc">Begin writing a continuous CSV log when live mode starts (<code>--log</code>)</div>
+              </div>
+              <div class="switch" id="toggle-autolog"></div>
+            </div>
+            <div class="toggle-row">
+              <div>
+                <div class="t-label">detailed sensors by default</div>
+                <div class="t-desc">Show the full per-sensor thermal breakdown (<code>--detailed</code>)</div>
+              </div>
+              <div class="switch" id="toggle-detailed"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── panel 3: p2p ────────────────────────── -->
+      <section class="panel" data-panel="3">
+        <div class="panel-head">
+          <div class="tag">p2p server</div>
+          <h2>peer-to-peer streaming</h2>
+          <div class="desc">Configure the server, then connect from another machine using the command below.</div>
+        </div>
+
+        <!-- Clean ASCII network flow -->
+        <pre class="ascii-arch" id="p2pArch">
+host [0.0.0.0:9876] ───( HMAC SHA-256 / TCP )───► peer client</pre>
+
+        <div class="card">
+          <div class="card-title">server settings</div>
+          <div class="card-body">
+            <label class="field">
+              <span class="lbl">password <b id="p2pPasswordOut">••••••••</b></span>
+              <input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret">
+            </label>
+            <label class="field">
+              <span class="lbl">bind address <b id="p2pHostOut">0.0.0.0</b></span>
+              <input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0">
+            </label>
+            <label class="field" style="margin-bottom:0;">
+              <span class="lbl">port <b id="p2pPortOut">9876</b></span>
+              <input type="number" id="p2pPort" value="9876" placeholder="9876">
+            </label>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">client command</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
+              <pre id="p2p-client-cmd"><span class="cmd">pyre p2p connect</span> \
+  --p2p-host &lt;server-ip&gt; \
+  --p2p-port 9876 \
+  --p2p-password mysecret</pre>
+            </div>
+            <p class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok)">
+              ✓ Server binds to <b>0.0.0.0</b>. Detected local LAN address pre-filled above.
+            </p>
+            <p class="note">
+              Both machines must be on the <b>same local network</b>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─── panel 4: review ─────────────────────── -->
+      <section class="panel" data-panel="4">
+        <div class="panel-head">
+          <div class="tag">ready</div>
+          <h2>launch configuration</h2>
+          <div class="desc">Copy the commands below to start pyre with your settings.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">live dashboard</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="launch-cmd">copy</button>
+              <pre id="launch-cmd"><span class="cmd">pyre live --interval 2 --export-dir ./pyre-exports</span></pre>
+            </div>
+            <p class="note">Theme (<b id="reviewTheme">default</b>) applied via <b>--theme</b> — change anytime with <b>c</b></p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">p2p server</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="p2p-cmd">copy</button>
+              <pre id="p2p-cmd"><span class="cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret</span></pre>
+            </div>
+            <p class="note">Clients connect with: <code id="p2pConnectCmd" style="word-break:break-all;">pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-port 9876 --p2p-password mysecret</code></p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">shell aliases (optional)</div>
+          <div class="card-body">
+            <div class="code-box">
+              <button class="copy-btn" data-copy="alias-cmd">copy</button>
+              <pre id="alias-cmd"><span class="dim">echo 'alias pyre-live="pyre live --interval 2 --export-dir ./pyre-exports"' >> ~/.zshrc</span>
+<span class="dim">echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret"' >> ~/.zshrc</span></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">checklist</div>
+          <div class="card-body">
+            <div class="checklist" id="checklist">
+              <div><span id="chk-sudo">○</span> Sensor access command run</div>
+              <div><span id="chk-theme-ok" class="ok">✓</span> Theme: <span id="chk-theme">default</span></div>
+              <div><span id="chk-interval-ok" class="ok">✓</span> Refresh interval: <span id="chk-interval">2s</span></div>
+              <div><span id="chk-dir-ok" class="ok">✓</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
+              <div><span id="chk-p2p" class="ok">✓</span> P2P secret configured</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button class="btn" id="prevBtn">← back</button>
+        <button class="btn primary" id="nextBtn">continue →</button>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="f-brand">pyre<span>· local-first thermal monitor</span></div>
+      <nav>
+        <a href="#" id="viewSplashLink">view intro flame</a>
+        <a href="https://github.com/somalip/pyre" target="_blank" rel="noopener">github</a>
+      </nav>
+      <div>runs locally on your machine</div>
+    </div>
+  </footer>
+</div>
+
+<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
+<script>
+  /* ── Ambient Rising ASCII Fire Embers (Page Background) ─────────────── */
+  (function(){
+    const canvas = document.getElementById('bgEmbers');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) return;
+
+    const SPARKS = ['.', '·', '°', '*', '^', '+', '`'];
+    let w, h, dpr, sparks = [];
+    const COUNT = 32;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth;
+      h = window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = '11px "JetBrains Mono", monospace';
+    }
+
+    function initSparks() {
+      sparks = [];
+      for (let i = 0; i < COUNT; i++) {
+        sparks.push({
+          x: Math.random() * w,
+          y: Math.random() * h,
+          speed: 0.3 + Math.random() * 0.8,
+          drift: (Math.random() - 0.5) * 0.4,
+          char: SPARKS[Math.floor(Math.random() * SPARKS.length)],
+          alpha: 0.08 + Math.random() * 0.18,
+          life: Math.random() * 100
+        });
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#ff5f2e';
+
+      for (let i = 0; i < sparks.length; i++) {
+        const s = sparks[i];
+        ctx.globalAlpha = s.alpha * (0.6 + 0.4 * Math.sin(s.life * 0.05));
+        ctx.fillText(s.char, s.x, s.y);
+
+        s.y -= s.speed;
+        s.x += s.drift;
+        s.life++;
+
+        if (s.y < -10) {
+          s.y = h + 10;
+          s.x = Math.random() * w;
+          s.char = SPARKS[Math.floor(Math.random() * SPARKS.length)];
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    let last = 0;
+    function loop(ts) {
+      if (ts - last > 40) {
+        draw();
+        last = ts;
+      }
+      requestAnimationFrame(loop);
+    }
+
+    resize();
+    initSparks();
+    requestAnimationFrame(loop);
+
+    let rt;
+    window.addEventListener('resize', () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => { resize(); initSparks(); }, 150);
+    });
+  })();
+
+  /* ── Procedural ASCII Fire Engine Factory (Interactive) ────────────── */
+  function createFireCanvas(canvasId, options = {}) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const CHAR_RAMP = [' ', '.', '`', ',', ':', ';', '+', '*', '?', '%', '#', '@'];
+    const STOPS = [
+      [0.00, [6, 6, 8]],
+      [0.14, [32, 8, 6]],
+      [0.30, [95, 16, 4]],
+      [0.46, [155, 42, 4]],
+      [0.62, [205, 80, 10]],
+      [0.78, [255, 140, 26]],
+      [0.90, [255, 190, 70]],
+      [1.00, [255, 240, 220]],
+    ];
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function paletteColor(t) {
+      for (let i = 0; i < STOPS.length - 1; i++) {
+        const [t0, c0] = STOPS[i], [t1, c1] = STOPS[i + 1];
+        if (t >= t0 && t <= t1) {
+          const lt = (t - t0) / (t1 - t0 || 1);
+          return `rgb(${Math.round(lerp(c0[0], c1[0], lt))},${Math.round(lerp(c0[1], c1[1], lt))},${Math.round(lerp(c0[2], c1[2], lt))})`;
+        }
+      }
+      return 'rgb(255,240,220)';
+    }
+
+    const MAXV = 36;
+    const PALETTE = [];
+    for (let i = 0; i <= MAXV; i++) PALETTE.push(paletteColor(i / MAXV));
+
+    let cols, rows, cellW, cellH, fire;
+
+    function setup() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      cellW = rect.width < 500 ? 7 : 9;
+      cellH = Math.round(cellW * 1.55);
+      cols = Math.max(16, Math.floor(rect.width / cellW));
+      rows = Math.max(6, Math.floor(rect.height / cellH));
+      canvas.width = cols * cellW * dpr;
+      canvas.height = rows * cellH * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.textBaseline = 'top';
+      ctx.font = `${cellH - 1}px 'JetBrains Mono', monospace`;
+      fire = new Uint8Array(cols * rows);
+    }
+
+    function step() {
+      const bRow = (rows - 1) * cols;
+      for (let x = 0; x < cols; x++) fire[bRow + x] = Math.max(0, MAXV - Math.floor(Math.random() * 4));
+      for (let y = rows - 1; y >= 1; y--) {
+        for (let x = 0; x < cols; x++) {
+          const src = y * cols + x, val = fire[src];
+          if (val === 0) { fire[(y - 1) * cols + x] = 0; continue; }
+          const decay = Math.floor(Math.random() * 3), drift = Math.floor(Math.random() * 3) - 1;
+          let nx = x + drift;
+          if (nx < 0) nx = 0; else if (nx >= cols) nx = cols - 1;
+          fire[(y - 1) * cols + nx] = Math.max(0, val - decay);
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < rows; y++) {
+        let runChar = null, runColor = null, runStartX = 0, run = '';
+        for (let x = 0; x <= cols; x++) {
+          const v = x < cols ? fire[y * cols + x] : -1;
+          const charIdx = x < cols ? Math.min(CHAR_RAMP.length - 1, Math.floor(v / (MAXV + 1) * CHAR_RAMP.length)) : null;
+          const ch = x < cols ? CHAR_RAMP[charIdx] : null;
+          const color = x < cols ? PALETTE[v] : null;
+
+          if (x < cols && color === runColor && ch === runChar) {
+            run += ch;
+          } else {
+            if (run.length) {
+              ctx.fillStyle = runColor;
+              ctx.fillText(run, runStartX * cellW, y * cellH);
+            }
+            run = ch || '';
+            runColor = color;
+            runChar = ch;
+            runStartX = x;
+          }
+        }
+      }
+    }
+
+    let last = 0;
+    function loop(ts) {
+      if (ts - last > 65) { step(); draw(); last = ts; }
+      requestAnimationFrame(loop);
+    }
+
+    // Interactive ignition at pointer position
+    function ignite(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const x = Math.floor((clientX - rect.left) / cellW);
+      const y = Math.floor((clientY - rect.top) / cellH);
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const tx = x + dx, ty = y + dy;
+          if (tx >= 0 && tx < cols && ty >= 0 && ty < rows) {
+            fire[ty * cols + tx] = MAXV;
+          }
+        }
+      }
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      // Kindle sparks on drag or active hover
+      if (e.buttons > 0 || options.hoverIgnite) ignite(e);
+    });
+    canvas.addEventListener('mousedown', ignite);
+    canvas.addEventListener('click', ignite);
+    canvas.addEventListener('touchmove', (e) => { ignite(e); }, { passive: true });
+    canvas.addEventListener('touchstart', (e) => { ignite(e); }, { passive: true });
+
+    setup(); step(); step(); step(); draw();
+    if (!reduceMotion) requestAnimationFrame(loop);
+
+    let rt;
+    window.addEventListener('resize', () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => { setup(); step(); step(); draw(); }, 150);
+    });
+
+    return { setup, ignite };
+  }
+
+  // Initialize both splash fire & in-page hearth fire
+  const splashFireEngine = createFireCanvas('fire', { hoverIgnite: true });
+  const hearthFireEngine = createFireCanvas('hearthFire', { hoverIgnite: true });
+
+  /* ── Splash Lifecycle ───────────────────────────────────────────────── */
+  (function(){
+    const splash = document.getElementById('splash');
+    function enter() {
+      splash.classList.add('hide');
+      document.getElementById('wizard-container').classList.add('show');
+      if (window.__pyreLocalIP && window.__pyreUpdateP2PCommands) {
+        window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
+      }
+      setTimeout(() => {
+        if (window.moveIndicator) window.moveIndicator();
+        if (hearthFireEngine) hearthFireEngine.setup();
+      }, 100);
+    }
+    document.getElementById('enterBtn').addEventListener('click', enter);
+    document.getElementById('skipLink').addEventListener('click', (e) => { e.preventDefault(); enter(); });
+    setTimeout(enter, 4200);
+
+    window.addEventListener('keydown', (e) => {
+      if (!splash.classList.contains('hide') && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault();
+        enter();
+      }
+    });
+
+    // Reopen splash when clicking brand or footer link
+    function reopenSplash(e) {
+      if (e) e.preventDefault();
+      splash.classList.remove('hide');
+      if (splashFireEngine) splashFireEngine.setup();
+    }
+    const brand = document.getElementById('topbarLogo');
+    if (brand) brand.addEventListener('click', reopenSplash);
+    const link = document.getElementById('viewSplashLink');
+    if (link) link.addEventListener('click', reopenSplash);
+  })();
+
+  /* ── Wizard Logic & Sliding Ember Tab Indicator ─────────────────────── */
+  (function(){
+    function detectLocalIP() {
+      return new Promise((resolve) => {
+        try {
+          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          pc.createDataChannel('');
+          pc.createOffer().then(offer => pc.setLocalDescription(offer));
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) { pc.close(); resolve(window.__pyreLocalIP || null); return; }
+            const cand = e.candidate.candidate;
+            if (!/typ host/.test(cand)) return;
+            const m = cand.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+            if (m) { pc.close(); window.__pyreLocalIP = m[1]; resolve(m[1]); }
+          };
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') { pc.close(); resolve(window.__pyreLocalIP || null); }
+          };
+          setTimeout(() => { pc.close(); resolve(window.__pyreLocalIP || null); }, 2500);
+        } catch { resolve(window.__pyreLocalIP || null); }
+      });
+    }
+
+    const state = {
+      step: 0,
+      sudoDone: false,
+      theme: 'default',
+      interval: 2,
+      exportDir: './pyre-exports',
+      autoLog: false,
+      detailed: false,
+      p2p: {
+        password: 'mysecret',
+        host: '0.0.0.0',
+        port: '9876',
+      }
+    };
+
+    const panels = document.querySelectorAll('.panel');
+    const tabs = document.querySelectorAll('.tab');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const tabIndicator = document.getElementById('tabIndicator');
+    const TOTAL = panels.length;
+
+    function moveIndicator() {
+      const active = document.querySelector('.tab.active');
+      if (!active || !tabIndicator) return;
+      tabIndicator.style.left = active.offsetLeft + 'px';
+      tabIndicator.style.width = active.offsetWidth + 'px';
+    }
+    window.moveIndicator = moveIndicator;
+
+    function render() {
+      panels.forEach(p => p.classList.toggle('active', Number(p.dataset.panel) === state.step));
+      tabs.forEach(t => {
+        const s = Number(t.dataset.step);
+        t.classList.toggle('active', s === state.step);
+        t.classList.toggle('done', s < state.step);
+      });
+
+      prevBtn.disabled = state.step === 0;
+      nextBtn.textContent = state.step === TOTAL - 1 ? 'finish' : 'continue →';
+
+      if (state.step === 0 && hearthFireEngine) hearthFireEngine.setup();
+      if (state.step === 1) updateMiniTerminal();
+      if (state.step === 3) updateP2pArch();
+      if (state.step === 4) updateReview();
+
+      requestAnimationFrame(moveIndicator);
+    }
+    window.addEventListener('resize', moveIndicator);
+
+    function updateMiniTerminal() {
+      const el = document.getElementById('liveTerminalPreview');
+      const label = document.getElementById('curThemeLabel');
+      if (label) label.textContent = state.theme;
+      if (el) {
+        el.innerHTML = `┌─ pyre live ──────────────────────────────────────────────────────────────┐
+│ CPU  [<span class="acc">████████████████░░░░░░░░</span>]  64%  Apple M3 Max (14C)      <span class="ok">44°C</span>        │
+│ MEM  [<span class="acc">██████████████████░░░░░░</span>]  18.4 GB / 36.0 GB       Pressure: <span class="ok">Normal</span> │
+│ GPU  [<span class="acc">████████░░░░░░░░░░░░░░░░</span>]  28%  Metal Cores             <span class="ok">39°C</span>        │
+│ PWR  [<span class="acc">■■■■■■■■□□□□□□□□</span>]  14.8W Total (CPU: 9.2W · GPU: 3.8W)             │
+│ NET  ▲ 1.4 MB/s  ▼ 8.9 MB/s    DISK  R: 45 MB/s  W: 120 MB/s             │
+└──────────────────────────────────────────────────────────────────────────┘`;
+      }
+    }
+
+    function updateP2pArch() {
+      const arch = document.getElementById('p2pArch');
+      if (arch) {
+        arch.textContent = `host [${state.p2p.host}:${state.p2p.port}] ───( HMAC SHA-256 / TCP )───► client [remote-mac]`;
+      }
+    }
+
+    function buildP2PCmd() {
+      const p = state.p2p;
+      return `pyre p2p server --p2p-host ${p.host || '0.0.0.0'} --p2p-port ${p.port} --p2p-password ${p.password}`;
+    }
+
+    function updateReview() {
+      const cmdParts = [`pyre live --interval ${state.interval} --export-dir ${state.exportDir}`];
+      if (state.autoLog) cmdParts.push('--log');
+      if (state.detailed) cmdParts.push('--detailed');
+      if (state.theme && state.theme !== 'default') cmdParts.push(`--theme ${state.theme}`);
+      const liveCmd = cmdParts.join(' ');
+
+      document.getElementById('launch-cmd').textContent = liveCmd;
+      document.getElementById('alias-cmd').textContent =
+        `echo 'alias pyre-live="${liveCmd}"' >> ~/.zshrc\necho 'alias pyre-p2p="${buildP2PCmd()}"' >> ~/.zshrc`;
+      document.getElementById('reviewTheme').textContent = state.theme;
+      document.getElementById('chk-theme').textContent = state.theme;
+      document.getElementById('chk-interval').textContent = state.interval + 's';
+      document.getElementById('chk-dir').textContent = state.exportDir;
+
+      const chkSudo = document.getElementById('chk-sudo');
+      chkSudo.textContent = state.sudoDone ? '✓' : '○';
+      chkSudo.className = state.sudoDone ? 'ok' : '';
+
+      document.getElementById('p2p-cmd').textContent = buildP2PCmd();
+      const clientCmd = `pyre p2p connect --p2p-host ${window.__pyreLocalIP || '<server-ip>'} --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
+      document.getElementById('p2pConnectCmd').textContent = clientCmd;
+    }
+
+    detectLocalIP().then(ip => {
+      if (ip) {
+        window.__pyreLocalIP = ip;
+        if (window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(ip);
+      }
+    });
+
+    window.__pyreUpdateP2PCommands = function(ip) {
+      if (!ip) return;
+      document.getElementById('p2p-client-cmd').textContent =
+        `pyre p2p connect \\\n  --p2p-host ${ip} \\\n  --p2p-port ${state.p2p.port} \\\n  --p2p-password ${state.p2p.password}`;
+      const note = document.getElementById('p2pAutoDetectNote');
+      if (note) note.style.display = 'block';
+      const reviewConnectCmd = document.getElementById('p2pConnectCmd');
+      if (reviewConnectCmd) {
+        reviewConnectCmd.textContent = `pyre p2p connect --p2p-host ${ip} --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
+      }
+    };
+
+    prevBtn.addEventListener('click', () => {
+      if (state.step > 0) { state.step--; render(); }
+    });
+    nextBtn.addEventListener('click', () => {
+      if (state.step < TOTAL - 1) {
+        state.step++;
+        render();
+      } else {
+        nextBtn.textContent = 'launched ✓';
+      }
+    });
+    tabs.forEach(t => {
+      t.addEventListener('click', () => {
+        state.step = Number(t.dataset.step);
+        render();
+      });
+    });
+
+    const sudoToggle = document.getElementById('toggle-sudo-done');
+    if (sudoToggle) {
+      sudoToggle.addEventListener('click', () => {
+        state.sudoDone = !state.sudoDone;
+        sudoToggle.classList.toggle('on', state.sudoDone);
+      });
+    }
+
+    document.querySelectorAll('.theme-swatch').forEach(sw => {
+      sw.addEventListener('click', () => {
+        document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('selected'));
+        sw.classList.add('selected');
+        state.theme = sw.dataset.theme;
+        document.body.setAttribute('data-theme', state.theme);
+        updateMiniTerminal();
+      });
+    });
+
+    const intervalInput = document.getElementById('interval');
+    intervalInput.addEventListener('input', () => {
+      state.interval = parseInt(intervalInput.value, 10) || 2;
+      document.getElementById('intervalOut').textContent = state.interval + 's';
+    });
+
+    const exportDirInput = document.getElementById('exportDir');
+    exportDirInput.addEventListener('input', (e) => {
+      state.exportDir = e.target.value || './pyre-exports';
+    });
+
+    const autoLogToggle = document.getElementById('toggle-autolog');
+    autoLogToggle.addEventListener('click', () => {
+      state.autoLog = !state.autoLog;
+      autoLogToggle.classList.toggle('on', state.autoLog);
+    });
+
+    const detailedToggle = document.getElementById('toggle-detailed');
+    detailedToggle.addEventListener('click', () => {
+      state.detailed = !state.detailed;
+      detailedToggle.classList.toggle('on', state.detailed);
+    });
+
+    const p2pPassword = document.getElementById('p2pPassword');
+    p2pPassword.addEventListener('input', (e) => {
+      state.p2p.password = e.target.value || 'mysecret';
+      document.getElementById('p2pPasswordOut').textContent = state.p2p.password ? '••••••••' : '(empty)';
+      if (window.__pyreLocalIP) window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
+    });
+
+    const p2pHost = document.getElementById('p2pHost');
+    p2pHost.addEventListener('input', (e) => {
+      state.p2p.host = e.target.value || '0.0.0.0';
+      document.getElementById('p2pHostOut').textContent = state.p2p.host;
+      updateP2pArch();
+    });
+
+    const p2pPort = document.getElementById('p2pPort');
+    p2pPort.addEventListener('input', (e) => {
+      state.p2p.port = e.target.value || '9876';
+      document.getElementById('p2pPortOut').textContent = state.p2p.port;
+      updateP2pArch();
+      if (window.__pyreLocalIP) window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
+    });
+
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = document.getElementById(btn.dataset.copy);
+        const text = target.textContent.replace(/^(#|\/\/).*\n/gm, '').trim();
+        navigator.clipboard.writeText(text).then(() => {
+          const orig = btn.textContent;
+          btn.textContent = 'copied';
+          setTimeout(() => { btn.textContent = orig; }, 1400);
+        }).catch(() => {});
+      });
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.key >= '0' && e.key <= '4') {
+        state.step = parseInt(e.key, 10);
+        render();
+      } else if (e.key === 'ArrowRight' || e.key === 'l') {
+        if (state.step < TOTAL - 1) { state.step++; render(); }
+      } else if (e.key === 'ArrowLeft' || e.key === 'h') {
+        if (state.step > 0) { state.step--; render(); }
+      }
+    });
+
+    render();
+    setTimeout(moveIndicator, 150);
+
+    // Live Server Telemetry (SSE fallback)
+    function updateDashboardUI(stats) {
+      if (!stats) return;
+      const metric = document.getElementById('liveMetric');
+      if (metric && stats.cpu) {
+        metric.innerHTML = `<span class="pulse-dot"></span> cpu ${stats.cpu.usage}%`;
+      }
+    }
+
+    if (window.EventSource) {
+      const evtSource = new EventSource('/api/stream');
+      evtSource.onmessage = function(e) {
+        try { updateDashboardUI(JSON.parse(e.data)); } catch {}
+      };
+      evtSource.onerror = function() {
+        fetch('/api').then(r => r.json()).then(updateDashboardUI).catch(() => {});
+      };
+    } else {
+      setInterval(async () => {
+        try {
+          const res = await fetch('/api');
+          if (res.ok) updateDashboardUI(await res.json());
+        } catch {}
+      }, 3000);
+    }
+  })();
+</script>
+</body>
+</html>

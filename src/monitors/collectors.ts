@@ -13,11 +13,44 @@
  */
 import chalk from 'chalk';
 import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
 import { resolveIp } from './dns_cache.js';
 import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData, ProtocolStats, ConnectionStateStats, RemoteHostInfo } from './types.js';
 import { collectBlenderRenders } from './blender.js';
+import {
+  collectLinuxSystem,
+  collectLinuxCpu,
+  collectLinuxMemory,
+  collectLinuxDisk,
+  collectLinuxBattery,
+  collectLinuxThermal,
+  collectLinuxPower,
+  collectLinuxGpu,
+  collectLinuxNetwork,
+  collectLinuxPackets,
+  collectLinuxProcesses,
+  collectLinuxTasks,
+  getLinuxDisplayInfo,
+} from './platform/linux.js';
+import {
+  collectWindowsSystem,
+  collectWindowsCpu,
+  collectWindowsMemory,
+  collectWindowsDisk,
+  collectWindowsBattery,
+  collectWindowsThermal,
+  collectWindowsPower,
+  collectWindowsGpu,
+  collectWindowsNetwork,
+  collectWindowsPackets,
+  collectWindowsProcesses,
+  collectWindowsTasks,
+  getWindowsDisplayInfo,
+} from './platform/windows.js';
 
 const SP_TTL_MS = 10_000;
 const NETSTAT_TTL_MS = 1000;
@@ -33,6 +66,31 @@ let routeCache: { iface: string; ip: string; ts: number } | null = null;
 const sysctlCache = new Map<string, { value: string; ts: number }>();
 
 let prevNetSample: { rxBytes: number; txBytes: number; rxPackets: number; txPackets: number; ts: number } | null = null;
+
+let cachedIoReportPath: string | null | undefined = undefined;
+function resolveIoReportScript(): string | null {
+  if (cachedIoReportPath !== undefined) return cachedIoReportPath;
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const candidates = [
+      path.join(dir, 'ioreport.py'),
+      path.join(dir, '..', 'src', 'monitors', 'ioreport.py'),
+      path.join(dir, 'monitors', 'ioreport.py'),
+      path.join(process.cwd(), 'src', 'monitors', 'ioreport.py'),
+      path.join(process.cwd(), 'dist', 'ioreport.py'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        cachedIoReportPath = c;
+        return c;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  cachedIoReportPath = null;
+  return null;
+}
 
 async function cachedSysctl(key: string, fallback: string): Promise<string> {
   const now = Date.now();
@@ -81,7 +139,7 @@ const MIN_ESTIMATE_WINDOW_MS = 30 * 1000;
 
 let prevBattery: { samples: { level: number; ts: number }[] } = { samples: [] };
 
-function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmpty?: string; dischargeRatePerHour?: number; powerWatts?: number } {
+function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmpty?: string; dischargeRatePerHour?: number } {
   const now = Date.now();
 
   if (state === 'charged' || state === 'charging') {
@@ -117,21 +175,18 @@ function estimateBatteryLife(level: number, state: string): { estimatedTimeToEmp
   const m = Math.round((hoursToEmpty - h) * 60);
   const estimatedTimeToEmpty = hoursToEmpty > 0 ? `${h}h ${m}m` : 'calculating';
 
-  // Rough wattage from discharge rate: %/hour * (typical battery capacity
-  // in Wh) / 100. This is only used as a last-resort estimate — collectPower()
-  // now prefers real ioreg-derived wattage when available (see below).
-  const ASSUMED_CAPACITY_WH = 55;
-  const powerWatts = Math.round(dischargeRate * (ASSUMED_CAPACITY_WH / 100) * 100) / 100;
-
-  return { estimatedTimeToEmpty, dischargeRatePerHour: Math.round(dischargeRate * 10) / 10, powerWatts };
+  return { estimatedTimeToEmpty, dischargeRatePerHour: Math.round(dischargeRate * 10) / 10 };
 }
+
+import { collectBuilds } from './buildTracker.js';
+import { computeSmartBatteryPrediction } from './batteryPredictor.js';
 
 /**
  * Gather every metric category in parallel and return a
  * complete {@link StatsData} snapshot.
  */
 export async function collectAll(opts: { detailed?: boolean; processLimit?: number } = {}): Promise<StatsData> {
-   const [cpu, gpu, memory, disk, battery, thermal, network, processes, system, power, packets, tasks, containers, blenderRenders] = await Promise.all([
+   const [cpu, gpu, memory, disk, rawBattery, thermal, network, processes, system, power, packets, tasks, containers, blenderRenders, activeBuilds] = await Promise.all([
      collectCpu(),
      collectGpu(opts.detailed),
      collectMemory(),
@@ -146,7 +201,13 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      collectTasks(),
      collectContainers(),
      collectBlenderRenders(),
+     collectBuilds(),
    ]);
+
+   const battery = rawBattery ? {
+     ...rawBattery,
+     smartPrediction: computeSmartBatteryPrediction(rawBattery, power) || undefined,
+   } : null;
 
    return {
      header: {
@@ -169,6 +230,7 @@ export async function collectAll(opts: { detailed?: boolean; processLimit?: numb
      tasks,
      containers,
      blenderRenders,
+     activeBuilds,
    };
  }
 
@@ -201,57 +263,65 @@ export async function collectContainers(): Promise<ContainerData[]> {
  * power data is available.
  */
 export async function collectPower(): Promise<PowerData | null> {
-   try {
-     const { power } = await getSmcMetrics();
-     if (power.cpu !== undefined || power.gpu !== undefined || power.combined !== undefined) {
-       return { cpuWatts: power.cpu, gpuWatts: power.gpu, aneWatts: 0, combinedWatts: power.combined };
-     }
-   } catch {
-     // ignore
-   }
+  if (process.platform === 'linux') return collectLinuxPower();
+  if (process.platform === 'win32') return collectWindowsPower();
+  try {
+    const { power } = await getSmcMetrics();
+    if (power.cpu !== undefined || power.gpu !== undefined || power.combined !== undefined) {
+      return { cpuWatts: power.cpu, gpuWatts: power.gpu, aneWatts: 0, combinedWatts: power.combined };
+    }
+  } catch {
+    // ignore
+  }
 
-   // `pmset -g batt` never actually prints a "mW" figure on any macOS
-   // version — that regex could never match, so this fallback was dead
-   // code and collectPower() silently returned null whenever powermetrics
-   // wasn't available (which is most machines without passwordless sudo
-   // configured). ioreg's AppleSmartBattery entry exposes instantaneous
-   // amperage (mA, signed: negative while discharging) and voltage (mV)
-   // without any privileges, so we can derive real wattage from that.
-   try {
-     const ioreg = (await run('ioreg -rn AppleSmartBattery 2>/dev/null')).trim();
-     const ampMatch = ioreg.match(/"InstantAmperage"\s*=\s*(-?\d+)/);
-     const voltMatch = ioreg.match(/"Voltage"\s*=\s*(\d+)/);
-     if (ampMatch && voltMatch) {
-       // Two representations show up in the wild: Intel Macs often print a
-       // literal minus sign ("-1200") — no unwrap needed. Apple Silicon
-       // instead wraps a negative reading into an *unsigned 64-bit* field
-       // (e.g. real -1200mA prints as 18446744073709550416). The previous
-       // 32-bit unwrap (`- 0x100000000`) didn't touch that at all, and
-       // `parseInt` can't even represent a number that large precisely, so
-       // it silently mangled into a huge garbage value → absurd wattage.
-       // Parse as BigInt and only unwrap when there's no explicit sign.
-       let ampsBig = BigInt(ampMatch[1]);
-       if (!ampMatch[1].startsWith('-')) {
-         const UINT64_MAX_PLUS_1 = 1n << 64n;
-         const INT64_MAX = (1n << 63n) - 1n;
-         if (ampsBig > INT64_MAX) ampsBig -= UINT64_MAX_PLUS_1;
-       }
-       const amps = Number(ampsBig);
-       const volts = parseInt(voltMatch[1], 10) / 1000;
-       const watts = Math.abs((amps / 1000) * volts);
-       // Sanity clamp — a real Mac never draws anywhere near this much;
-       // treat an out-of-range reading as "no usable data" rather than
-       // display nonsense.
-       if (Number.isFinite(watts) && watts < 500) {
-         return { combinedWatts: Math.round(watts * 100) / 100 };
-       }
-     }
-   } catch {
-     // ignore
-   }
+  // Apple Silicon IOReport (reads Energy Model channels GPU Energy, CPU Energy, ANE without root)
+  const scriptPath = resolveIoReportScript();
+  if (scriptPath && process.platform === 'darwin') {
+    try {
+      const pyOut = (await run(`python3 "${scriptPath}" 2>/dev/null`, '')).trim();
+      if (pyOut.startsWith('{') && pyOut.endsWith('}')) {
+        const parsed = JSON.parse(pyOut);
+        if (typeof parsed.cpuWatts === 'number' || typeof parsed.gpuWatts === 'number') {
+          return {
+            cpuWatts: parsed.cpuWatts,
+            gpuWatts: parsed.gpuWatts,
+            aneWatts: parsed.aneWatts ?? 0,
+            combinedWatts: parsed.combinedWatts ?? (Math.round(((parsed.cpuWatts ?? 0) + (parsed.gpuWatts ?? 0) + (parsed.aneWatts ?? 0)) * 100) / 100),
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 
-   return null;
- }
+  // Fallback: ioreg's AppleSmartBattery entry exposes instantaneous
+  // amperage (mA, signed: negative while discharging) and voltage (mV)
+  // without any privileges, so we can derive real wattage from that.
+  try {
+    const ioreg = (await run('ioreg -rn AppleSmartBattery 2>/dev/null')).trim();
+    const ampMatch = ioreg.match(/"InstantAmperage"\s*=\s*(-?\d+)/);
+    const voltMatch = ioreg.match(/"Voltage"\s*=\s*(\d+)/);
+    if (ampMatch && voltMatch) {
+      let ampsBig = BigInt(ampMatch[1]);
+      if (!ampMatch[1].startsWith('-')) {
+        const UINT64_MAX_PLUS_1 = 1n << 64n;
+        const INT64_MAX = (1n << 63n) - 1n;
+        if (ampsBig > INT64_MAX) ampsBig -= UINT64_MAX_PLUS_1;
+      }
+      const amps = Number(ampsBig);
+      const volts = parseInt(voltMatch[1], 10) / 1000;
+      const watts = Math.abs((amps / 1000) * volts);
+      if (Number.isFinite(watts) && watts < 500) {
+        return { combinedWatts: Math.round(watts * 100) / 100 };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
 
  /**
   * Gather GPU information from system_profiler and powermetrics.
@@ -263,6 +333,8 @@ export async function collectPower(): Promise<PowerData | null> {
    * Returns null when GPU hardware is unavailable.
    */
   export async function collectGpu(detailed?: boolean): Promise<GpuData | null> {
+    if (process.platform === 'linux') return collectLinuxGpu();
+    if (process.platform === 'win32') return collectWindowsGpu();
     let spRaw = '';
     const now = Date.now();
     if (spGpuCache && now - spGpuCache.ts < SP_TTL_MS) {
@@ -401,7 +473,9 @@ export async function collectPower(): Promise<PowerData | null> {
     return { model, memory, utilization, temperature, processes: gpuProcesses };
   }
 
-async function collectSystem(): Promise<{ hostname: string; os: string; uptime: string }> {
+export async function collectSystem(): Promise<{ hostname: string; os: string; uptime: string }> {
+  if (process.platform === 'linux') return collectLinuxSystem();
+  if (process.platform === 'win32') return collectWindowsSystem();
   const hostname = (await run('hostname', 'Mac')).trim();
   const osRaw = (await run('sw_vers -productVersion', 'Unknown')).trim();
   const uptimeRaw = (await run('uptime')).trim();
@@ -414,6 +488,17 @@ async function collectSystem(): Promise<{ hostname: string; os: string; uptime: 
 }
 
 export async function collectCpu(): Promise<CpuData> {
+  const prevCpuTimesRef = { current: prevCpuTimes };
+  if (process.platform === 'linux') {
+    const res = await collectLinuxCpu(prevCpuTimesRef);
+    prevCpuTimes = prevCpuTimesRef.current;
+    return res;
+  }
+  if (process.platform === 'win32') {
+    const res = await collectWindowsCpu(prevCpuTimesRef);
+    prevCpuTimes = prevCpuTimesRef.current;
+    return res;
+  }
   const brand = (await cachedSysctl('machdep.cpu.brand_string', 'Unknown CPU')).trim();
   const cores = parseInt(await cachedSysctl('hw.ncpu', '1')) || 1;
   const physicalCores = parseInt(await cachedSysctl('hw.physicalcpu', String(cores))) || cores;
@@ -533,6 +618,8 @@ export async function collectCpu(): Promise<CpuData> {
 }
 
 export async function collectMemory(): Promise<MemoryData> {
+  if (process.platform === 'linux') return collectLinuxMemory();
+  if (process.platform === 'win32') return collectWindowsMemory();
   const totalBytes = parseInt(await cachedSysctl('hw.memsize', '0')) || 0;
   const pageSize = parseInt(await cachedSysctl('hw.pagesize', '4096')) || 4096;
 
@@ -643,6 +730,8 @@ async function getDiskIoRates(): Promise<{ readBytesSec: number; writeBytesSec: 
 }
 
 export async function collectDisk(): Promise<DiskData[]> {
+  if (process.platform === 'linux') return collectLinuxDisk();
+  if (process.platform === 'win32') return collectWindowsDisk();
   const [rawDf, ioRates] = await Promise.all([
     run('df -h'),
     getDiskIoRates(),
@@ -666,6 +755,8 @@ export async function collectDisk(): Promise<DiskData[]> {
 }
 
 export async function collectBattery(): Promise<BatteryData | null> {
+  if (process.platform === 'linux') return collectLinuxBattery();
+  if (process.platform === 'win32') return collectWindowsBattery();
   try {
     const raw = (await run('pmset -g batt')).trim();
     if (!raw.includes('Battery Power') && !raw.includes('AC Power')) return null;
@@ -735,6 +826,31 @@ export async function collectBattery(): Promise<BatteryData | null> {
 
     const estimate = estimateBatteryLife(level, state);
 
+    let powerWatts: number | undefined;
+    if (!powerPlugged && state === 'discharging') {
+      try {
+        const ioreg = (await run('ioreg -rn AppleSmartBattery 2>/dev/null')).trim();
+        const ampMatch = ioreg.match(/"InstantAmperage"\s*=\s*(-?\d+)/);
+        const voltMatch = ioreg.match(/"Voltage"\s*=\s*(\d+)/);
+        if (ampMatch && voltMatch) {
+          let ampsBig = BigInt(ampMatch[1]);
+          if (!ampMatch[1].startsWith('-')) {
+            const UINT64_MAX_PLUS_1 = 1n << 64n;
+            const INT64_MAX = (1n << 63n) - 1n;
+            if (ampsBig > INT64_MAX) ampsBig -= UINT64_MAX_PLUS_1;
+          }
+          const amps = Number(ampsBig);
+          const volts = parseInt(voltMatch[1], 10) / 1000;
+          const watts = Math.abs((amps / 1000) * volts);
+          if (Number.isFinite(watts) && watts < 500) {
+            powerWatts = Math.round(watts * 100) / 100;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return {
       level,
       state,
@@ -745,6 +861,7 @@ export async function collectBattery(): Promise<BatteryData | null> {
       condition,
       maxCapacityPercent,
       friendlySummary,
+      powerWatts,
       ...estimate,
     };
   } catch {
@@ -761,6 +878,8 @@ function pressureFromState(state: string): number {
 }
 
 export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
+  if (process.platform === 'linux') return collectLinuxThermal();
+  if (process.platform === 'win32') return collectWindowsThermal();
   try {
     const therm = (await run('pmset -g therm', '')).trim();
 
@@ -829,11 +948,21 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
       detail = `${state} (estimated from ${cpuDieTemp}°C)`;
     }
 
+    // Collect fan speeds from SMC (same cached call as temps above)
+    let fans: import('./types.js').FanData[] = [];
+    try {
+      const smcData = await getSmcMetrics();
+      fans = smcData.fans;
+    } catch {
+      // ignore — fans unavailable without sudo
+    }
+
     return {
       state,
       detail,
       pressureLevel: pressureFromState(state),
       temperatures: Object.keys(temperatures).length ? temperatures : undefined,
+      fans: fans.length > 0 ? fans : undefined,
     };
   } catch {
     return { state: 'Unknown', pressureLevel: 0, error: 'Thermal info unavailable on this system' };
@@ -841,6 +970,8 @@ export async function collectThermal(detailed?: boolean): Promise<ThermalData> {
 }
 
 export async function collectNetwork(): Promise<NetworkData> {
+  if (process.platform === 'linux') return collectLinuxNetwork();
+  if (process.platform === 'win32') return collectWindowsNetwork();
   try {
     const { iface, ip } = await cachedRouteIface();
     const netStat = await cachedNetstatIb();
@@ -1025,6 +1156,8 @@ async function getTopRemoteHosts(): Promise<RemoteHostInfo[]> {
 }
 
 export async function collectProcesses(limit?: number): Promise<ProcessData[]> {
+   if (process.platform === 'linux') return collectLinuxProcesses(limit);
+   if (process.platform === 'win32') return collectWindowsProcesses(limit);
    try {
       const isMac = process.platform === 'darwin';
       const sortArg = isMac ? '-r' : '--sort=-pcpu';
@@ -1060,6 +1193,8 @@ function parseBytes(str: string): number {
 }
 
 export async function collectPackets(): Promise<PacketData | null> {
+  if (process.platform === 'linux') return collectLinuxPackets();
+  if (process.platform === 'win32') return collectWindowsPackets();
   try {
     const netStat = await cachedNetstatIb();
     const lines = netStat.split('\n').slice(1);
@@ -1198,7 +1333,9 @@ export async function collectPackets(): Promise<PacketData | null> {
   }
 
 export async function collectTasks(limit = 12): Promise<TaskData[]> {
-   try {
+  if (process.platform === 'linux') return collectLinuxTasks(limit);
+  if (process.platform === 'win32') return collectWindowsTasks(limit);
+  try {
      const isMac = process.platform === 'darwin';
      const sortArg = isMac ? '-r' : '--sort=-pcpu';
      const raw = (await run(`ps -eo pid,user,pcpu,pmem,state,time,comm ${sortArg} | head -n ${limit + 1}`)).trim();
@@ -1224,6 +1361,8 @@ export interface DisplayInfo {
 }
 
 export async function getDisplayInfo(): Promise<DisplayInfo[]> {
+  if (process.platform === 'linux') return getLinuxDisplayInfo();
+  if (process.platform === 'win32') return getWindowsDisplayInfo();
   try {
     const raw = await run('system_profiler SPDisplaysDataType 2>&1', '');
     const displays: DisplayInfo[] = [];
@@ -1268,6 +1407,9 @@ export interface TimeMachineStatus {
 }
 
 export async function getTimeMachineStatus(): Promise<TimeMachineStatus> {
+  if (process.platform !== 'darwin') {
+    return { configured: false, running: false };
+  }
   try {
     const statusRaw = await run('tmutil status 2>&1', '');
     if (statusRaw.includes('No Time Machine destination') || statusRaw.includes('not configured')) {

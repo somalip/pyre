@@ -85,6 +85,8 @@ const state = {
         'Splash Animation',
         'Notifications',
         'Temperature Unit',
+        'AI Model',
+        'Grid Panel Order',
         'Toggle CPU',
         'Toggle Memory',
         'Toggle GPU',
@@ -145,6 +147,9 @@ const state = {
         isDocker: isDockerEnv,
         dockerModeConfirmed: config.dockerModeConfirmed || false,
         dockerSelectionIndex: 0,
+        aiModel: config.aiModel || 'expert-rules-v1',
+        aiBackend: config.aiBackend || 'builtin',
+        modelSelectionIndex: 0,
     };
 
 function setStatus(msg: string, ms = 3000) {

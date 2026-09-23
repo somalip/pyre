@@ -1,13 +1,15 @@
 # pyre
 
-Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, P2P live data streaming, web dashboard, SSH monitoring, micro-benchmarking, and Blender render tracking.
+Cross-platform system monitoring CLI for **macOS**, **Linux**, and **Windows**: temps, CPU, memory, disk, battery, GPU, power draw, live dashboard, packet monitor, process management, export, alerts, P2P live data streaming, web dashboard, SSH monitoring, micro-benchmarking, and background service management.
 
 ![Version](https://img.shields.io/badge/version-5.0.0-blue)
-![macOS](https://img.shields.io/badge/macos-14%2B-lightgrey)
+![macOS](https://img.shields.io/badge/macOS-14%2B-lightgrey)
+![Linux](https://img.shields.io/badge/Linux-x86__64%20%7C%20arm64-orange)
+![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-blue)
 ![Node](https://img.shields.io/badge/node-18%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-> **Note:** things may not work as intended if your firewall settings do not allow inbound connections for this program.
+> **Note:** things may not work as intended if your firewall settings do not allow inbound connections for P2P streaming or Web dashboard mode.
 >
 > You can skip init with Enter, but you may encounter some UI bugs. This is being worked on.
 
@@ -51,16 +53,22 @@ Mac system monitoring CLI: temps, CPU, memory, disk, battery, GPU, power draw, l
 
 ## Installation
 
-### npm
+### npm (macOS, Linux, Windows)
 
 ```bash
 npm install -g pyre-cli
 ```
 
-### curl
+### curl (macOS & Linux)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash
+```
+
+### PowerShell (Windows)
+
+```powershell
+irm https://raw.githubusercontent.com/somalip/pyre/main/install.ps1 | iex
 ```
 
 ## Quick Start
@@ -441,17 +449,16 @@ timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_pa
 
 ## Requirements
 
-- **macOS 14+** (Sonoma or later)
 - **Node.js 18+**
-- **Optional:** `sudo` for `powermetrics` detailed temperatures in `--detailed` mode
+- **macOS:** macOS 14+ (Sonoma or later recommended). Optional `sudo` for `powermetrics` detailed thermal/power readings.
+- **Linux:** Any modern Linux distribution (Ubuntu/Debian, Fedora/RHEL, Arch) with kernel 4.x+; reads `/proc` and `/sys`. Optional `smartmontools` for disk health.
+- **Windows:** Windows 10, Windows 11, or Windows Server 2016+ with PowerShell 5.1+.
 
-  To enable password‑less access for `powermetrics` (required for accurate sensor readings), run:
+  On macOS, to enable password‑less access for `powermetrics` (optional, for detailed sensor readings), run:
 
   ```bash
   echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" | sudo tee /etc/sudoers.d/pyre-powermetrics
   ```
-
-  This adds a single sudoers entry granting `pyre` the ability to execute `powermetrics` without a password prompt. Remove it later with `sudo rm /etc/sudoers.d/pyre-powermetrics`.
 
 ## Project Structure
 
@@ -460,16 +467,20 @@ pyre/
 ├── src/
 │   ├── index.ts            # CLI entry point (commander definitions, main())
 │   ├── anomaliesCmd.ts     # Resource spike & anomaly digest generator
-│   ├── brewHealth.ts       # Homebrew health & cellar usage inspector
-│   ├── doctor.ts           # System diagnostics (permissions, Gatekeeper, SIP, XProtect)
-│   ├── extensions.ts       # System Extensions inspector (systemextensionsctl list)
+│   ├── brewHealth.ts       # Package manager health inspector (Brew, APT, Pacman, DNF, Winget, Scoop)
+│   ├── doctor.ts           # System diagnostics (macOS SIP/Gatekeeper, Linux /proc/sys, Windows WMI)
+│   ├── extensions.ts       # Extensions/modules inspector (macOS extensions, Linux lsmod, Windows driverquery)
+│   ├── service.ts          # Background service daemon manager (launchd, systemd, schtasks)
 │   ├── updateCheck.ts      # Passive and on-demand npm registry version check
 │   ├── monitors/           # System metric collection (CPU, memory, disk, battery, thermal, network, packets, power, tasks)
 │   │   ├── index.ts        # Public API: collectAll, collectPower, collectPackets, collectTasks
 │   │   ├── types.ts        # TypeScript interfaces for all metric types
-│   │   ├── smc.ts          # SMC sensor reading with caching
-│   │   ├── collectors.ts   # Individual metric collectors, displays, Time Machine, and orchestrator
-│   │   └── run.ts          # Shared shell-execution helper
+│   │   ├── smc.ts          # SMC sensor reading with caching (macOS)
+│   │   ├── collectors.ts   # Metric collection orchestrator & platform dispatch
+│   │   ├── platform/       # OS-specific native metric collectors
+│   │   │   ├── linux.ts    # Linux /proc, /sys, df, ps, and netstat collectors
+│   │   │   └── windows.ts  # Windows os, WMI/PowerShell, netstat, and tasklist collectors
+│   │   └── run.ts          # Shared shell & PowerShell execution helpers
 │   ├── formatters/         # Output formatting and rendering
 │   │   ├── index.ts        # Public API: formatTable, formatJson, formatCsv, formatTsv, formatGraphs
 │   │   ├── output.ts       # JSON/CSV/TSV serialisation and sparkline graphs

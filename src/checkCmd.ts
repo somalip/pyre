@@ -15,7 +15,7 @@ export async function runCheckCommand(opts: CheckOptions = {}): Promise<void> {
   const cpuUsage = data.cpu.usage;
   const tempC = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die;
   const memUsage = data.memory.usagePercent;
-  const disk = data.disk.mainVolume;
+  const disk = data.disk && data.disk.length > 0 ? data.disk[0] : null;
 
   const sentences: string[] = [];
   let isWarning = false;
@@ -61,10 +61,10 @@ export async function runCheckCommand(opts: CheckOptions = {}): Promise<void> {
 
   // Disk sentence
   if (disk) {
-    const freeBytes = disk.free;
-    const freeStr = formatBytes(freeBytes);
-    sentences.push(`${freeStr} free on ${disk.mount}.`);
-    if (disk.usePercent >= 90) {
+    const freeStr = disk.available;
+    sentences.push(`${freeStr} free on ${disk.mountpoint}.`);
+    const cap = parseInt(disk.capacity, 10);
+    if (!isNaN(cap) && cap >= 90) {
       isWarning = true;
     }
   }

@@ -13,8 +13,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CONFIG_DIR = path.join(os.homedir(), '.config', 'pyre');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 export interface PyreConfig {
   theme?: string;
@@ -41,6 +39,22 @@ export interface PyreConfig {
   watchdogMem?: number;
   webhookUrl?: string;
   alertCmd?: string;
+  /** Slack incoming webhook URL for alert notifications */
+  slackAlertUrl?: string;
+  /** Discord webhook URL for alert notifications */
+  discordAlertUrl?: string;
+  /** Pushover application token for alert notifications */
+  pushoverToken?: string;
+  /** Pushover user key for alert notifications */
+  pushoverUser?: string;
+  /** ntfy.sh topic URL (e.g. https://ntfy.sh/my-pyre-alerts) for alert notifications */
+  ntfyUrl?: string;
+  /** AI backend: 'builtin' (heuristic / rule-based), 'ollama', or 'openai' */
+  aiBackend?: string;
+  /** Selected AI model identifier */
+  aiModel?: string;
+  /** Optional API key for external cloud providers */
+  aiApiKey?: string;
   dockerModeConfirmed?: boolean;
   visiblePanels?: {
     cpu?: boolean;
@@ -86,6 +100,14 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   splashAnimation: 'classic',
   webhookUrl: '',
   alertCmd: '',
+  slackAlertUrl: '',
+  discordAlertUrl: '',
+  pushoverToken: '',
+  pushoverUser: '',
+  ntfyUrl: '',
+  aiBackend: 'builtin',
+  aiModel: 'expert-rules-v1',
+  aiApiKey: '',
   dockerModeConfirmed: false,
   visiblePanels: {
     cpu: true,
@@ -106,10 +128,27 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   panelLayout: ['mem', 'disk', 'net'],
 };
 
+export function getConfigDir(): string {
+  return process.env.PYRE_CONFIG_DIR || path.join(os.homedir(), '.config', 'pyre');
+}
+
+export function getConfigFile(): string {
+  return path.join(getConfigDir(), 'config.json');
+}
+
+export function getProfilesDir(): string {
+  return path.join(getConfigDir(), 'profiles');
+}
+
+export const CONFIG_DIR = getConfigDir();
+export const CONFIG_FILE = getConfigFile();
+export const PROFILES_DIR = getProfilesDir();
+
 export function readConfig(): Required<PyreConfig> {
   try {
-    if (!fs.existsSync(CONFIG_FILE)) return { ...DEFAULT_CONFIG };
-    const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
+    const file = getConfigFile();
+    if (!fs.existsSync(file)) return { ...DEFAULT_CONFIG };
+    const raw = fs.readFileSync(file, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<PyreConfig>;
     return deepMerge(DEFAULT_CONFIG, parsed);
   } catch {
@@ -119,32 +158,34 @@ export function readConfig(): Required<PyreConfig> {
 
 export function writeConfig(config: Partial<PyreConfig>): void {
   try {
-    if (!fs.existsSync(CONFIG_DIR)) {
-      fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    const dir = getConfigDir();
+    const file = getConfigFile();
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
     const merged = deepMerge(readConfig(), config);
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2) + '\n');
+    fs.writeFileSync(file, JSON.stringify(merged, null, 2) + '\n');
   } catch {
     // ignore write errors
   }
 }
 
-const PROFILES_DIR = path.join(CONFIG_DIR, 'profiles');
-
 export function saveProfile(name: string): void {
   if (!name || name.includes('/') || name.includes('\\')) {
     throw new Error('Invalid profile name.');
   }
-  if (!fs.existsSync(PROFILES_DIR)) {
-    fs.mkdirSync(PROFILES_DIR, { recursive: true });
+  const profilesDir = getProfilesDir();
+  if (!fs.existsSync(profilesDir)) {
+    fs.mkdirSync(profilesDir, { recursive: true });
   }
   const currentConfig = readConfig();
-  const profileFile = path.join(PROFILES_DIR, `${name}.json`);
+  const profileFile = path.join(profilesDir, `${name}.json`);
   fs.writeFileSync(profileFile, JSON.stringify(currentConfig, null, 2) + '\n');
 }
 
 export function loadProfile(name: string): void {
-  const profileFile = path.join(PROFILES_DIR, `${name}.json`);
+  const profilesDir = getProfilesDir();
+  const profileFile = path.join(profilesDir, `${name}.json`);
   if (!fs.existsSync(profileFile)) {
     throw new Error(`Profile '${name}' does not exist.`);
   }
@@ -155,8 +196,9 @@ export function loadProfile(name: string): void {
 }
 
 export function listProfiles(): string[] {
-  if (!fs.existsSync(PROFILES_DIR)) return [];
-  const files = fs.readdirSync(PROFILES_DIR);
+  const profilesDir = getProfilesDir();
+  if (!fs.existsSync(profilesDir)) return [];
+  const files = fs.readdirSync(profilesDir);
   return files.filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, ''));
 }
 
@@ -175,7 +217,6 @@ function deepMerge(target: any, source: any): any {
 }
 
 export function getConfigPath(): string {
-  return CONFIG_FILE;
+  return getConfigFile();
 }
 
-export { CONFIG_FILE, PROFILES_DIR };

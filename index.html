@@ -1,1168 +1,2454 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>pyre — setup</title>
-<meta name="description" content="pyre setup wizard — configure your Mac system monitoring CLI" />
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<style>
-  /* ── tokens ────────────────────────────────────────────────────────── */
-  :root {
-    --bg:       #000000;
-    --surface:  #080808;
-    --border:   #1a1a1a;
-    --accent:   #ff5f2e;
-    --accent2:  #ffa07a;
-    --text:     #f0f0f0;
-    --dim:      #888888;
-    --dimmer:   #444444;
-    --ok:       #10b981;
-    --mono:     'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-  }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pyre® — Systems Built as Precision</title>
+  <meta name="description" content="Next-generation telemetry and system diagnostics for macOS, Linux, and Windows. Built as systems, not decorations." />
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
-  }
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  ::selection { background: var(--accent); color: var(--bg); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
+    :root {
+      --bg-dark: #070709;
+      --bg-base: #0c0d11;
+      --bg-surface: #121318;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.16);
+      --text-main: #f4f4f6;
+      --text-muted: #94949e;
+      --text-dim: #666672;
+      --orange: #ff6b2b;
+      --orange-glow: rgba(255, 107, 43, 0.4);
+      --font-serif: 'DM Serif Display', Georgia, 'Times New Roman', serif;
+      --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    }
 
-  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 32px; width: 100%; }
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg-dark);
+      color: #ffffff;
+      font-family: var(--font-display);
+      -webkit-font-smoothing: antialiased;
+    }
 
-  /* ── splash screen ─────────────────────────────────────────────────── */
-  #splash {
-    position: fixed; inset: 0; z-index: 50;
-    background: var(--bg);
-    display: flex; flex-direction: column;
-    justify-content: space-between;
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    transition: opacity .5s ease, visibility .5s ease;
-  }
-  #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+    body { overflow-x: hidden; min-height: 100vh; }
+    ::selection { background: var(--orange); color: #fff; }
 
-  .splash-inner {
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 8px;
-    padding: 32px 20px 0;
-    z-index: 2;
-  }
+    /* ─── HERO SECTION (SENTIRA LAYOUT) ────────────────────────────────── */
+    .hero {
+      position: relative;
+      width: 100%;
+      min-height: 100vh;
+      background: var(--bg-dark);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
 
-  .splash-title {
-    font-size: 28px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: var(--text);
-    text-transform: lowercase;
-  }
+    /* Three.js canvas container */
+    #three-container {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 55%;
+      z-index: 1;
+    }
 
-  .splash-status {
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
+    #three-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
 
-  #fire {
-    display: block;
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-    max-height: none;
-    background: var(--bg);
-  }
+    /* ─── TOP NAV ──────────────────────────────────────────────────────── */
+    .top-nav {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 28px 48px;
+    }
 
-  .splash-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 16px 20px 28px;
-    z-index: 2;
-  }
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      list-style: none;
+    }
 
-  .enter-btn {
-    background: transparent;
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 11px;
-    font-weight: 500;
-    padding: 8px 24px;
-    cursor: pointer;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-radius: 4px;
-    transition: all .15s;
-  }
-  .enter-btn:hover {
-    background: var(--accent);
-    color: var(--bg);
-  }
+    .nav-links a {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.2s;
+      letter-spacing: -0.01em;
+    }
 
-  .skip-link {
-    font-size: 10px;
-    color: var(--dimmer);
-    letter-spacing: 0.04em;
-    text-decoration: none;
-  }
-  .skip-link:hover { color: var(--dim); text-decoration: none; }
+    .nav-links a:hover { color: #ffffff; }
 
-  /* ── wizard shell ──────────────────────────────────────────────────── */
-  #wizard-container {
-    opacity: 0; transform: translateY(10px);
-    transition: opacity .5s ease .1s, transform .5s ease .1s;
-    flex: 1; display: flex; flex-direction: column;
-    align-items: center; padding: 32px 24px 0;
-    width: 100%;
-  }
-  #wizard-container.show { opacity: 1; transform: none; }
-  #wizard {
-    flex: 1; display: flex; flex-direction: column;
-    width: 100%; max-width: 1200px;
-    min-height: calc(100vh - 32px);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    position: relative;
-    overflow: hidden;
-  }
-  #wizard.show { opacity: 1; }
+    .nav-center {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
 
-  #wizard > * { position: relative; z-index: 1; }
+    .nav-logo-text {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
 
-  /* top bar */
-  .topbar {
-    border-bottom: 1px solid var(--border);
-    padding: 16px 0;
-  }
-  .topbar .wrap {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .topbar-brand {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: 0.04em;
-  }
-  .topbar-brand span {
-    color: var(--accent);
-    margin-left: 2px;
-  }
-  .topbar-meta {
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.04em;
-  }
+    .nav-logo-icon {
+      width: 28px;
+      height: 28px;
+      border: 2px solid rgba(255,255,255,0.8);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--orange);
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
 
-  /* ── step tabs ───────────────────────────────────────────────────────── */
-  .tabs {
-    border-bottom: 1px solid var(--border);
-    padding: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  .tabs::-webkit-scrollbar { display: none; }
-  .tabs .wrap {
-    display: flex;
-    gap: 20px;
-  }
-  .tab {
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    padding: 14px 0;
-    color: var(--dim);
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-    text-transform: uppercase;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active {
-    color: var(--accent);
-  }
-  .tab.done { color: var(--dim); }
-  .tab .idx {
-    color: var(--dimmer);
-    margin-right: 6px;
-  }
-  .tab.active .idx { color: var(--accent); }
+    .nav-cta {
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      padding: 10px 24px;
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 999px;
+      transition: all 0.2s;
+      letter-spacing: -0.01em;
+    }
 
-  /* ── main content ────────────────────────────────────────────────    */
-  main { flex: 1; padding: 32px 0 60px; }
-  .panel { display: none; }
-  .panel.active { display: block; }
+    .nav-cta:hover {
+      background: #ffffff;
+      color: #0a0a0a;
+      border-color: #ffffff;
+    }
 
-  /* panel header */
-  .panel-head {
-    margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border);
-  }
-  .panel-head .tag {
-    font-size: 10px;
-    color: var(--accent);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  .panel-head h2 {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text);
-    letter-spacing: -0.01em;
-    margin-bottom: 6px;
-  }
-  .panel-head .desc {
-    font-size: 12px;
-    color: var(--dim);
-    max-width: 520px;
-  }
+    /* ─── HERO CONTENT ─────────────────────────────────────────────────── */
+    .hero-content {
+      position: relative;
+      z-index: 5;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 48px 45vh;
+      pointer-events: none;
+    }
 
-  /* ── card: TUI box ─────────────────────────────────────────────────── */
-  .card {
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin-bottom: 20px;
-    background: var(--bg);
-    overflow: hidden;
-  }
-  .card-title {
-    font-size: 10px;
-    color: var(--text);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    font-weight: bold;
-  }
-  .card-body { padding: 14px; }
+    .hero-title {
+      font-family: var(--font-serif);
+      font-size: clamp(5rem, 14vw, 12rem);
+      font-weight: 400;
+      font-style: italic;
+      line-height: 0.9;
+      letter-spacing: -0.03em;
+      color: #ffffff;
+      margin-bottom: 28px;
+      text-shadow: 0 4px 60px rgba(0,0,0,0.5);
+    }
 
-  /* code box */
-  .code-box {
-    background: #050505;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 12px 14px;
-    position: relative;
-    margin-bottom: 4px;
-  }
-  .code-box pre {
-    font-size: 12px;
-    color: var(--accent2);
-    overflow-x: auto;
-    white-space: pre;
-    line-height: 1.55;
-  }
-  .code-box pre .dim { color: var(--dimmer); }
+    .hero-sub {
+      font-size: 16px;
+      line-height: 1.7;
+      color: rgba(255,255,255,0.6);
+      max-width: 520px;
+      margin-bottom: 36px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
 
-  .copy-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--dim);
-    font-family: var(--mono);
-    font-size: 9px;
-    padding: 3px 8px;
-    cursor: pointer;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-radius: 3px;
-    transition: all .15s;
-  }
-  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+    .hero-buttons {
+      display: flex;
+      gap: 14px;
+      pointer-events: auto;
+    }
 
-  .note {
-    font-size: 11px;
-    color: var(--dim);
-    margin-top: 8px;
-    line-height: 1.5;
-  }
-  .note b { color: var(--text); font-weight: 500; }
+    .btn-primary {
+      background: #ffffff;
+      color: #0a0a0a;
+      border: 1px solid #ffffff;
+      padding: 12px 28px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font-display);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      letter-spacing: -0.01em;
+    }
 
-  /* feature list */
-  .feat-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    font-size: 12px;
-    color: var(--dim);
-  }
-  .feat-list li {
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-  }
-  .feat-list li:last-child { border-bottom: none; }
-  .feat-list .bullet { color: var(--accent); flex-shrink: 0; }
-  .feat-list b { color: var(--text); font-weight: 500; }
+    .btn-primary:hover {
+      background: var(--orange);
+      border-color: var(--orange);
+      color: #ffffff;
+    }
 
-  /* ── form controls ─────────────────────────────────────────────────── */
-  label.field { display: block; margin-bottom: 16px; }
-  label.field .lbl {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--dim);
-    margin-bottom: 6px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  label.field .lbl b { color: var(--accent2); font-weight: 500; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: #ffffff;
+      border: 1px solid rgba(255,255,255,0.2);
+      padding: 12px 28px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: var(--font-display);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      letter-spacing: -0.01em;
+    }
 
-  input[type="text"],
-  input[type="password"],
-  input[type="number"] {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 8px 12px;
-    transition: border-color .15s;
-  }
-  input:focus { outline: none; border-color: var(--accent); background: rgba(255, 95, 46, 0.02); }
-  
-  .input-wrap {
-    position: relative;
-    width: 100%;
-  }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(255,255,255,0.4);
+    }
 
-  input[type="range"] {
-    -webkit-appearance: none;
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    height: 8px;
-    outline: none;
-  }
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: var(--accent);
-    cursor: pointer;
-  }
+    .btn-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      font-size: 11px;
+    }
 
-  /* toggle rows */
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .toggle-row:last-child { border-bottom: none; }
-  .t-label { font-size: 12px; color: var(--text); }
-  .t-desc { font-size: 10px; color: var(--dim); margin-top: 2px; }
+    /* ─── LOGOS / TRUST STRIP ──────────────────────────────────────────── */
+    .trust-strip {
+      position: relative;
+      z-index: 10;
+      background: var(--bg-dark);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 48px 48px 56px;
+      text-align: center;
+    }
 
-  .switch {
-    font-size: 14px;
-    color: var(--dim);
-    cursor: pointer;
-    user-select: none;
-    font-weight: bold;
-    font-family: var(--mono);
-    display: flex;
-    align-items: center;
-  }
-  .switch::before {
-    content: '';
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
-    margin-right: 6px;
-    box-sizing: border-box;
-    transition: all .15s;
-  }
-  .switch.on::before {
-    background: var(--accent);
-    border-color: var(--accent);
-    box-shadow: inset 0 0 0 2px var(--bg);
-  }
+    .trust-label {
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      margin-bottom: 28px;
+      letter-spacing: 0.02em;
+    }
 
-  /* theme grid */
-  .theme-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
-  }
-  .theme-swatch {
-    padding: 14px 12px;
-    cursor: pointer;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-  }
-  .theme-swatch.selected {
-    border-color: var(--accent);
-    background: var(--surface);
-  }
-  .theme-swatch .swname {
-    font-size: 10px;
-    margin-bottom: 8px;
-    color: var(--dim);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .theme-swatch.selected .swname { color: var(--accent); }
-  .theme-swatch .dotsrow { display: flex; gap: 4px; }
-  .theme-swatch .dotsrow span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-  }
+    .trust-logos {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 56px;
+      flex-wrap: wrap;
+    }
 
-  /* checklist */
-  .checklist { font-size: 12px; color: var(--dim); }
-  .checklist div {
-    display: flex;
-    gap: 10px;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .checklist div:last-child { border-bottom: none; }
-  .checklist .ok { color: var(--ok); }
+    .trust-logo {
+      font-family: var(--font-display);
+      font-size: 16px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.25);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
 
-  /* nav buttons */
-  .actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 32px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-  }
-  .btn {
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 8px 20px;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    border-radius: 4px;
-    transition: all .15s;
-    font-weight: bold;
-  }
-  .btn:hover { color: var(--bg); background: var(--text); border-color: var(--text); }
-  .btn:active { }
-  .btn.primary {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-  .btn.primary:hover {
-    background: var(--accent);
-    color: var(--bg);
-  }
-  .btn:disabled { opacity: 0.2; cursor: default; transform: none; }
+    .trust-logo:hover { color: rgba(255,255,255,0.5); }
 
-  /* ── footer ────────────────────────────────────────────────────────── */
-  footer {
-    border-top: 1px solid var(--border);
-    margin-top: auto;
-    padding: 16px 0;
-  }
-  footer .wrap {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 20px;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 10px;
-    color: var(--dim);
-    letter-spacing: 0.04em;
-  }
-  footer .f-brand { color: var(--text); font-weight: 500; }
-  footer .f-brand span { color: var(--dim); margin-left: 4px; }
-  footer nav { display: flex; gap: 16px; }
-  footer nav a {
-    color: var(--dim);
-    text-decoration: none;
-    transition: color .15s;
-  }
-  footer nav a:hover { color: var(--accent); }
+    .trust-logo .mono { font-family: var(--font-mono); }
 
-  /* ── responsive ────────────────────────────────────────────────────── */
-  @media (max-width: 620px) {
-    body { font-size: 12px; }
-    .wrap { padding: 0 18px; }
-    #wizard-container { padding: 16px 12px 0; }
-    #wizard { min-height: calc(100vh - 16px); border-radius: 0; }
-    .theme-grid { grid-template-columns: repeat(2, 1fr); }
-    .tab { padding: 12px 0; font-size: 10px; }
-    footer .wrap { flex-direction: column; align-items: flex-start; }
-  }
+    /* ─── CONTENT SECTIONS ────────────────────────────────────────────── */
+    .section-light,
+    .section-dark {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      padding: 120px 48px;
+      position: relative;
+      border-top: 1px solid var(--border-subtle);
+    }
 
-  @media (min-width: 900px) {
-    .panel[data-panel="0"] .card,
-    .panel[data-panel="2"] .card { max-width: 760px; }
-  }
+    #editorial {
+      background: #09090c;
+    }
 
-  @media (prefers-reduced-motion: reduce) {
-    .switch::before { transition: none; }
-  }
-</style>
+    #specimens {
+      background: #0b0c10;
+    }
+
+    #features {
+      background: #090a0d;
+    }
+
+    #install {
+      background: #070709;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      margin-bottom: 20px;
+      color: var(--orange);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-eyebrow::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 8px var(--orange);
+    }
+
+    .section-dark .section-eyebrow,
+    .section-light .section-eyebrow {
+      color: var(--orange);
+    }
+
+    /* ─── EDITORIAL STATEMENT ──────────────────────────────────────────── */
+    .editorial-statement {
+      font-size: clamp(2.2rem, 4.4vw, 4.2rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.035em;
+      max-width: 1100px;
+      margin-bottom: 50px;
+    }
+
+    .section-dark .editorial-statement { color: #ffffff; }
+    .section-dark .editorial-statement em { font-style: normal; color: #888892; }
+
+    .pyre-glow {
+      color: var(--orange);
+      text-shadow: 0 0 8px var(--orange-glow);
+    }
+
+    /* ─── STATS ────────────────────────────────────────────────────────── */
+    .stats-trio {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 40px;
+      padding-top: 60px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .stat-item h3 {
+      font-size: clamp(2.8rem, 4.5vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .stat-item p { font-size: 15px; color: #8e8e94; line-height: 1.5; }
+
+    /* ─── SPECIMEN CARDS ───────────────────────────────────────────────── */
+    .specimen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 64px;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 24px;
+    }
+
+    .specimen-header h2 {
+      font-size: clamp(2.2rem, 4vw, 3.4rem);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1;
+    }
+
+    .specimen-header p {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 440px;
+      line-height: 1.4;
+    }
+
+    .specimen-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 32px;
+    }
+
+    .specimen-card {
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 20px;
+      padding: 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 380px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      position: relative;
+      transform-style: preserve-3d;
+      perspective: 1000px;
+      transition: transform 0.4s var(--ease), border-color 0.3s ease, box-shadow 0.4s var(--ease);
+      will-change: transform;
+      cursor: pointer;
+    }
+
+    .specimen-card:hover {
+      border-color: rgba(255, 107, 43, 0.35);
+      box-shadow: 0 24px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(255, 107, 43, 0.1);
+    }
+
+    /* Inner realistic ambient glare */
+    .specimen-card::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 20px;
+      background: radial-gradient(
+        circle 320px at var(--mouse-x, 50%) var(--mouse-y, 50%),
+        rgba(255, 255, 255, 0.08) 0%,
+        rgba(255, 107, 43, 0.05) 35%,
+        transparent 75%
+      );
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .specimen-card:hover::after {
+      opacity: 1;
+    }
+
+    /* Layered 3D element pop */
+    .specimen-card .specimen-top,
+    .specimen-card .specimen-mid,
+    .specimen-card .specimen-live-data {
+      transform-style: preserve-3d;
+      transition: transform 0.2s ease-out;
+    }
+
+    .specimen-card:hover .specimen-title {
+      color: #ffffff;
+    }
+
+    .specimen-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .specimen-index {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--orange);
+    }
+
+    .specimen-tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 10px;
+      border-radius: 999px;
+      color: #c4c4cc;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .specimen-mid { margin: 28px 0; }
+
+    .specimen-title {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+
+    .specimen-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .specimen-live-data {
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 12px;
+      padding: 14px 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #a1a1aa;
+    }
+
+    .live-dot {
+      width: 7px; height: 7px;
+      background: #10b981;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+      box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.7; }
+    }
+
+    .live-val { font-weight: 600; color: #ffffff; }
+
+    /* ─── FEATURES GRID ────────────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+    }
+
+    .features-grid .specimen-card { min-height: 360px; }
+
+    .specimen-badge-row { display: flex; align-items: center; gap: 8px; }
+
+    .specimen-cli-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: #e4e4e8;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Card Expand Indicator */
+    .card-expand-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: #92929e;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 3px 9px;
+      border-radius: 999px;
+      transition: all 0.25s var(--ease);
+      transform: translateZ(18px);
+    }
+
+    .specimen-card:hover .card-expand-hint {
+      color: var(--orange);
+      background: rgba(255,107,43,0.1);
+      border-color: rgba(255,107,43,0.25);
+      transform: translateZ(24px) scale(1.04);
+    }
+
+    .card-expand-hint svg {
+      transition: transform 0.2s ease;
+    }
+
+    .specimen-card:hover .card-expand-hint svg {
+      transform: translate(1px, -1px);
+    }
+
+    /* ─── VIEW MORE FEATURES ACCORDION ─────────────────────────────────── */
+    .features-more-wrapper {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: max-height 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.45s ease,
+                  margin-top 0.4s ease;
+      margin-top: 0;
+    }
+
+    .features-more-wrapper.open {
+      max-height: 1600px;
+      opacity: 1;
+      margin-top: 28px;
+      overflow: visible;
+    }
+
+    .view-more-action {
+      display: flex;
+      justify-content: center;
+      margin-top: 48px;
+    }
+
+    .view-more-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 13px 30px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.25s var(--ease);
+    }
+
+    .view-more-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--orange);
+      color: var(--orange);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 28px rgba(255, 107, 43, 0.2);
+    }
+
+    .view-more-btn .btn-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      transition: transform 0.35s var(--ease), background 0.2s ease;
+    }
+
+    .view-more-btn:hover .btn-icon {
+      background: rgba(255, 107, 43, 0.2);
+    }
+
+    .view-more-btn.expanded .btn-icon {
+      transform: rotate(180deg);
+    }
+
+    /* ─── CARD DETAIL MODAL (Apple Developer / Hardware Sheet Style) ───── */
+    .card-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 7, 9, 0.78);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
+    }
+
+    .card-modal-backdrop.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .card-modal-dialog {
+      background: #111114;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 40px 100px -15px rgba(0,0,0,0.9), 0 0 50px rgba(255,107,43,0.15);
+      border-radius: 24px;
+      max-width: 760px;
+      width: 100%;
+      max-height: 88vh;
+      overflow-y: auto;
+      color: #f4f4f6;
+      padding: 40px;
+      transform: scale(0.92) translateY(24px);
+      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    .card-modal-backdrop.active .card-modal-dialog {
+      transform: scale(1) translateY(0);
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: 24px;
+      right: 24px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.06);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 16px;
+    }
+
+    .modal-close-btn:hover {
+      background: #ffffff;
+      color: #0a0a0a;
+      transform: rotate(90deg);
+    }
+
+    .modal-header-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .modal-index {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--orange);
+      letter-spacing: 0.04em;
+    }
+
+    .modal-tag {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      background: rgba(255,255,255,0.1);
+      padding: 3px 10px;
+      border-radius: 999px;
+      color: #e4e4e7;
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 3.2vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 14px;
+      color: #ffffff;
+      line-height: 1.15;
+    }
+
+    .modal-desc {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #a1a1aa;
+      margin-bottom: 28px;
+    }
+
+    .modal-section-title {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #71717a;
+      margin-bottom: 10px;
+    }
+
+    .modal-cli-box {
+      background: #18191e;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .modal-cli-code {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: #f4f4f5;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .modal-cli-code .prefix {
+      color: var(--orange);
+      margin-right: 6px;
+    }
+
+    .modal-copy-btn {
+      background: rgba(255,255,255,0.12);
+      border: none;
+      color: #ffffff;
+      font-family: var(--font-display);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .modal-copy-btn:hover {
+      background: #ffffff;
+      color: #000000;
+    }
+
+    /* Flags Table */
+    .modal-flags-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .modal-flag-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      gap: 16px;
+    }
+
+    .modal-flag-name {
+      font-family: var(--font-mono);
+      color: var(--orange);
+      font-weight: 600;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+
+    .modal-flag-desc {
+      color: #9ca3af;
+      font-size: 13px;
+      text-align: right;
+    }
+
+    /* Live Output Box */
+    .modal-output-preview {
+      background: #090a0c;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 18px 20px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      color: #34d399;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      margin-bottom: 24px;
+    }
+
+    .modal-output-preview .meta-line {
+      color: #64748b;
+    }
+
+    .modal-output-preview .accent-line {
+      color: #fbbf24;
+    }
+
+    .modal-footer-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .modal-btn-done {
+      background: #ffffff;
+      color: #0a0a0a;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-display);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .modal-btn-done:hover {
+      background: var(--orange);
+      color: #ffffff;
+    }
+    .section-install {
+      background: #0f1013;
+      color: #ffffff;
+      padding: 140px 60px;
+    }
+
+    .install-box {
+      max-width: 860px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .install-box h2 {
+      font-size: clamp(2.4rem, 4.8vw, 4rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 16px;
+    }
+
+    .install-box p.sub {
+      color: #92929a;
+      font-size: 17px;
+      margin-bottom: 40px;
+    }
+
+    .install-tabs {
+      display: inline-flex;
+      background: rgba(255,255,255,0.07);
+      padding: 4px;
+      border-radius: 999px;
+      margin-bottom: 24px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #a0a0a8;
+      padding: 8px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: var(--font-display);
+    }
+
+    .tab-btn.active {
+      background: #ffffff;
+      color: #0a0a0a;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .cli-command-pill {
+      background: #18191e;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-family: var(--font-mono);
+      font-size: 15px;
+      box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+    }
+
+    .command-text {
+      color: #e4e4e7;
+      user-select: all;
+      text-align: left;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+
+    .command-text span.prefix { color: #63636e; margin-right: 6px; }
+
+    .copy-btn {
+      background: rgba(255,255,255,0.12);
+      border: none;
+      color: #ffffff;
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.18s ease;
+      flex-shrink: 0;
+    }
+
+    .copy-btn:hover { background: #ffffff; color: #000; }
+
+    .cli-mini-terminal {
+      margin-top: 36px;
+      background: #090a0c;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 24px;
+      text-align: left;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.7;
+      color: #a1a1aa;
+    }
+
+    .term-dots { display: flex; gap: 6px; margin-bottom: 16px; }
+    .term-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+    .term-val { color: #ffffff; font-weight: 600; }
+    .term-accent { color: #10b981; }
+
+    @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+    .cursor-blink {
+      display: inline-block; width: 8px; height: 14px;
+      background: var(--orange); animation: blink 1s step-end infinite;
+      vertical-align: text-bottom; margin-left: 4px; border-radius: 1px;
+    }
+
+    /* ─── FOOTER ────────────────────────────────────────────────────────── */
+    footer {
+      background: #0a0a0c;
+      color: #71717a;
+      padding: 60px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .footer-links { display: flex; gap: 28px; list-style: none; }
+    .footer-links a { color: #a1a1aa; text-decoration: none; transition: color 0.15s; }
+    .footer-links a:hover { color: #ffffff; }
+
+    /* ─── RESPONSIVE ───────────────────────────────────────────────────── */
+    @media (max-width: 960px) {
+      .top-nav { padding: 20px 24px; }
+      .nav-links { gap: 20px; }
+      .hero-content { padding: 0 24px 120px; }
+      .section-light, .section-dark, .section-install { padding: 90px 24px; }
+      .specimen-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-trio { grid-template-columns: 1fr; gap: 32px; }
+      .footer-inner { flex-direction: column; gap: 20px; align-items: flex-start; }
+      .trust-logos { gap: 32px; }
+      .specimen-header { flex-direction: column; gap: 16px; align-items: flex-start; }
+    }
+
+    @media (max-width: 600px) {
+      .nav-links { display: none; }
+      .nav-center { position: relative; left: auto; transform: none; }
+      .hero-title { font-size: clamp(3.5rem, 16vw, 5rem); }
+      .hero-buttons { flex-direction: column; width: 100%; max-width: 280px; }
+      .btn-primary, .btn-secondary { text-align: center; justify-content: center; }
+      .cli-command-pill { flex-direction: column; align-items: stretch; }
+      .copy-btn { justify-content: center; }
+      .trust-logos { flex-direction: column; gap: 20px; }
+    }
+    /* ─── APPLE-STYLE PAGE SCROLL TRANSITIONS ──────────────────────────── */
+
+    /* Hero entrance on initial load */
+    .hero-content > * {
+      opacity: 0;
+      transform: translateY(30px);
+      animation: heroEntrance 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .hero-content > *:nth-child(1) { animation-delay: 0.15s; }
+    .hero-content > *:nth-child(2) { animation-delay: 0.35s; }
+    .hero-content > *:nth-child(3) { animation-delay: 0.55s; }
+
+    @keyframes heroEntrance {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .top-nav {
+      opacity: 0;
+      animation: fadeDown 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Page sections: Fluid, continuous layout */
+    .page-section {
+      position: relative;
+      width: 100%;
+      scroll-margin-top: 40px;
+    }
+
+
+
+    /* Specimen card screenshot viewport */
+    .card-screenshot-stage {
+      position: relative;
+      border-radius: 14px;
+      background: #090a0e;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      margin: 18px 0 16px;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .section-dark .card-screenshot-stage {
+      background: #07080a;
+      border-color: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 14px 34px rgba(0, 0, 0, 0.5);
+    }
+
+    .card-screenshot-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .card-screenshot-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .card-screenshot-dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .card-screenshot-path {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: #71717a;
+    }
+
+    .card-screenshot-body {
+      padding: 12px 14px;
+      min-height: 84px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0b0c10;
+    }
+
+    .card-screenshot-img {
+      display: none;
+      width: 100%;
+      height: auto;
+      max-height: 140px;
+      object-fit: cover;
+      border-radius: 6px;
+    }
+
+    .card-screenshot-img.img-loaded {
+      display: block;
+    }
+
+    .card-screenshot-img.img-loaded + .card-screenshot-fallback-ui {
+      display: none;
+    }
+
+    .card-screenshot-img.img-fallback {
+      display: none !important;
+    }
+
+    .card-screenshot-fallback-ui {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .card-fallback-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.03em;
+    }
+
+    .card-fb-label {
+      color: #71717a;
+      text-transform: uppercase;
+      font-size: 9.5px;
+    }
+
+    .card-fb-val {
+      font-weight: 600;
+    }
+
+    .card-fb-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.07);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .card-fb-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+
+    .card-fb-fill.orange { background: var(--orange); }
+    .card-fb-fill.cyan { background: #38bdf8; }
+    .card-fb-fill.amber { background: #f59e0b; }
+    .card-fb-fill.green { background: #10b981; }
+    .card-fb-fill.blue { background: #60a5fa; }
+    .card-fb-fill.emerald { background: #34d399; }
+
+    .text-orange { color: var(--orange); }
+    .text-cyan { color: #38bdf8; }
+    .text-amber { color: #f59e0b; }
+    .text-green { color: #10b981; }
+    .text-blue { color: #60a5fa; }
+    .text-emerald { color: #34d399; }
+
+
+    /* Trust logos: clean visibility without individual pop-in */
+    .trust-logo {
+      opacity: 0.65;
+      transition: opacity 0.2s ease, color 0.2s ease;
+    }
+    .trust-logo:hover {
+      opacity: 1;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* Stat counter glow */
+    .stat-item h3 {
+      transition: text-shadow 0.6s ease;
+    }
+    .stat-item.counted h3 {
+      text-shadow: 0 0 30px rgba(255,107,43,0.3);
+    }
+
+    /* Reduce motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
 </head>
 <body>
-<!-- ═══════════════════ SPLASH ═══════════════════ -->
-<div id="splash">
-  <div class="splash-inner">
-    <h1 class="splash-title">pyre</h1>
-    <div class="splash-status">setup wizard</div>
-  </div>
-  <canvas id="fire"></canvas>
-  <div class="splash-bar">
-    <button class="enter-btn" id="enterBtn">enter</button>
-    <a href="#" class="skip-link" id="skipLink">skip</a>
-  </div>
-</div>
 
-<!-- ═══════════════════ WIZARD ═══════════════════ -->
-<div id="wizard-container">
-  <div id="wizard">
-  <div class="topbar">
-    <div class="wrap">
-      <div class="topbar-brand">pyre<span>::setup</span></div>
-      <div class="topbar-meta">v5.0.0 · macOS</div>
-    </div>
-  </div>
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- HERO & INFRASTRUCTURE                                               -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <section class="hero page-section" id="hero">
+      <!-- Three.js dot-matrix terrain lives here -->
+      <div id="three-container"></div>
 
-  <div class="tabs">
-    <div class="wrap">
-      <div class="tab" data-step="0"><span class="idx">[0]</span>readme</div>
-      <div class="tab" data-step="1"><span class="idx">[1]</span>theme</div>
-      <div class="tab" data-step="2"><span class="idx">[2]</span>config</div>
-      <div class="tab" data-step="3"><span class="idx">[3]</span>p2p</div>
-      <div class="tab" data-step="4"><span class="idx">[4]</span>launch</div>
-    </div>
-  </div>
+      <!-- Top Navigation -->
+      <nav class="top-nav">
+        <ul class="nav-links">
+          <li><a href="#editorial">Philosophy</a></li>
+          <li><a href="#specimens">Architecture</a></li>
+          <li><a href="#features">Features</a></li>
+        </ul>
 
-  <div class="wrap">
-    <main>
-      <!-- ─── panel 0: readme ─────────────────────── -->
-      <section class="panel" data-panel="0">
-        <div class="panel-head">
-          <div class="tag">documentation</div>
-          <h2>pyre overview</h2>
-          <div class="desc">Mac system monitoring CLI — CPU, memory, GPU, disk, battery, thermal, network, P2P streaming, web dashboard, benchmarking.</div>
-        </div>
+        <a href="#hero" class="nav-center">
+          <span class="nav-logo-icon">⬡</span>
+          <span class="nav-logo-text">Pyre</span>
+        </a>
 
-        <div class="card">
-          <div class="card-title">features</div>
-          <div class="card-body">
-            <ul class="feat-list">
-              <li><span class="bullet">▸</span><b>Real-time Dashboard</b> — interactive TUI with mouse support, graphs, and custom panel layouts</li>
-              <li><span class="bullet">▸</span><b>Zero Sudo Required</b> — native SMC sensor caching and system APIs provide temperatures and power metrics</li>
-              <li><span class="bullet">▸</span><b>P2P &amp; Remote Fleet</b> — encrypted TCP telemetry streaming or multi-Mac monitoring via <code>pyre fleet</code></li>
-              <li><span class="bullet">▸</span><b>History &amp; Benchmarking</b> — CSV logging, historical trends, snapshot diff, CPU benchmark</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">quick start</div>
-          <div class="card-body">
-            <div class="code-box">
-              <button class="copy-btn" data-copy="quickstart-cmd">copy</button>
-              <pre id="quickstart-cmd"><span class="dim"># interactive live dashboard</span>
-pyre live
-
-<span class="dim"># static snapshot</span>
-pyre --once
-
-<span class="dim"># web dashboard on localhost</span>
-pyre web --port 3000</pre>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">temperature monitoring</div>
-          <div class="card-body">
-            <p class="note" style="margin-top:0; margin-bottom:10px">
-              Pyre reads CPU/GPU/SMC die temperatures via macOS <b style="color:var(--accent)">powermetrics</b>.
-              This requires <b style="color:var(--accent)">passwordless sudo</b>. Without it, pyre falls back to less precise sensor sources.
-            </p>
-            <p class="note" style="margin-bottom:10px">
-              Run <b>once</b> to grant access — no other elevated privileges are granted:
-            </p>
-            <div class="code-box">
-              <button class="copy-btn" data-copy="powermetrics-cmd">copy</button>
-              <pre id="powermetrics-cmd"><span class="dim"># allow powermetrics without password</span>
-echo "$(whoami) ALL=(root) NOPASSWD: /usr/bin/powermetrics" \
-  | sudo tee /etc/sudoers.d/pyre-powermetrics</pre>
-            </div>
-            <p class="note">
-              <b>Why?</b> <code style="color:var(--accent)">powermetrics</code> reads Apple SMC hardware sensors.
-              Without this entry, readings can differ from btop by ~30 °C.
-            </p>
-            <p class="note" style="margin-top:6px">
-              To remove later: <code style="color:var(--text)">sudo rm /etc/sudoers.d/pyre-powermetrics</code>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─── panel 1: theme ──────────────────────── -->
-      <section class="panel" data-panel="1">
-        <div class="panel-head">
-          <div class="tag">visuals</div>
-          <h2>pick a theme</h2>
-          <div class="desc">Applied on first launch. Change anytime with <b style="color:var(--accent)">c</b> in the dashboard.</div>
-        </div>
-
-        <div class="theme-grid" id="themeGrid">
-          <div class="theme-swatch selected" data-theme="default">
-            <div class="swname">default</div>
-            <div class="dotsrow">
-              <span style="background:#22d3ee"></span><span style="background:#a78bfa"></span>
-              <span style="background:#fb923c"></span><span style="background:#60a5fa"></span>
-            </div>
-          </div>
-          <div class="theme-swatch" data-theme="dracula">
-            <div class="swname">dracula</div>
-            <div class="dotsrow">
-              <span style="background:#8be9fd"></span><span style="background:#bd93f9"></span>
-              <span style="background:#ffb86c"></span><span style="background:#ff79c6"></span>
-            </div>
-          </div>
-          <div class="theme-swatch" data-theme="cyberpunk">
-            <div class="swname">cyberpunk</div>
-            <div class="dotsrow">
-              <span style="background:#00ffcc"></span><span style="background:#ff00ff"></span>
-              <span style="background:#ff6600"></span><span style="background:#00ffff"></span>
-            </div>
-          </div>
-          <div class="theme-swatch" data-theme="monochrome">
-            <div class="swname">mono</div>
-            <div class="dotsrow">
-              <span style="background:#e5e7eb"></span><span style="background:#9ca3af"></span>
-              <span style="background:#6b7280"></span><span style="background:#f3f4f6"></span>
-            </div>
-          </div>
-          <div class="theme-swatch" data-theme="nord">
-            <div class="swname">nord</div>
-            <div class="dotsrow">
-              <span style="background:#88c0d0"></span><span style="background:#b48ead"></span>
-              <span style="background:#bf616a"></span><span style="background:#81a1c1"></span>
-            </div>
-          </div>
-          <div class="theme-swatch" data-theme="gruvbox">
-            <div class="swname">gruvbox</div>
-            <div class="dotsrow">
-              <span style="background:#fb4934"></span><span style="background:#b8bb26"></span>
-              <span style="background:#d3869b"></span><span style="background:#83a598"></span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─── panel 2: behavior ───────────────────── -->
-      <section class="panel" data-panel="2">
-        <div class="panel-head">
-          <div class="tag">defaults</div>
-          <h2>configure live mode</h2>
-          <div class="desc">Maps to pyre CLI flags. You'll get the exact command on the next screen.</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">parameters</div>
-          <div class="card-body">
-            <label class="field">
-              <span class="lbl">refresh interval <b id="intervalOut">2s</b></span>
-              <input type="range" id="interval" min="1" max="10" step="1" value="2">
-            </label>
-
-            <label class="field">
-              <span class="lbl">export directory</span>
-              <div class="input-wrap"><input type="text" id="exportDir" value="./pyre-exports"></div>
-            </label>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">toggles</div>
-          <div class="card-body">
-            <div class="toggle-row">
-              <div>
-                <div class="t-label">auto-start CSV logging</div>
-                <div class="t-desc">Begin writing a continuous CSV log when live mode starts</div>
-              </div>
-              <div class="switch" id="toggle-autolog"></div>
-            </div>
-            <div class="toggle-row">
-              <div>
-                <div class="t-label">detailed sensors by default</div>
-                <div class="t-desc">Show the full per-sensor thermal breakdown</div>
-              </div>
-              <div class="switch" id="toggle-detailed"></div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─── panel 3: p2p ────────────────────────── -->
-      <section class="panel" data-panel="3">
-        <div class="panel-head">
-          <div class="tag">p2p server</div>
-          <h2>peer-to-peer streaming</h2>
-          <div class="desc">Configure the server, then connect from another machine using the command below.</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">server settings</div>
-          <div class="card-body">
-            <label class="field">
-              <span class="lbl">password <b id="p2pPasswordOut">••••••••</b></span>
-              <div class="input-wrap"><input type="password" id="p2pPassword" value="mysecret" placeholder="shared secret"></div>
-            </label>
-            <label class="field">
-              <span class="lbl">bind address <b id="p2pHostOut">0.0.0.0</b></span>
-              <div class="input-wrap"><input type="text" id="p2pHost" value="0.0.0.0" placeholder="0.0.0.0"></div>
-            </label>
-            <label class="field">
-              <span class="lbl">port <b id="p2pPortOut">9876</b></span>
-              <div class="input-wrap"><input type="number" id="p2pPort" value="9876" placeholder="9876"></div>
-            </label>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">client command</div>
-          <div class="card-body">
-            <div class="code-box">
-              <button class="copy-btn" data-copy="p2p-client-cmd">copy</button>
-              <pre id="p2p-client-cmd">pyre p2p connect \
-  --p2p-host &lt;server-ip&gt; \
-  --p2p-port 9876 \
-  --p2p-password mysecret</pre>
-            </div>
-            <div class="note" id="p2pAutoDetectNote" style="display:none; color: var(--ok)">
-              ✓ Server binds to <b>0.0.0.0</b> (all interfaces). Clients on the same LAN should connect using the detected IP above.
-            </div>
-            <p class="note" style="margin-top:8px">
-              Both machines must be on the <b>same local network</b>. Never expose this server to the public internet.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─── panel 4: review ─────────────────────── -->
-      <section class="panel" data-panel="4">
-        <div class="panel-head">
-          <div class="tag">ready</div>
-          <h2>launch configuration</h2>
-          <div class="desc">Copy the commands below to start pyre with your settings.</div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">live dashboard</div>
-          <div class="card-body">
-            <div class="code-box">
-              <button class="copy-btn" data-copy="launch-cmd">copy</button>
-              <pre id="launch-cmd">pyre live --interval 2 --export-dir ./pyre-exports</pre>
-            </div>
-            <p class="note">Theme (<b id="reviewTheme">default</b>) applied via <b>--theme</b> — change anytime with <b>c</b></p>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">p2p server</div>
-          <div class="card-body">
-            <div class="code-box">
-              <button class="copy-btn" data-copy="p2p-cmd">copy</button>
-              <pre id="p2p-cmd">pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret</pre>
-            </div>
-            <p class="note">Clients connect with: <b id="p2pConnectCmd">pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-port 9876 --p2p-password mysecret</b></p>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">shell aliases (optional)</div>
-          <div class="card-body">
-            <div class="code-box">
-              <button class="copy-btn" data-copy="alias-cmd">copy</button>
-              <pre id="alias-cmd">echo 'alias pyre-live="pyre live --interval 2 --export-dir ./pyre-exports"' >> ~/.zshrc
-echo 'alias pyre-p2p="pyre p2p server --p2p-host 0.0.0.0 --p2p-port 9876 --p2p-password mysecret"' >> ~/.zshrc</pre>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-title">checklist</div>
-          <div class="card-body">
-            <div class="checklist" id="checklist">
-              <div><span id="chk-sudo">○</span> Sensor access command run</div>
-              <div><span id="chk-theme-ok">○</span> Theme selected: <span id="chk-theme">default</span></div>
-              <div><span id="chk-interval-ok">○</span> Refresh interval: <span id="chk-interval">2s</span></div>
-              <div><span id="chk-dir-ok">○</span> Export directory: <span id="chk-dir">./pyre-exports</span></div>
-              <div><span id="chk-p2p">○</span> P2P password set</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <div class="actions">
-        <button class="btn ghost" id="prevBtn">← back</button>
-        <button class="btn primary" id="nextBtn">continue →</button>
-      </div>
-    </main>
-  </div>
-
-  <footer>
-    <div class="wrap">
-      <div class="f-brand">pyre<span>· local-first thermal monitor</span></div>
-      <nav>
-        <a href="https://github.com/somalip/pyre" onclick="return false;">github</a>
+        <a href="#install" class="nav-cta">Get started</a>
       </nav>
-      <div>setup wizard · runs entirely on your machine</div>
+
+      <!-- Hero Content -->
+      <div class="hero-content">
+        <h1 class="hero-title">Pyre</h1>
+        <p class="hero-sub">
+          Zero-overhead native telemetry for macOS, Linux &amp; Windows.
+          Sub-millisecond probes, silicon analytics, and packet-level
+          forensics — without the guesswork.
+        </p>
+        <div class="hero-buttons">
+          <a href="#install" class="btn-primary">Install CLI</a>
+          <a href="#editorial" class="btn-secondary">
+            How it works
+            <span class="btn-arrow">→</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- ═══ Trust / Logo Strip ═══ -->
+      <div class="trust-strip">
+        <p class="trust-label">Built for teams who ship precision infrastructure:</p>
+        <div class="trust-logos">
+          <span class="trust-logo">Darwin</span>
+          <span class="trust-logo"><span class="mono">Linux</span></span>
+          <span class="trust-logo">Win32</span>
+          <span class="trust-logo"><span class="mono">ARM64</span></span>
+          <span class="trust-logo">x86_64</span>
+        </div>
+      </div>
+    </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- PHILOSOPHY                                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <section class="section-dark page-section" id="editorial">
+    <div class="container">
+      <div class="section-eyebrow">Guiding Principles</div>
+      <p class="editorial-statement">
+        Modern system monitors waste precious machine cycles rendering decorative animations.
+        <em><span class="pyre-glow">Pyre</span> treats telemetry as a disciplined instrument</em> — zero-overhead native probes,
+        sub-millisecond sampling, and uncompromising precision.
+      </p>
+
+      <div class="stats-trio">
+        <div class="stat-item" data-delay="1">
+          <h3 data-count="0.1" data-prefix="< " data-suffix="%">&lt; 0.1%</h3>
+          <p>CPU footprint under continuous background multi-core and GPU telemetry polling.</p>
+        </div>
+        <div class="stat-item" data-delay="2">
+          <h3 data-count="0.8" data-suffix="ms">0.8ms</h3>
+          <p>Kernel probe latency for temperature sensors, memory pressure, and socket dispatch.</p>
+        </div>
+        <div class="stat-item" data-delay="3">
+          <h3 data-count="0" data-suffix=" MB">0 MB</h3>
+          <p>Electron dependencies. Pure native compiled runtime with surgical precision.</p>
+        </div>
+      </div>
     </div>
-  </footer>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- TELEMETRY ARCHITECTURE                                              -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <section class="section-dark page-section" id="specimens">
+    <div class="container">
+      <div class="specimen-header">
+        <div>
+          <div class="section-eyebrow">Telemetry Architecture</div>
+          <h2>Architected for depth.</h2>
+        </div>
+        <p>Four native telemetry systems engineered to surface hardware truth without interfering with your production workloads.</p>
+      </div>
+
+      <div class="specimen-grid">
+        <div class="specimen-card" data-delay="1" data-modal-card="silicon">
+          <div class="specimen-top">
+            <span class="specimen-index">SPECIMEN // 01</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-tag">Silicon</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Apple Silicon &amp; Heterogeneous Compute</h3>
+            <p class="specimen-desc">Direct registers for Performance and Efficiency cluster loads, unified memory throughput, and neural engine throttling states.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>M-Series Cluster Load</span></div>
+            <div class="live-val" id="liveSilicon">P-Core: 18% &bull; E-Core: 4%</div>
+          </div>
+        </div>
+
+        <div class="specimen-card" data-delay="2" data-modal-card="thermals">
+          <div class="specimen-top">
+            <span class="specimen-index">SPECIMEN // 02</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-tag">Thermals</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Thermals &amp; Dynamic Fan Curves</h3>
+            <p class="specimen-desc">SMC &amp; ACPI thermistor arrays monitoring heatpipe dissipation, throttling thresholds, and tachometer fan hysteresis.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Die Temp / Fan RPM</span></div>
+            <div class="live-val" id="liveThermal">43.2°C &bull; 1,420 RPM</div>
+          </div>
+        </div>
+
+        <div class="specimen-card" data-delay="3" data-modal-card="network">
+          <div class="specimen-top">
+            <span class="specimen-index">SPECIMEN // 03</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-tag">Network</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Micro-Packet Flow &amp; Socket Tracking</h3>
+            <p class="specimen-desc">Non-intrusive nettop kernel streaming that correlates delta egress/ingress with precise PID lineages and open file descriptors.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Socket Throughput</span></div>
+            <div class="live-val" id="liveNet">↓ 4.8 MB/s &bull; ↑ 182 KB/s</div>
+          </div>
+        </div>
+
+        <div class="specimen-card" data-delay="4" data-modal-card="power">
+          <div class="specimen-top">
+            <span class="specimen-index">SPECIMEN // 04</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-tag">Power</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Battery Degradation &amp; Cycle Analytics</h3>
+            <p class="specimen-desc">Coulomb counter telemetry projecting degradation trajectories, active milliwatt draw, and charging temperature curves.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Power Health</span></div>
+            <div class="live-val" id="livePower">96.4% Health &bull; 4.2W Draw</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- CORE CAPABILITIES                                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <section class="section-dark page-section" id="features">
+    <div class="container">
+      <div class="specimen-header">
+        <div>
+          <div class="section-eyebrow">Core Capabilities</div>
+          <h2>Precision systems.</h2>
+        </div>
+        <p>Engineered for high-frequency telemetry, cross-platform hardware monitoring, and multi-host fleet visibility. Click any card to inspect commands.</p>
+      </div>
+
+      <!-- Flagship Core Features (Top 3) -->
+      <div class="features-grid">
+        <div class="specimen-card" data-delay="1" data-modal-card="tui">
+          <div class="specimen-top">
+            <span class="specimen-index">Interactive TUI</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-cli-badge">pyre live</span>
+              <span class="specimen-tag">TUI</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Interactive Terminal Dashboard</h3>
+            <p class="specimen-desc">Full-screen keyboard &amp; mouse-driven TUI. Live sparklines, bar graphs, process trees, interactive kill signals, and 6 built-in colorways.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Refresh Cycle</span></div>
+            <div class="live-val">250ms &bull; 6 Themes</div>
+          </div>
+        </div>
+
+        <div class="specimen-card" data-delay="2" data-modal-card="fleet">
+          <div class="specimen-top">
+            <span class="specimen-index">Fleet Aggregator</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-cli-badge">pyre fleet</span>
+              <span class="specimen-tag">Fleet</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Multi-Host Fleet &amp; Remote SSH</h3>
+            <p class="specimen-desc">Monitor remote servers over SSH or aggregate multiple Darwin, Linux, and Windows nodes into a tiled unified multi-host dashboard.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Remote Mesh</span></div>
+            <div class="live-val">Multi-Host Aggregator</div>
+          </div>
+        </div>
+
+        <div class="specimen-card" data-delay="3" data-modal-card="anomalies">
+          <div class="specimen-top">
+            <span class="specimen-index">Anomaly Radar</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="specimen-cli-badge">pyre anomalies</span>
+              <span class="specimen-tag">Analytics</span>
+              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+            </div>
+          </div>
+          <div class="specimen-mid">
+            <h3 class="specimen-title">Statistical Anomaly Digest</h3>
+            <p class="specimen-desc">Per-tick continuous CSV logging with rolling window z-score spike detection. Surfaces runaway CPU/memory anomalies automatically.</p>
+          </div>
+          <div class="specimen-live-data">
+            <div><span class="live-dot"></span><span>Detection Engine</span></div>
+            <div class="live-val">Z-Score Spike Model</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Secondary Capabilities (Collapsible Accordion) -->
+      <div class="features-more-wrapper" id="moreFeaturesWrapper">
+        <div class="features-grid">
+          <div class="specimen-card" data-modal-card="p2p">
+            <div class="specimen-top">
+              <span class="specimen-index">Encrypted P2P</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="specimen-cli-badge">pyre p2p</span>
+                <span class="specimen-tag">Network</span>
+                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+              </div>
+            </div>
+            <div class="specimen-mid">
+              <h3 class="specimen-title">Encrypted P2P Live Streaming</h3>
+              <p class="specimen-desc">Zero-broker TCP streaming over LAN. Hardened with TLS encryption, SHA-256 challenge-response auth, HMAC signing, and audit trails.</p>
+            </div>
+            <div class="specimen-live-data">
+              <div><span class="live-dot"></span><span>P2P Protocol</span></div>
+              <div class="live-val">TLS &bull; HMAC-SHA256</div>
+            </div>
+          </div>
+
+          <div class="specimen-card" data-modal-card="web">
+            <div class="specimen-top">
+              <span class="specimen-index">Web Portal</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="specimen-cli-badge">pyre web</span>
+                <span class="specimen-tag">Portal</span>
+                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+              </div>
+            </div>
+            <div class="specimen-mid">
+              <h3 class="specimen-title">Web Portal &amp; Native App</h3>
+              <p class="specimen-desc">Instant real-time browser dashboard powered by Server-Sent Events (SSE) on localhost, paired with a lightweight native macOS app window.</p>
+            </div>
+            <div class="specimen-live-data">
+              <div><span class="live-dot"></span><span>Transport Layer</span></div>
+              <div class="live-val">SSE Real-Time Stream</div>
+            </div>
+          </div>
+
+          <div class="specimen-card" data-modal-card="bench">
+            <div class="specimen-top">
+              <span class="specimen-index">Energy Profiler</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="specimen-cli-badge">pyre bench</span>
+                <span class="specimen-tag">Energy</span>
+                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
+              </div>
+            </div>
+            <div class="specimen-mid">
+              <h3 class="specimen-title">Micro-Benchmarking &amp; Energy</h3>
+              <p class="specimen-desc">Profile arbitrary shell commands with granular milliwatt precision. Measures wall time, multi-core impact, and kWh power draw costs.</p>
+            </div>
+            <div class="specimen-live-data">
+              <div><span class="live-dot"></span><span>Power Telemetry</span></div>
+              <div class="live-val">Granular kWh &amp; Joules</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View More Capabilities Trigger -->
+      <div class="view-more-action">
+        <button id="toggleMoreFeaturesBtn" class="view-more-btn" aria-expanded="false">
+          <span class="btn-text">View More Capabilities (3)</span>
+          <span class="btn-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- CLI INSTALL & DEPLOY                                                -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <section class="section-install page-section" id="install">
+    <div class="container">
+      <div class="install-box">
+        <div class="section-eyebrow">Deployment</div>
+        <h2>One command. Zero bloat.</h2>
+        <p class="sub">Deploy the <span class="pyre-glow">Pyre</span> telemetry daemon or run it ad-hoc directly from your shell.</p>
+
+        <div class="install-tabs" role="tablist">
+          <button class="tab-btn active" data-cmd="brew install somalip/pyre/pyre">Homebrew</button>
+          <button class="tab-btn" data-cmd="curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash">Shell Script</button>
+          <button class="tab-btn" data-cmd="npm install -g pyre-cli">npm</button>
+          <button class="tab-btn" data-cmd="cargo install pyre-cli">Cargo</button>
+        </div>
+
+        <div class="cli-command-pill">
+          <div class="command-text" id="commandDisplay">
+            <span class="prefix">$</span>brew install somalip/pyre/pyre
+          </div>
+          <button class="copy-btn" id="copyBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span id="copyText">Copy</span>
+          </button>
+        </div>
+
+        <div class="cli-mini-terminal">
+          <div class="term-dots">
+            <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+          </div>
+          <p><span class="term-accent">✔</span> <span class="term-val">pyre v10.1.0</span> initialized in 4.2ms [darwin-arm64]</p>
+          <p>Probing 14 thermal sensors &bull; CPU cluster 8P+4E &bull; Unified RAM 32GB</p>
+          <p style="color: #64748b;">$ pyre live --rate 250ms --format compact</p>
+          <p><span class="term-accent">●</span> <span style="color: #f59e0b;">LIVE</span> streaming 12 channels @ 250ms <span class="cursor-blink"></span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ FOOTER ═══ -->
+    <footer>
+      <div class="footer-inner">
+        <div><span>© 2026 <span class="pyre-glow">Pyre</span>®. Systems built as precision.</span></div>
+        <ul class="footer-links">
+          <li><a href="https://github.com/somalip/pyre" target="_blank" rel="noreferrer">GitHub</a></li>
+          <li><a href="#specimens">Architecture</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#install">Install</a></li>
+        </ul>
+      </div>
+    </footer>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- CARD INSPECTION MODAL (Apple Style Hardware Sheet)                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="card-modal-backdrop" id="cardDetailModal" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="card-modal-dialog">
+      <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close dialog">✕</button>
+      <div class="modal-header-meta">
+        <span class="modal-index" id="modalIndex">Silicon Architecture</span>
+        <span class="modal-tag" id="modalTag">Silicon</span>
+      </div>
+      <h2 class="modal-title" id="modalTitle">Apple Silicon &amp; Heterogeneous Compute</h2>
+      <p class="modal-desc" id="modalDesc">Direct registers for Performance and Efficiency cluster loads, unified memory throughput, and neural engine throttling states.</p>
+
+      <div class="modal-section-title">Terminal Execution</div>
+      <div class="modal-cli-box">
+        <div class="modal-cli-code"><span class="prefix">$</span><span id="modalCommand">pyre top --silicon</span></div>
+        <button class="modal-copy-btn" id="modalCopyBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span id="modalCopyText">Copy</span>
+        </button>
+      </div>
+
+      <div class="modal-section-title">Telemetry Flags &amp; Subsystems</div>
+      <div class="modal-flags-list" id="modalFlagsList">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div class="modal-section-title">Live Hardware Stream Output</div>
+      <div class="modal-output-preview" id="modalOutputPreview">
+        <!-- Injected dynamically -->
+      </div>
+
+      <div class="modal-footer-actions">
+        <button class="modal-btn-done" id="modalDoneBtn">Done</button>
+      </div>
+    </div>
   </div>
-</div>
 
-<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
-<script>
-  /* ── fire simulation (splash) ─────────────────────────────────────── */
-  (function(){
-    const canvas = document.getElementById('fire');
-    const ctx = canvas.getContext('2d');
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const CHAR_RAMP = [' ', '.', '`', ',', ':', ';', '+', '*', '?', '%', '#', '@'];
-    const STOPS = [
-      [0.00,[8,8,10]],[0.14,[30,8,6]],[0.30,[90,16,4]],[0.46,[150,42,4]],
-      [0.62,[200,80,10]],[0.78,[255,140,26]],[0.90,[255,190,70]],[1.00,[255,240,220]],
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- THREE.JS: 3D DOT-MATRIX TERRAIN                                   -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ─── SIMPLEX NOISE (inline, compact) ───────────────────────────────
+    // Adapted from simplex-noise.js by Jonas Wagner (MIT)
+    const F2 = 0.5 * (Math.sqrt(3) - 1);
+    const G2 = (3 - Math.sqrt(3)) / 6;
+    const F3 = 1 / 3;
+    const G3 = 1 / 6;
+    const grad3 = [
+      [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
+      [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
+      [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
     ];
-    function lerp(a,b,t){ return a+(b-a)*t; }
-    function paletteColor(t){
-      for(let i=0;i<STOPS.length-1;i++){
-        const [t0,c0]=STOPS[i], [t1,c1]=STOPS[i+1];
-        if(t>=t0 && t<=t1){
-          const lt=(t-t0)/(t1-t0||1);
-          return `rgb(${Math.round(lerp(c0[0],c1[0],lt))},${Math.round(lerp(c0[1],c1[1],lt))},${Math.round(lerp(c0[2],c1[2],lt))})`;
+    const perm = new Uint8Array(512);
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    for (let i = 255; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+
+    function simplex2(x, y) {
+      let n0, n1, n2;
+      const s = (x + y) * F2;
+      const i = Math.floor(x + s);
+      const j = Math.floor(y + s);
+      const t = (i + j) * G2;
+      const X0 = i - t;
+      const Y0 = j - t;
+      const x0 = x - X0;
+      const y0 = y - Y0;
+      let i1, j1;
+      if (x0 > y0) { i1 = 1; j1 = 0; }
+      else { i1 = 0; j1 = 1; }
+      const x1 = x0 - i1 + G2;
+      const y1 = y0 - j1 + G2;
+      const x2 = x0 - 1 + 2 * G2;
+      const y2 = y0 - 1 + 2 * G2;
+      const ii = i & 255;
+      const jj = j & 255;
+      const gi0 = perm[ii + perm[jj]] % 12;
+      const gi1 = perm[ii + i1 + perm[jj + j1]] % 12;
+      const gi2 = perm[ii + 1 + perm[jj + 1]] % 12;
+      let t0 = 0.5 - x0 * x0 - y0 * y0;
+      if (t0 < 0) n0 = 0;
+      else { t0 *= t0; n0 = t0 * t0 * (grad3[gi0][0] * x0 + grad3[gi0][1] * y0); }
+      let t1 = 0.5 - x1 * x1 - y1 * y1;
+      if (t1 < 0) n1 = 0;
+      else { t1 *= t1; n1 = t1 * t1 * (grad3[gi1][0] * x1 + grad3[gi1][1] * y1); }
+      let t2 = 0.5 - x2 * x2 - y2 * y2;
+      if (t2 < 0) n2 = 0;
+      else { t2 *= t2; n2 = t2 * t2 * (grad3[gi2][0] * x2 + grad3[gi2][1] * y2); }
+      return 70 * (n0 + n1 + n2);
+    }
+
+    // ─── SCENE SETUP ───────────────────────────────────────────────────
+    const container = document.getElementById('three-container');
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 200);
+    camera.position.set(0, 12, 22);
+    camera.lookAt(0, -2, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setClearColor(0x000000, 0);
+    container.appendChild(renderer.domElement);
+
+    // ─── DOT-MATRIX TERRAIN (CIRCULAR DISC) ──────────────────────────
+    const gridW = 200;
+    const gridH = 200;
+    const spacing = 0.28;
+    const radius = (gridW / 2) * spacing; // world-space radius
+
+    // First pass: count how many dots fall inside the circle
+    const tempPts = [];
+    for (let iy = 0; iy < gridH; iy++) {
+      for (let ix = 0; ix < gridW; ix++) {
+        const x = (ix - gridW / 2) * spacing;
+        const z = (iy - gridH / 2) * spacing;
+        const r = Math.sqrt(x * x + z * z);
+        if (r > radius) continue;
+        tempPts.push({ x, z, r });
+      }
+    }
+
+    const count = tempPts.length;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const edgeFades = new Float32Array(count);
+    const basePositions = new Float32Array(count * 3);
+
+    const colorOrange = new THREE.Color(0xff6b2b);
+    const colorRed = new THREE.Color(0xcc2200);
+    const colorAmber = new THREE.Color(0xff9500);
+    const colorDarkRed = new THREE.Color(0x661100);
+    const tempColor = new THREE.Color();
+
+    for (let idx = 0; idx < count; idx++) {
+      const i3 = idx * 3;
+      const { x, z, r } = tempPts[idx];
+
+      // Multi-octave terrain
+      const n1 = simplex2(x * 0.08, z * 0.08) * 3.5;
+      const n2 = simplex2(x * 0.15 + 5, z * 0.15 + 5) * 1.8;
+      const n3 = simplex2(x * 0.3 + 10, z * 0.3 + 10) * 0.6;
+      let y = n1 + n2 + n3;
+
+      // Smooth circular fade at edges
+      const normR = r / radius;
+      const edgeFade = Math.max(0, 1 - Math.pow(normR, 2));
+      y *= edgeFade;
+      edgeFades[idx] = edgeFade;
+
+      positions[i3] = x;
+      positions[i3 + 1] = y;
+      positions[i3 + 2] = z;
+      basePositions[i3] = x;
+      basePositions[i3 + 1] = y;
+      basePositions[i3 + 2] = z;
+
+      // Color: blend orange → red based on height
+      const hn = (y + 4) / 8;
+      if (hn > 0.6) {
+        tempColor.lerpColors(colorOrange, colorAmber, (hn - 0.6) / 0.4);
+      } else if (hn > 0.3) {
+        tempColor.lerpColors(colorRed, colorOrange, (hn - 0.3) / 0.3);
+      } else {
+        tempColor.lerpColors(colorDarkRed, colorRed, Math.max(0, hn / 0.3));
+      }
+
+      colors[i3] = tempColor.r;
+      colors[i3 + 1] = tempColor.g;
+      colors[i3 + 2] = tempColor.b;
+
+      sizes[idx] = (1.5 + hn * 3.0) * edgeFade;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    geometry.setAttribute('edgeFade', new THREE.BufferAttribute(edgeFades, 1));
+
+    // Custom shader for round dots with per-vertex size and color
+    const vertexShader = `
+      attribute float size;
+      attribute float edgeFade;
+      varying vec3 vColor;
+      varying float vAlpha;
+
+      void main() {
+        vColor = color;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+        // Fade alpha for dots further away + edge fade
+        float dist = -mvPosition.z;
+        vAlpha = smoothstep(60.0, 10.0, dist) * edgeFade;
+
+        gl_PointSize = size * (180.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+      }
+    `;
+
+    const fragmentShader = `
+      varying vec3 vColor;
+      varying float vAlpha;
+
+      void main() {
+        vec2 center = gl_PointCoord - vec2(0.5);
+        float dist = length(center);
+        if (dist > 0.5) discard;
+
+        float alpha = smoothstep(0.5, 0.25, dist) * vAlpha;
+        gl_FragColor = vec4(vColor, alpha);
+      }
+    `;
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      depthWrite: false,
+      vertexColors: true,
+    });
+
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+
+    // ─── MOUSE INTERACTION ─────────────────────────────────────────────
+    let mouseX = 0, mouseY = 0;
+    let targetMouseX = 0, targetMouseY = 0;
+
+    window.addEventListener('mousemove', (e) => {
+      targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+      targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+    });
+
+    // ─── RESIZE ────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // ─── ANIMATION LOOP ───────────────────────────────────────────────
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const time = clock.getElapsedTime();
+
+      // Smooth mouse
+      mouseX += (targetMouseX - mouseX) * 0.04;
+      mouseY += (targetMouseY - mouseY) * 0.04;
+
+      // Subtle camera orbit based on mouse
+      camera.position.x = mouseX * 4;
+      camera.position.y = 12 - mouseY * 2;
+      camera.lookAt(0, -2, 0);
+
+      // Animate terrain: gentle waves + mouse ripple
+      const posArr = geometry.attributes.position.array;
+      const sizeArr = geometry.attributes.size.array;
+      const colArr = geometry.attributes.color.array;
+
+      for (let idx = 0; idx < count; idx++) {
+        const i3 = idx * 3;
+
+        const bx = basePositions[i3];
+        const by = basePositions[i3 + 1];
+        const bz = basePositions[i3 + 2];
+
+        // Gentle wave over time
+        const wave = Math.sin(bx * 0.3 + time * 0.8) * 0.3 +
+                     Math.cos(bz * 0.25 + time * 0.6) * 0.25 +
+                     Math.sin((bx + bz) * 0.15 + time * 0.4) * 0.4;
+
+        // Mouse-driven ripple
+        const mWorldX = mouseX * 15;
+        const mWorldZ = mouseY * 10;
+        const dx = bx - mWorldX;
+        const dz = bz - mWorldZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const ripple = Math.sin(dist * 0.6 - time * 3) * Math.max(0, 1.5 - dist * 0.08);
+
+        const newY = by + wave + ripple;
+        posArr[i3 + 1] = newY;
+
+        // Dynamic color based on new height
+        const hn = Math.max(0, Math.min(1, (newY + 4) / 8));
+        if (hn > 0.6) {
+          tempColor.lerpColors(colorOrange, colorAmber, (hn - 0.6) / 0.4);
+        } else if (hn > 0.3) {
+          tempColor.lerpColors(colorRed, colorOrange, (hn - 0.3) / 0.3);
+        } else {
+          tempColor.lerpColors(colorDarkRed, colorRed, hn / 0.3);
         }
+
+        colArr[i3] = tempColor.r;
+        colArr[i3 + 1] = tempColor.g;
+        colArr[i3 + 2] = tempColor.b;
+
+        sizeArr[idx] = 1.5 + hn * 3.0;
       }
-      return 'rgb(255,240,220)';
-    }
-    const MAXV=36;
-    const PALETTE=[]; for(let i=0;i<=MAXV;i++) PALETTE.push(paletteColor(i/MAXV));
-    let cols, rows, cellW, cellH, fire;
-    function setup(){
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      cellW = rect.width < 500 ? 7 : 9;
-      cellH = Math.round(cellW*1.6);
-      cols = Math.max(24, Math.floor(rect.width/cellW));
-      rows = Math.max(8, Math.floor(rect.height/cellH));
-      canvas.width = cols*cellW*dpr; canvas.height = rows*cellH*dpr;
-      canvas.style.width = rect.width+'px'; canvas.style.height = rect.height+'px';
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.textBaseline='top'; ctx.font = `${cellH-1}px 'JetBrains Mono', monospace`;
-      fire = new Uint8Array(cols*rows);
-    }
-    function step(){
-      for(let x=0;x<cols;x++) fire[(rows-1)*cols+x] = MAXV - Math.floor(Math.random()*4);
-      for(let y=rows-1;y>=1;y--){
-        for(let x=0;x<cols;x++){
-          const src=y*cols+x, val=fire[src];
-          if(val===0){ fire[(y-1)*cols+x]=0; continue; }
-          const decay=Math.floor(Math.random()*3), drift=Math.floor(Math.random()*3)-1;
-          let nx=x+drift; if(nx<0) nx=0; else if(nx>=cols) nx=cols-1;
-          fire[(y-1)*cols+nx]=Math.max(0,val-decay);
-        }
-      }
-    }
-    function draw(){
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      for(let y=0;y<rows;y++){
-        let runChar=null, runColor=null, runStartX=0, run='';
-        for(let x=0;x<=cols;x++){
-          const v = x<cols ? fire[y*cols+x] : -1;
-          const charIdx = x<cols ? Math.min(CHAR_RAMP.length-1, Math.floor(v/(MAXV+1)*CHAR_RAMP.length)) : null;
-          const ch = x<cols ? CHAR_RAMP[charIdx] : null;
-          const color = x<cols ? PALETTE[v] : null;
-          if(x<cols && color===runColor && ch===runChar){ run+=ch; }
-          else{
-            if(run.length){ ctx.fillStyle=runColor; ctx.fillText(run, runStartX*cellW, y*cellH); }
-            run = ch||''; runColor=color; runChar=ch; runStartX=x;
-          }
-        }
-      }
-    }
-    let last=0;
-    function loop(ts){ if(ts-last>65){ step(); draw(); last=ts; } requestAnimationFrame(loop); }
-    setup(); step();step();step();step(); draw();
-    if(!reduceMotion) requestAnimationFrame(loop);
-    let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{setup();step();step();draw();},150); });
 
-    const splash = document.getElementById('splash');
-    function enter(){
-      splash.classList.add('hide'); document.getElementById('wizard-container').classList.add('show');
-      if (window.__pyreLocalIP && window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(window.__pyreLocalIP);
-    }
-    document.getElementById('enterBtn').addEventListener('click', enter);
-    document.getElementById('skipLink').addEventListener('click', (e)=>{ e.preventDefault(); enter(); });
-    setTimeout(enter, 4200);
-    window.addEventListener('keydown', (e)=>{ if(!splash.classList.contains('hide') && (e.key==='Enter'||e.key===' ')) enter(); });
-  })();
+      geometry.attributes.position.needsUpdate = true;
+      geometry.attributes.color.needsUpdate = true;
+      geometry.attributes.size.needsUpdate = true;
 
-  /* ── wizard logic ─────────────────────────────────────────────────── */
-  (function(){
-    // Detect local IP for P2P
-    function detectLocalIP() {
-      return new Promise((resolve) => {
-        try {
-          const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-          pc.createDataChannel('');
-          pc.createOffer().then(offer => pc.setLocalDescription(offer));
-          pc.onicecandidate = (e) => {
-            if (!e.candidate) { pc.close(); resolve(window.__pyreLocalIP || null); return; }
-            const cand = e.candidate.candidate;
-            if (!/typ host/.test(cand)) return;
-            const m = cand.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
-            if (m) { pc.close(); window.__pyreLocalIP = m[1]; resolve(m[1]); }
-          };
-          pc.onicegatheringstatechange = () => {
-            if (pc.iceGatheringState === 'complete') { pc.close(); resolve(window.__pyreLocalIP || null); }
-          };
-          setTimeout(() => { pc.close(); resolve(window.__pyreLocalIP || null); }, 3000);
-        } catch { resolve(window.__pyreLocalIP || null); }
-      });
+      renderer.render(scene, camera);
     }
 
-    const state = {
-      step: 0,
-      sudoDone: false,
-      theme: 'default',
-      interval: 2,
-      exportDir: './pyre-exports',
-      autoLog: false,
-      detailed: false,
-      p2p: {
-        password: 'mysecret',
-        host: '0.0.0.0',
-        port: '9876',
-      }
-    };
+    animate();
+  </script>
 
-    const panels = document.querySelectorAll('.panel');
-    const tabs = document.querySelectorAll('.tab');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const TOTAL = panels.length;
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- INTERACTIVE SCRIPTS (Tabs, Copy, Telemetry)                        -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <script>
+    /* ─── INSTALL TABS & CLIPBOARD ───────────────────────────────────── */
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const commandDisplay = document.getElementById('commandDisplay');
+    const copyBtn = document.getElementById('copyBtn');
+    const copyText = document.getElementById('copyText');
+    let currentCommand = 'brew install somalip/pyre/pyre';
 
-    function render(){
-      panels.forEach(p => p.classList.toggle('active', Number(p.dataset.panel) === state.step));
-      tabs.forEach(t => {
-        const s = Number(t.dataset.step);
-        t.classList.toggle('active', s === state.step);
-        t.classList.toggle('done', s < state.step);
-      });
-      prevBtn.disabled = state.step === 0;
-      nextBtn.textContent = state.step === TOTAL - 1 ? 'finish' : 'continue →';
-      if(state.step === TOTAL - 1) updateReview();
-    }
-    window.addEventListener('resize', render);
-
-    function buildP2PCmd(){
-      const p = state.p2p;
-      return `pyre p2p server --p2p-host ${p.host || '0.0.0.0'} --p2p-port ${p.port} --p2p-password ${p.password}`;
-    }
-
-    function updateReview(){
-      const cmdParts = [`pyre live --interval ${state.interval} --export-dir ${state.exportDir}`];
-      if(state.autoLog) cmdParts.push('--log');
-      if(state.detailed) cmdParts.push('--detailed');
-      if(state.theme && state.theme !== 'default') cmdParts.push(`--theme ${state.theme}`);
-      const liveCmd = cmdParts.join(' ');
-      document.getElementById('launch-cmd').textContent = liveCmd;
-      document.getElementById('alias-cmd').textContent =
-        `echo 'alias pyre-live="${liveCmd}"' >> ~/.zshrc\necho 'alias pyre-p2p="${buildP2PCmd()}"' >> ~/.zshrc`;
-      document.getElementById('reviewTheme').textContent = state.theme;
-      document.getElementById('chk-theme').textContent = state.theme;
-      document.getElementById('chk-theme-ok').textContent = '✓';
-      document.getElementById('chk-theme-ok').className = 'ok';
-      document.getElementById('chk-interval').textContent = state.interval + 's';
-      document.getElementById('chk-interval-ok').textContent = '✓';
-      document.getElementById('chk-interval-ok').className = 'ok';
-      document.getElementById('chk-dir').textContent = state.exportDir;
-      document.getElementById('chk-dir-ok').textContent = '✓';
-      document.getElementById('chk-dir-ok').className = 'ok';
-      document.getElementById('chk-sudo').textContent = state.sudoDone ? '✓' : '○';
-      document.getElementById('chk-sudo').className = state.sudoDone ? 'ok' : '';
-      document.getElementById('chk-p2p').textContent = state.p2p.password ? '✓' : '○';
-      document.getElementById('chk-p2p').className = state.p2p.password ? 'ok' : '';
-      document.getElementById('p2p-cmd').textContent = buildP2PCmd();
-      document.getElementById('p2pConnectCmd').textContent =
-        `pyre p2p connect --p2p-host <server-ip> --p2p-port ${state.p2p.port} --p2p-password ${state.p2p.password}`;
-    }
-
-    // Update P2P commands on wizard entry with detected IP
-    detectLocalIP().then(ip => {
-      if (ip) { window.__pyreLocalIP = ip; if (window.__pyreUpdateP2PCommands) window.__pyreUpdateP2PCommands(ip); }
-    });
-
-    prevBtn.addEventListener('click', () => { if(state.step>0){ state.step--; render(); } });
-    nextBtn.addEventListener('click', () => {
-      if(state.step < TOTAL-1){ state.step++; render(); }
-      else { nextBtn.textContent = 'launched ✓'; }
-    });
-    tabs.forEach(t => t.addEventListener('click', () => { state.step = Number(t.dataset.step); render(); }));
-
-    const sudoToggle = document.getElementById('toggle-sudo-done');
-    if (sudoToggle) {
-      sudoToggle.addEventListener('click', () => {
-        state.sudoDone = !state.sudoDone;
-        sudoToggle.classList.toggle('on', state.sudoDone);
-      });
-    }
-
-    document.querySelectorAll('.theme-swatch').forEach(sw => {
-      sw.addEventListener('click', () => {
-        document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('selected'));
-        sw.classList.add('selected');
-        state.theme = sw.dataset.theme;
-      });
-    });
-
-    const intervalInput = document.getElementById('interval');
-    intervalInput.addEventListener('input', () => {
-      state.interval = parseInt(intervalInput.value, 10) || 2;
-      document.getElementById('intervalOut').textContent = state.interval + 's';
-    });
-    document.getElementById('exportDir').addEventListener('input', (e) => {
-      state.exportDir = e.target.value || './pyre-exports';
-    });
-    const autoLogToggle = document.getElementById('toggle-autolog');
-    autoLogToggle.addEventListener('click', () => {
-      state.autoLog = !state.autoLog;
-      autoLogToggle.classList.toggle('on', state.autoLog);
-    });
-    const detailedToggle = document.getElementById('toggle-detailed');
-    detailedToggle.addEventListener('click', () => {
-      state.detailed = !state.detailed;
-      detailedToggle.classList.toggle('on', state.detailed);
-    });
-
-    const p2pPassword = document.getElementById('p2pPassword');
-    p2pPassword.addEventListener('input', (e) => {
-      state.p2p.password = e.target.value || 'mysecret';
-      document.getElementById('p2pPasswordOut').textContent = state.p2p.password ? '••••••••' : '(empty)';
-    });
-    const p2pHost = document.getElementById('p2pHost');
-    p2pHost.addEventListener('input', (e) => {
-      state.p2p.host = e.target.value || '0.0.0.0';
-      document.getElementById('p2pHostOut').textContent = state.p2p.host;
-    });
-
-    window.__pyreUpdateP2PCommands = function(ip) {
-      if (!ip) return;
-      state.p2p.host = '0.0.0.0';
-      p2pHost.value = '0.0.0.0';
-      document.getElementById('p2pHostOut').textContent = '0.0.0.0';
-      document.getElementById('p2p-client-cmd').textContent =
-        'pyre p2p connect \\\n  --p2p-host ' + ip + ' \\\n  --p2p-port ' + state.p2p.port + ' \\\n  --p2p-password ' + state.p2p.password;
-      const reviewConnectCmd = document.getElementById('p2pConnectCmd');
-      if (reviewConnectCmd) {
-        reviewConnectCmd.textContent = 'pyre p2p connect --p2p-host ' + ip + ' --p2p-port ' + state.p2p.port + ' --p2p-password ' + state.p2p.password;
-      }
-      const note = document.getElementById('p2pAutoDetectNote');
-      if (note) note.style.display = 'block';
-      const serverCmd = document.getElementById('p2p-cmd');
-      if (serverCmd) {
-        serverCmd.textContent = buildP2PCmd();
-      }
-    };
-    const p2pPort = document.getElementById('p2pPort');
-    p2pPort.addEventListener('input', (e) => {
-      state.p2p.port = e.target.value || '9876';
-      document.getElementById('p2pPortOut').textContent = state.p2p.port;
-    });
-
-    document.querySelectorAll('.copy-btn').forEach(btn => {
+    tabBtns.forEach(btn => {
       btn.addEventListener('click', () => {
-        const target = document.getElementById(btn.dataset.copy);
-        const text = target.textContent.replace(/^(#|\/\/).*\n/gm, '').trim();
-        navigator.clipboard.writeText(text).then(() => {
-          const orig = btn.textContent;
-          btn.textContent = 'copied';
-          setTimeout(() => { btn.textContent = orig; }, 1500);
-        }).catch(() => {});
+        tabBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCommand = btn.getAttribute('data-cmd');
+        commandDisplay.innerHTML = `<span class="prefix">$</span>${currentCommand}`;
       });
     });
 
-    render();
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(currentCommand);
+        copyText.textContent = 'Copied!';
+        setTimeout(() => { copyText.textContent = 'Copy'; }, 2000);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = currentCommand;
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        copyText.textContent = 'Copied!';
+        setTimeout(() => { copyText.textContent = 'Copy'; }, 2000);
+      }
+    });
 
-    // Auto-refresh stats via SSE with polling fallback
-    function updateDashboardUI(stats) {
-      if (!stats) return;
-      const cpuEl = document.getElementById('live-cpu-val');
-      const memEl = document.getElementById('live-mem-val');
-      if (cpuEl && stats.cpu) cpuEl.textContent = `${stats.cpu.usage}%`;
-      if (memEl && stats.memory) memEl.textContent = `${stats.memory.usagePercent}%`;
+    /* ─── LIVE TELEMETRY SIMULATION ──────────────────────────────────── */
+    const elS = document.getElementById('liveSilicon');
+    const elT = document.getElementById('liveThermal');
+    const elN = document.getElementById('liveNet');
+    const elP = document.getElementById('livePower');
+
+    setInterval(() => {
+      if (elS) elS.textContent = `P-Core: ${(14+Math.random()*18).toFixed(1)}% • E-Core: ${(2+Math.random()*6).toFixed(1)}%`;
+      if (elT) elT.textContent = `${(41.8+Math.random()*3.4).toFixed(1)}°C • ${Math.floor(1380+Math.random()*90).toLocaleString()} RPM`;
+      if (elN) elN.textContent = `↓ ${(3.2+Math.random()*2.8).toFixed(1)} MB/s • ↑ ${Math.floor(140+Math.random()*90)} KB/s`;
+      if (elP) elP.textContent = `96.4% Health • ${(3.8+Math.random()*1.5).toFixed(1)}W Draw`;
+    }, 1800);
+  </script>
+
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- STAT COUNTER ANIMATION                                              -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <script>
+
+    /* ─── Stat Counter Animation ─────────────────────────────────────── */
+    const counterObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const h3 = entry.target.querySelector('h3');
+          if (!h3) return;
+          const target = parseFloat(h3.dataset.count);
+          const prefix = h3.dataset.prefix || '';
+          const suffix = h3.dataset.suffix || '';
+          const duration = 1200;
+          const start = performance.now();
+
+          function tick(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const current = target * eased;
+
+            if (target === 0) {
+              h3.textContent = prefix + '0' + suffix;
+            } else if (target < 1) {
+              h3.textContent = prefix + current.toFixed(1) + suffix;
+            } else {
+              h3.textContent = prefix + current.toFixed(1) + suffix;
+            }
+
+            if (progress < 1) {
+              requestAnimationFrame(tick);
+            } else {
+              if (target === 0) {
+                h3.textContent = prefix + '0' + suffix;
+              } else if (target < 1) {
+                h3.textContent = prefix + target.toFixed(1) + suffix;
+              } else {
+                h3.textContent = prefix + target + suffix;
+              }
+            }
+          }
+
+          requestAnimationFrame(tick);
+          entry.target.classList.add('counted');
+          counterObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.4 });
+
+    document.querySelectorAll('.stat-item[data-delay]').forEach(el => {
+      counterObserver.observe(el);
+    });
+
+    /* ─── Interactive 3D Card Reaction (Tilt & Layered Depth) ────── */
+    const cards = document.querySelectorAll('.specimen-card');
+
+    cards.forEach(card => {
+      let bounds;
+      let mouseX = 0;
+      let mouseY = 0;
+      let isHovered = false;
+      let rafId = null;
+
+      function updateCard() {
+        if (!isHovered || !bounds) return;
+
+        const width = bounds.width;
+        const height = bounds.height;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        const normX = (mouseX - centerX) / centerX;
+        const normY = (mouseY - centerY) / centerY;
+
+        const maxRotateX = 14;
+        const maxRotateY = 14;
+        const rotateX = -normY * maxRotateX;
+        const rotateY = normX * maxRotateY;
+
+        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(12px) scale3d(1.025, 1.025, 1.025)`;
+
+        // Parallax inner elements for tactile 3D depth
+        const topEl = card.querySelector('.specimen-top');
+        const midEl = card.querySelector('.specimen-mid');
+        const liveEl = card.querySelector('.specimen-live-data');
+
+        if (topEl) topEl.style.transform = `translateZ(20px) translateX(${(-normX * 4).toFixed(1)}px) translateY(${(-normY * 4).toFixed(1)}px)`;
+        if (midEl) midEl.style.transform = `translateZ(32px) translateX(${(-normX * 8).toFixed(1)}px) translateY(${(-normY * 8).toFixed(1)}px)`;
+        if (liveEl) liveEl.style.transform = `translateZ(26px) translateX(${(-normX * 5).toFixed(1)}px) translateY(${(-normY * 5).toFixed(1)}px)`;
+
+        // Dynamic specular glare location
+        card.style.setProperty('--mouse-x', `${((mouseX / width) * 100).toFixed(1)}%`);
+        card.style.setProperty('--mouse-y', `${((mouseY / height) * 100).toFixed(1)}%`);
+      }
+
+      card.addEventListener('mouseenter', () => {
+        isHovered = true;
+        bounds = card.getBoundingClientRect();
+        card.style.transition = 'transform 0.12s ease-out, box-shadow 0.25s ease';
+      });
+
+      card.addEventListener('mousemove', (e) => {
+        if (!bounds) bounds = card.getBoundingClientRect();
+        mouseX = e.clientX - bounds.left;
+        mouseY = e.clientY - bounds.top;
+
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(updateCard);
+      });
+
+      card.addEventListener('mouseleave', () => {
+        isHovered = false;
+        if (rafId) cancelAnimationFrame(rafId);
+
+        card.style.transition = 'transform 0.6s var(--ease), box-shadow 0.6s var(--ease)';
+        card.style.transform = '';
+
+        const topEl = card.querySelector('.specimen-top');
+        const midEl = card.querySelector('.specimen-mid');
+        const liveEl = card.querySelector('.specimen-live-data');
+
+        if (topEl) {
+          topEl.style.transition = 'transform 0.6s var(--ease)';
+          topEl.style.transform = '';
+        }
+        if (midEl) {
+          midEl.style.transition = 'transform 0.6s var(--ease)';
+          midEl.style.transform = '';
+        }
+        if (liveEl) {
+          liveEl.style.transition = 'transform 0.6s var(--ease)';
+          liveEl.style.transform = '';
+        }
+      });
+    });
+
+    /* ─── Collapsible Features Library Toggle ("View More") ───────────── */
+    const toggleBtn = document.getElementById('toggleMoreFeaturesBtn');
+    const moreWrapper = document.getElementById('moreFeaturesWrapper');
+
+    if (toggleBtn && moreWrapper) {
+      toggleBtn.addEventListener('click', () => {
+        const isOpen = moreWrapper.classList.toggle('open');
+        toggleBtn.classList.toggle('expanded', isOpen);
+        toggleBtn.setAttribute('aria-expanded', isOpen);
+
+        const btnText = toggleBtn.querySelector('.btn-text');
+        if (btnText) {
+          btnText.textContent = isOpen ? 'Show Less Capabilities' : 'View More Capabilities (3)';
+        }
+      });
     }
 
-    if (window.EventSource) {
-      const evtSource = new EventSource('/api/stream');
-      evtSource.onmessage = function(event) {
-        try {
-          const stats = JSON.parse(event.data);
-          updateDashboardUI(stats);
-        } catch {
-          // ignore parse error
-        }
-      };
-      evtSource.onerror = function() {
-        fetch('/api').then(r => r.json()).then(updateDashboardUI).catch(() => {});
-      };
-    } else {
-      setInterval(async () => {
-        try {
-          const res = await fetch('/api');
-          if (res.ok) updateDashboardUI(await res.json());
-        } catch {
-          // ignore network error
-        }
-      }, 2000);
-    }
-  })();
-</script>
+    /* ─── Card Inspection Modal Engine (Apple Hardware Inspector) ────── */
+    const CARD_METADATA = {
+      silicon: {
+        index: 'Silicon Architecture',
+        tag: 'Silicon',
+        title: 'Apple Silicon & Heterogeneous Compute',
+        desc: 'Direct register probes for Performance and Efficiency cluster loads, unified memory bus throughput, and Apple Neural Engine throttling states.',
+        command: 'pyre top --silicon --clusters all',
+        flags: [
+          { flag: '--clusters <p|e|all>', desc: 'Isolate Performance (Firestorm/Avalanche) or Efficiency cores' },
+          { flag: '--ane-watch', desc: 'Monitor Apple Neural Engine active TOPS and thermal throttling' },
+          { flag: '--interval <ms>', desc: 'Hardware register sampling frequency (default: 250ms)' },
+          { flag: '--json', desc: 'Stream structured JSON telemetry for downstream aggregators' }
+        ],
+        output: `[PYRE] M-SERIES SILICON REGISTER PROBE [darwin-arm64]
+├─ P-Cluster [0..7]: 18.4% active (3.49 GHz) · IPC: 2.81 · 2.4 W
+├─ E-Cluster [0..3]:  4.1% active (2.06 GHz) · IPC: 1.14 · 0.4 W
+├─ Apple Neural Engine: IDLE (0.00 TOPS) · Temp: 38.2°C
+└─ Unified Memory Bus: 68.2 GB/s Bandwidth [14.2% Saturation]`
+      },
+      thermals: {
+        index: 'Thermals & SMC',
+        tag: 'Thermals',
+        title: 'Thermals & Dynamic Fan Curves',
+        desc: 'SMC & ACPI thermistor arrays monitoring heatpipe dissipation, throttling thresholds, and tachometer fan hysteresis curves in real-time.',
+        command: 'pyre sensors --thermals --fan-curve',
+        flags: [
+          { flag: '--sensors <all|die|ambient>', desc: 'Select target thermistor channel groups' },
+          { flag: '--fan-curve', desc: 'Display active PID RPM curve vs target thermal junction' },
+          { flag: '--hysteresis <ms>', desc: 'Adjust sensor damping window to eliminate thermal jitter' },
+          { flag: '--alert-temp <degC>', desc: 'Trigger shell exit code or alert on junction breach' }
+        ],
+        output: `[PYRE] THERMAL JUNCTION & SMC TACHOMETER [14 Sensors Active]
+├─ CPU Die Core Max:   43.2°C [Throttling Junction: 102.0°C]
+├─ GPU Core Average:   41.8°C [Throttling Junction:  98.0°C]
+├─ Left Fan Tachometer: 1,420 RPM [Profile: Whisper / Silent]
+└─ Heatpipe Delta:     +3.6°C / 10s · Dissipation Headroom: 88.4%`
+      },
+      network: {
+        index: 'Kernel Flow',
+        tag: 'Network',
+        title: 'Micro-Packet Flow & Socket Tracking',
+        desc: 'Non-intrusive nettop kernel streaming that correlates delta egress/ingress with precise PID lineages and open file descriptors.',
+        command: 'pyre net --sockets --resolve-pid',
+        flags: [
+          { flag: '--interface <en0|eth0>', desc: 'Bind socket inspection to specific network adapter' },
+          { flag: '--resolve-pid', desc: 'Trace each socket stream to binary path and parent PID' },
+          { flag: '--min-kb <n>', desc: 'Filter out background keep-alives under specified rate' },
+          { flag: '--export-pcap <file>', desc: 'Stream forensic capture directly to Wireshark/pcap' }
+        ],
+        output: `[PYRE] PACKET FLOW DELTA & SOCKET CORRELATION
+├─ [PID 4180 / pyre-daemon] TCP 127.0.0.1:9042 -> ESTABLISHED
+│  └─ Delta In: 4.8 MB/s · Delta Out: 182 KB/s · Latency: 0.2ms
+├─ [PID 1204 / curl]        TLS 192.168.1.14:443 -> CLOSED_WAIT
+└─ Buffer Bloat: 0.11ms · Packet Drops: 0.00% · Retransmits: 0`
+      },
+      power: {
+        index: 'Power Dynamics',
+        tag: 'Power',
+        title: 'Battery Degradation & Cycle Analytics',
+        desc: 'Coulomb counter telemetry projecting battery degradation trajectories, active milliwatt draw, and charging temperature curves.',
+        command: 'pyre power --coulomb --project-decay',
+        flags: [
+          { flag: '--project-decay', desc: 'Statistical projection of capacity loss over 500 charge cycles' },
+          { flag: '--milliwatts', desc: 'Display per-subsystem power draw breakdown in mW' },
+          { flag: '--charge-curve', desc: 'Graph current voltage against cell thermal coefficient' },
+          { flag: '--csv <path>', desc: 'Continuously append battery state logs to CSV' }
+        ],
+        output: `[PYRE] COULOMB POWER CONTROLLER TELEMETRY
+├─ State: DISCHARGING · Voltage: 11.42 V · Total Draw: 4.21 W
+├─ Health: 96.4% · Design Capacity: 70.0 Wh · Current: 67.5 Wh
+├─ Charge Cycles: 142 · Estimated Time to Empty: 11h 42m
+└─ Subsystems: Core (1.8W) · Retina Display (1.2W) · Baseboard (1.2W)`
+      },
+      tui: {
+        index: 'Interactive TUI',
+        tag: 'TUI',
+        title: 'Interactive Terminal Dashboard',
+        desc: 'Full-screen keyboard & mouse-driven TUI. Live sparklines, bar graphs, process trees, interactive kill signals, and 6 built-in colorways.',
+        command: 'pyre live --rate 250ms --theme obsidian',
+        flags: [
+          { flag: '--rate <ms>', desc: 'Sampling and terminal redraw frequency (100ms - 1000ms)' },
+          { flag: '--theme <name>', desc: 'Colorways: obsidian, chalk, solar, emerald, crimson, neon' },
+          { flag: '--mouse', desc: 'Enable full terminal cursor selection, scroll, and click signals' },
+          { flag: '--tree', desc: 'Render hierarchical parent-child process tree view' }
+        ],
+        output: `┌─ Pyre Live Dashboard ─────────────────────── [q] quit  [?] help ┐
+│ CPU: [████████░░░░░░░░░░] 42%   RAM: [████████████░░░] 61% (19.4GB)│
+│ TASKS: 342 total · 4 running · 338 sleeping                     │
+│ PID   NAME          CPU%   MEM%   USER        DISK I/O   STATUS    │
+│ 1942  node-worker   18.2   4.1    somalip     12 MB/s    RUNNING   │
+│ 8841  cargo-build   14.8   8.4    somalip     44 MB/s    RUNNING   │
+└─────────────────────────────────────────────────────────────────┘`
+      },
+      fleet: {
+        index: 'Fleet Aggregator',
+        tag: 'Fleet',
+        title: 'Multi-Host Fleet & Remote SSH',
+        desc: 'Monitor remote servers over SSH or aggregate multiple Darwin, Linux, and Windows nodes into a tiled unified multi-host dashboard.',
+        command: 'pyre fleet --hosts hosts.yaml --tile',
+        flags: [
+          { flag: '--hosts <file.yaml>', desc: 'Configuration containing target SSH endpoints and credentials' },
+          { flag: '--tile', desc: 'Split terminal into adaptive multi-grid monitor layout' },
+          { flag: '--alert-on-disconnect', desc: 'Fire system chime and webhook notification if node drops' },
+          { flag: '--bandwidth-cap <kb>', desc: 'Throttle outbound probe bandwidth on metered links' }
+        ],
+        output: `[PYRE] FLEET MESH AGGREGATOR [4 / 4 Nodes Connected]
+├─ node-01.us-east.pyre.internal [Linux 6.8]  :: CPU 34% · RAM 42% · OK
+├─ node-02.eu-west.pyre.internal [Darwin 23]  :: CPU 12% · RAM 28% · OK
+├─ node-03.ap-east.pyre.internal [Linux 6.8]  :: CPU 88% · RAM 74% · HIGH
+└─ node-04.us-west.pyre.internal [Win32 10]   :: CPU  8% · RAM 19% · OK`
+      },
+      anomalies: {
+        index: 'Anomaly Radar',
+        tag: 'Analytics',
+        title: 'Statistical Anomaly Digest',
+        desc: 'Per-tick continuous CSV logging with rolling window z-score spike detection. Surfaces runaway CPU/memory anomalies automatically.',
+        command: 'pyre anomalies --threshold 2.8 --window 60s',
+        flags: [
+          { flag: '--threshold <z>', desc: 'Statistical Z-score deviation required to trigger an alert' },
+          { flag: '--window <duration>', desc: 'Rolling historical window duration for moving average' },
+          { flag: '--webhook <url>', desc: 'Dispatch structured incident payload to Slack/Discord/PagerDuty' },
+          { flag: '--autokill', desc: 'Optionally terminate runaway processes exceeding safety budget' }
+        ],
+        output: `[PYRE] STATISTICAL SPIKE MODEL [Rolling Window: 60s]
+[ALERT] PID 9201 [ffmpeg] CPU spike z-score: +3.82 > threshold 2.80
+├─ Baseline Mean: 12.4% (±3.1%) · Measured Current: 89.2%
+├─ Memory Delta:  +412 MB in last 10 seconds
+└─ Recommendation: Send SIGTERM or throttle core affinity`
+      },
+      p2p: {
+        index: 'Encrypted P2P',
+        tag: 'Network',
+        title: 'Encrypted P2P Live Streaming',
+        desc: 'Zero-broker TCP streaming over LAN. Hardened with TLS encryption, SHA-256 challenge-response auth, HMAC signing, and audit trails.',
+        command: 'pyre p2p --listen 9042 --tls --auth-hmac',
+        flags: [
+          { flag: '--listen <port>', desc: 'Local TCP port to bind streaming peer listener' },
+          { flag: '--key <secret>', desc: 'Pre-shared HMAC authorization token for client handshakes' },
+          { flag: '--max-peers <n>', desc: 'Maximum concurrent consumer nodes (default: 8)' },
+          { flag: '--compress <zstd|none>', desc: 'On-the-fly streaming payload compression algorithm' }
+        ],
+        output: `[PYRE] P2P BROKERLESS STREAM [Bound on 0.0.0.0:9042]
+├─ Protocol: TLS 1.3 · Cipher: CHACHA20-POLY1305 · SHA-256 Auth
+├─ Connected Peers: 2 active nodes streaming @ 250ms cadence
+└─ Throughput: 14.8 KB/s out · Wire compression ratio: 4.8:1 (zstd)`
+      },
+      web: {
+        index: 'Web Portal',
+        tag: 'Portal',
+        title: 'Web Portal & Native App',
+        desc: 'Instant real-time browser dashboard powered by Server-Sent Events (SSE) on localhost, paired with a lightweight native macOS app window.',
+        command: 'pyre web --port 3000 --open',
+        flags: [
+          { flag: '--port <port>', desc: 'HTTP port for local browser dashboard (default: 3000)' },
+          { flag: '--open', desc: 'Automatically launch default web browser on daemon start' },
+          { flag: '--app', desc: 'Launch ultra-lightweight macOS WebKit companion window' },
+          { flag: '--auth-token <str>', desc: 'Enforce local bearer token authentication header' }
+        ],
+        output: `[PYRE] EMBEDDED HTTP & SSE ENGINE
+├─ Local Dashboard: http://localhost:3000/?token=pyre_dev_8819
+├─ Stream Transport: text/event-stream [250ms tick dispatch]
+└─ Client Session: macOS Safari 17.4 · Latency: 0.4ms`
+      },
+      bench: {
+        index: 'Energy Profiler',
+        tag: 'Energy',
+        title: 'Micro-Benchmarking & Energy Profile',
+        desc: 'Profile arbitrary shell commands with granular milliwatt precision. Measures wall time, multi-core impact, and kWh power draw costs.',
+        command: 'pyre bench --energy --runs 5 -- "cargo build --release"',
+        flags: [
+          { flag: '--energy', desc: 'Measure granular milliwatt-hours and Joules expended' },
+          { flag: '--runs <n>', desc: 'Execute command N times and compute statistical median' },
+          { flag: '--warmup <n>', desc: 'Pre-warm file caches before beginning benchmark ticks' },
+          { flag: '--csv <file>', desc: 'Export high-frequency timeseries power log to CSV' }
+        ],
+        output: `[PYRE] ENERGY & HARDWARE BENCHMARK [5 Runs Completed]
+├─ Command: cargo build --release
+├─ Wall Clock Time:  14.82s (±0.18s) · User: 48.2s · Sys: 3.4s
+├─ Energy Expended:  1,420.8 Joules (0.394 Wh)
+└─ Peak Power Draw:  38.4 W · Peak CPU Junction Temp: 68.4°C`
+      }
+    };
 
+    const modalBackdrop = document.getElementById('cardDetailModal');
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    const modalDoneBtn = document.getElementById('modalDoneBtn');
+    const modalCopyBtn = document.getElementById('modalCopyBtn');
+    const modalCopyText = document.getElementById('modalCopyText');
+
+    let currentModalCommand = '';
+
+    function openCardModal(cardKey) {
+      const data = CARD_METADATA[cardKey];
+      if (!data || !modalBackdrop) return;
+
+      document.getElementById('modalIndex').textContent = data.index;
+      document.getElementById('modalTag').textContent = data.tag;
+      document.getElementById('modalTitle').textContent = data.title;
+      document.getElementById('modalDesc').textContent = data.desc;
+      document.getElementById('modalCommand').textContent = data.command;
+      currentModalCommand = data.command;
+
+      // Render flags list
+      const flagsContainer = document.getElementById('modalFlagsList');
+      flagsContainer.innerHTML = '';
+      data.flags.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'modal-flag-row';
+        row.innerHTML = `
+          <span class="modal-flag-name">${item.flag}</span>
+          <span class="modal-flag-desc">${item.desc}</span>
+        `;
+        flagsContainer.appendChild(row);
+      });
+
+      // Render output preview
+      document.getElementById('modalOutputPreview').textContent = data.output;
+
+      // Show modal
+      modalBackdrop.classList.add('active');
+      modalBackdrop.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeCardModal() {
+      if (!modalBackdrop) return;
+      modalBackdrop.classList.remove('active');
+      modalBackdrop.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+
+    // Attach click handlers to all specimen cards with data-modal-card
+    document.querySelectorAll('.specimen-card[data-modal-card]').forEach(card => {
+      card.addEventListener('click', (e) => {
+        // Prevent trigger if clicking on live telemetry copy buttons or links inside
+        if (e.target.closest('a, button')) return;
+        const cardKey = card.getAttribute('data-modal-card');
+        if (cardKey) openCardModal(cardKey);
+      });
+    });
+
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeCardModal);
+    if (modalDoneBtn) modalDoneBtn.addEventListener('click', closeCardModal);
+
+    // Click outside dialog to close
+    if (modalBackdrop) {
+      modalBackdrop.addEventListener('click', (e) => {
+        if (e.target === modalBackdrop) closeCardModal();
+      });
+    }
+
+    // ESC key closes modal
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modalBackdrop && modalBackdrop.classList.contains('active')) {
+        closeCardModal();
+      }
+    });
+
+    // Modal command copy button
+    if (modalCopyBtn) {
+      modalCopyBtn.addEventListener('click', async () => {
+        if (!currentModalCommand) return;
+        try {
+          await navigator.clipboard.writeText(currentModalCommand);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = currentModalCommand;
+          document.body.appendChild(ta); ta.select();
+          document.execCommand('copy'); document.body.removeChild(ta);
+        }
+        if (modalCopyText) {
+          modalCopyText.textContent = 'Copied!';
+          setTimeout(() => { modalCopyText.textContent = 'Copy'; }, 2000);
+        }
+      });
+    }
+  </script>
 </body>
 </html>

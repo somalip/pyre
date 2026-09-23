@@ -15,6 +15,7 @@ import type { History } from '../history.js';
 import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './types.js';
 import type { BlenderRenderData } from '../monitors/types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
+import { explainAnomaliesLocally } from '../ai/models.js';
 
 
 // --- low-level box drawing ---------------------------------------------------
@@ -314,8 +315,17 @@ function batteryCard(data: StatsData, contentWidth: number): string[] | null {
   if (data.battery.estimatedTimeToEmpty && data.battery.state !== 'charged') {
     lines.push(statRow('Est. Empty', data.battery.estimatedTimeToEmpty));
   }
-  if (data.battery.dischargeRatePerHour !== undefined && data.battery.state !== 'charged') {
-    lines.push(statRow('Disch. Rate', `${data.battery.dischargeRatePerHour}%/h`));
+  if (data.battery.powerWatts !== undefined && data.battery.powerWatts > 0 && data.battery.state !== 'charged') {
+    lines.push(statRow('Power Draw', `${data.battery.powerWatts.toFixed(2)} W`));
+  }
+  if (data.battery.smartPrediction) {
+    const sp = data.battery.smartPrediction;
+    lines.push('');
+    lines.push(chalk.bold('SMART RUNTIME FORECAST:'));
+    lines.push(statRow('Light Load', `${chalk.green(sp.scenarios.idle.timeRemaining)}  (~${sp.scenarios.idle.ratePerHour}%/h)`));
+    lines.push(statRow('Current Load', `${chalk.yellow(sp.scenarios.current.timeRemaining)}  (~${sp.scenarios.current.ratePerHour}%/h)`));
+    lines.push(statRow('Heavy Load', `${chalk.red(sp.scenarios.heavy.timeRemaining)}  (~${sp.scenarios.heavy.ratePerHour}%/h)`));
+    lines.push(chalk.dim(`Advice: ${sp.recommendation}`));
   }
   return lines;
 }
@@ -812,13 +822,8 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
     }
     case 'power': {
       const power = powerCard(data);
-      if (!power && !data.battery) return ['No power data available'];
-      const lines: string[] = [];
-      if (power) lines.push(...power);
-      if (data.battery?.powerWatts !== undefined && data.battery.powerWatts > 0) {
-        lines.push(statRow('Battery', `${data.battery.powerWatts.toFixed(2)} W`));
-      }
-      return lines.length ? lines : ['No power data available'];
+      if (!power) return ['No power data available'];
+      return power;
     }
     case 'battery':
       return data.battery ? batteryCard(data, contentWidth) : ['No battery data available'];
@@ -954,12 +959,31 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       const lines: string[] = [];
       // Sort by timestamp descending
       const sorted = [...opts.anomalyHistory].sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0));
-      for (const a of sorted) {
+      for (const a of sorted.slice(0, 10)) {
         const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
         const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
         const valStr = a.metric.toLowerCase().includes('net') ? `${formatBytes(a.value)}/s` : `${a.value.toFixed(1)}%`;
         const timeStr = a.timestamp ? a.timestamp.toLocaleTimeString() : '';
         lines.push(color(` ${timeStr.padEnd(10)} ⚠ ${a.metric.padEnd(8)}: ${valStr.padEnd(12)} (${direction}, σ=${a.zScore.toFixed(1)})`));
+      }
+      lines.push('');
+      // In-TUI AI Model Diagnosis section (offline, zero external server needed)
+      const modelId = opts.aiModel || 'expert-rules-v1';
+      const aiAnalysis = explainAnomaliesLocally(sorted, modelId);
+      for (const al of aiAnalysis.split('\n')) {
+        if (al.startsWith('Diagnosis Engine:')) {
+          lines.push(chalk.bold.magenta(al));
+        } else if (al.startsWith('Tip:')) {
+          lines.push(chalk.cyan.bold(al));
+        } else if (al.startsWith('  • Recommendation:')) {
+          lines.push(chalk.green(al));
+        } else if (al.startsWith('  • Cause:')) {
+          lines.push(chalk.yellow(al));
+        } else if (al.startsWith('  • Verdict:')) {
+          lines.push(chalk.dim(al));
+        } else {
+          lines.push(chalk.dim(al));
+        }
       }
       return lines;
     }

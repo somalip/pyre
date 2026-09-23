@@ -16,6 +16,8 @@ import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame 
 import type { LiveOptions, ExportFormat, InputMode, SortMode, GraphMode, ActivePanel } from './types.js';
 import { startP2PServer } from '../p2p/index.js';
 import { writeConfig } from '../state/config.js';
+import { AVAILABLE_AI_MODELS } from '../ai/models.js';
+import { loadPlugins, executePlugins } from '../plugins/index.js';
 
   function persistConfig() {
     writeConfig({
@@ -39,6 +41,8 @@ import { writeConfig } from '../state/config.js';
        visiblePanels: { ...state.visiblePanels },
        notificationsEnabled: state.notificationsEnabled,
        dockerModeConfirmed: state.dockerModeConfirmed,
+       aiModel: state.aiModel,
+       aiBackend: state.aiBackend,
     });
   }
 
@@ -96,6 +100,25 @@ function handleInputModeKey(str: string, key: readline.Key) {
            } else if (selected === 'Temperature Unit') {
              state.tempUnit = state.tempUnit === 'c' ? 'f' : 'c';
              setStatus(`Temperature unit: ${state.tempUnit.toUpperCase()}`);
+           } else if (selected === 'AI Model') {
+             const curIdx = AVAILABLE_AI_MODELS.findIndex(m => m.id === state.aiModel);
+             const nextIdx = (curIdx + 1) % AVAILABLE_AI_MODELS.length;
+             state.aiModel = AVAILABLE_AI_MODELS[nextIdx].id;
+             state.aiBackend = AVAILABLE_AI_MODELS[nextIdx].backend;
+             setStatus(`AI Model: ${AVAILABLE_AI_MODELS[nextIdx].name}`);
+           } else if (selected === 'Grid Panel Order') {
+             // Rotate panelLayout
+             const layouts = [
+               ['mem', 'disk', 'net'],
+               ['disk', 'mem', 'net'],
+               ['net', 'mem', 'disk'],
+               ['mem', 'net', 'disk'],
+             ];
+             const currentStr = state.panelLayout.join(',');
+             const currentIdx = layouts.findIndex(l => l.join(',') === currentStr);
+             const nextIdx = (currentIdx + 1) % layouts.length;
+             state.panelLayout = layouts[nextIdx];
+             setStatus(`Panel layout: ${state.panelLayout.join(' → ')}`);
            } else {
             const toggleKey = getToggleKey(selected);
             if (toggleKey) {
@@ -216,6 +239,37 @@ function handleInputModeKey(str: string, key: readline.Key) {
           state.visiblePanels.gpu = true;
         }
         
+        invalidateTableCache();
+        invalidateFrame();
+        persistConfig();
+        render();
+        return;
+      }
+      return;
+    }
+
+    if (state.inputMode === 'ai-model') {
+      if (isEscKey(key, str)) {
+        state.inputMode = null;
+        render();
+        return;
+      }
+      if (isUpKey(key, str) || str === 'k') {
+        state.modelSelectionIndex = (state.modelSelectionIndex - 1 + AVAILABLE_AI_MODELS.length) % AVAILABLE_AI_MODELS.length;
+        render();
+        return;
+      }
+      if (isDownKey(key, str) || str === 'j') {
+        state.modelSelectionIndex = (state.modelSelectionIndex + 1) % AVAILABLE_AI_MODELS.length;
+        render();
+        return;
+      }
+      if (isEnterKey(key, str) || str === ' ') {
+        const chosen = AVAILABLE_AI_MODELS[state.modelSelectionIndex];
+        state.aiModel = chosen.id;
+        state.aiBackend = chosen.backend;
+        state.inputMode = null;
+        setStatus(`Active AI Model: ${chosen.name}`, 4000);
         invalidateTableCache();
         invalidateFrame();
         persistConfig();
@@ -488,6 +542,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
      state.history.reset();
      state.history.setMaxLen(Math.max(20, Math.min(200, state.termWidth - 30)));
 
+    await loadPlugins().catch(() => {});
     const warmupPromise = doWarmup();
 
     if (splashPromise) {
@@ -624,6 +679,11 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         case 'c':
           state.inputMode = 'customizer';
           state.customizerIndex = 0;
+          render();
+          break;
+        case 'm':
+          state.inputMode = 'ai-model';
+          state.modelSelectionIndex = Math.max(0, AVAILABLE_AI_MODELS.findIndex(m => m.id === state.aiModel));
           render();
           break;
         case 'p':

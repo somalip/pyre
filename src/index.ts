@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * pyre - Mac system monitoring CLI
- * Monitors temps, cpu, memory, disk, battery, and system stats.
+ * pyre - Cross-platform system monitoring CLI
+ * Monitors temps, cpu, memory, disk, battery, and system stats on macOS, Linux, and Windows.
  * Live mode is a full interactive dashboard: graphs, pause/resume,
  * on-demand snapshot export, and continuous CSV logging.
  * P2P mode enables live data streaming between two systems over TCP.
@@ -18,7 +18,7 @@ import { startLive, stopLive } from './live/index.js';
 import { showSplash } from './splash.js';
 import { P2PServer, P2PClient } from './p2p/index.js';
 import { runDoctor, printDoctorReport } from './doctor.js';
-import { generateZshCompletions, generateBashCompletions, generateFishCompletions } from './completions.js';
+import { generateZshCompletions, generateBashCompletions, generateFishCompletions, generatePowerShellCompletions } from './completions.js';
 import { runHistoryCommand } from './historyCmd.js';
 import { runDiffCommand } from './diffCmd.js';
 import { readConfig, CONFIG_FILE } from './state/config.js';
@@ -34,7 +34,7 @@ const program = new Command();
 program
     .name('pyre')
     .version(pkg.version)
-    .description('Mac system monitoring CLI: interactive live dashboard, stats, graphs, export, packet monitor, battery predictor')
+    .description('Cross-platform system monitoring CLI: interactive live dashboard, stats, graphs, export, packet monitor, battery predictor')
     .option('-j, --json', 'Output as JSON')
     .option('--html', 'Output as HTML')
     .option('--md', 'Output as Markdown')
@@ -79,7 +79,23 @@ program
     .option('--no-wizard', 'Skip first-run interactive setup wizard')
     .option('--install', 'Install pyre web as a background launchd agent')
     .option('--uninstall', 'Uninstall pyre web launchd agent')
-    .option('--port <port>', 'Port number for web server mode', '3000');
+    .option('--port <port>', 'Port number for web server mode', '3000')
+    .option('--prometheus-port <port>', 'Port number for Prometheus exporter (default: 9090)', '9090')
+    .option('--speed <n>', 'Playback speed multiplier for pyre replay (default: 1)', '1')
+    .option('--llm-backend <backend>', 'AI backend: builtin (local zero-setup), ollama, or openai (default: builtin)', 'builtin')
+    .option('--llm-model <model>', 'AI model name for pyre explain (default: expert-rules-v1 / llama3.2 / gpt-4o-mini)')
+    .option('--api-key <key>', 'API key for OpenAI-compatible LLM backend (or set OPENAI_API_KEY env)')
+    .option('--alert-slack <url>', 'Slack webhook URL for alert notifications')
+    .option('--alert-discord <url>', 'Discord webhook URL for alert notifications')
+    .option('--alert-pushover-token <token>', 'Pushover application token for alert notifications')
+    .option('--alert-pushover-user <user>', 'Pushover user key for alert notifications')
+    .option('--alert-ntfy <url>', 'ntfy.sh topic URL for alert notifications (e.g. https://ntfy.sh/my-topic)')
+    .option('--watchdog-config <file>', 'Path to custom watchdog JSON configuration rules')
+    .option('--dry-run', 'Simulate actions in watchdog mode without executing kills')
+    .option('--top <n>', 'Number of items to display in netusage command (default: 15)')
+    .option('--raw', 'Print unparsed output for profiler')
+    .option('--sync-dir <dir>', 'Custom directory path for cloud profile/config sync')
+    .option('--scan', 'Perform active network sweep on LAN neighbors for topology map');
 
 program.addHelpText('after', `
  Commands:
@@ -87,27 +103,39 @@ program.addHelpText('after', `
    check                          One-line plain-English health summary
    pipe                           Continuous newline-delimited JSON stream for scripting
    stress                         Synthetic CPU/GPU load generator
-   ui                             Launch the native macOS UI dashboard
+   ui                             Launch the live UI dashboard window
    web                            Serve an auto-refreshing live web portal
-   ssh <host>                     Stream live stats from a remote Mac over SSH
-   fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple Macs
+   ssh <host>                     Stream live stats from a remote host over SSH
+   fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple hosts
    bench <cmd>                    Log CPU, memory, network, power draw, and estimate kWh cost
    benchmark                      Run a 1-minute CPU benchmark calculating digits of PI
    anomalies                      Compute z-score anomalies and print plain-language digest
    doctor                         Run system diagnostics
-   extensions                     System Extensions inspector
-   brew                           Homebrew health panel
+   extensions                     System Extensions / Driver inspector
+   brew                           Package manager health panel (brew/apt/pacman/winget)
    update                         Check for pyre-cli updates
    profile <save|load|list>       Atomic configuration profile management
    config <show|reset>            View or reset persistent configuration file
    history                        Graph historical resource trends from CSV logs
    diff <file1> <file2>           Compare two saved snapshot files side-by-side
    info                           Concise hardware summary
-   completions <shell>            Generate shell auto-completion scripts
+   completions <shell>            Generate shell auto-completion scripts (zsh, bash, fish, powershell)
    xbar                           Generate an xbar / SwiftBar menu bar plugin script
    p2p <server|connect>           Start a P2P server or connect to one
    server                         Print commands for starting P2P server/client
    blender                        Track active Blender render jobs and their progress
+   prometheus                     Start a Prometheus metrics exporter on localhost
+   smart                          S.M.A.R.T. disk health report (requires smartmontools)
+   replay <file>                  Play back a pyre CSV log file in the TUI
+   explain                        AI-powered plain-English anomaly explanation (Ollama/OpenAI)
+   alert test                     Send a test notification to all configured alert channels
+   netusage                       Real-time per-application network usage breakdown
+   serve                          Lightweight structured JSON REST API server
+   profile-proc <pid>             CPU call-tree profiler and hot function sampler
+   watchdog                       Persistent autonomous monitoring daemon and rules engine
+   build                          Active compiler and build system tracker
+   topo                           Network topology mapper and pyre peer auto-discovery
+   sync <push|pull|status>        Synchronize config profiles across Macs via iCloud/Drive
  `);
 
 program.parse(process.argv);
@@ -257,6 +285,158 @@ async function main() {
       lines.push('');
     }
     console.log(lines.join('\n'));
+    return;
+  }
+
+  if (cmd === 'prometheus') {
+    const { runPrometheusServer } = await import('./prometheusCmd.js');
+    const prometheusPort = parseInt(opts.prometheusPort, 10) || 9090;
+    const intervalSec = parseFloat(opts.interval) || 15;
+    await runPrometheusServer({ port: prometheusPort, interval: intervalSec, detailed: opts.detailed });
+    return;
+  }
+
+  if (cmd === 'smart') {
+    const { runSmartCommand } = await import('./smartCmd.js');
+    await runSmartCommand();
+    return;
+  }
+
+  if (cmd === 'replay') {
+    const file = program.args[1];
+    if (!file) {
+      console.error(chalk.red('  ✖ Usage: pyre replay <logfile.csv>'));
+      process.exit(1);
+    }
+    const { runReplayCommand } = await import('./replayCmd.js');
+    await runReplayCommand({
+      file,
+      speed: parseFloat(opts.speed) || 1,
+      plain: opts.plain || opts.a11y,
+    });
+    return;
+  }
+
+  if (cmd === 'explain') {
+    const { runExplainCommand } = await import('./explainCmd.js');
+    const backend = opts.llmBackend === 'openai' ? 'openai' : opts.llmBackend === 'ollama' ? 'ollama' : 'builtin';
+    await runExplainCommand({
+      since: opts.since || '7d',
+      backend,
+      model: opts.llmModel,
+      apiKey: opts.apiKey,
+      dir: opts.exportDir,
+    });
+    return;
+  }
+
+  if (cmd === 'alert') {
+    const sub = program.args[1];
+    if (sub === 'test') {
+      const { sendTestAlert } = await import('./alertChannels.js');
+      const { writeConfig } = await import('./state/config.js');
+      // Persist any channel flags passed on CLI before sending test
+      if (opts.alertSlack || opts.alertDiscord || opts.alertPushoverToken || opts.alertPushoverUser || opts.alertNtfy) {
+        writeConfig({
+          slackAlertUrl: opts.alertSlack || config.slackAlertUrl,
+          discordAlertUrl: opts.alertDiscord || config.discordAlertUrl,
+          pushoverToken: opts.alertPushoverToken || config.pushoverToken,
+          pushoverUser: opts.alertPushoverUser || config.pushoverUser,
+          ntfyUrl: opts.alertNtfy || config.ntfyUrl,
+        });
+      }
+      const testConfig = {
+        slackUrl: opts.alertSlack || config.slackAlertUrl || undefined,
+        discordUrl: opts.alertDiscord || config.discordAlertUrl || undefined,
+        pushoverToken: opts.alertPushoverToken || config.pushoverToken || undefined,
+        pushoverUser: opts.alertPushoverUser || config.pushoverUser || undefined,
+        ntfyUrl: opts.alertNtfy || config.ntfyUrl || undefined,
+      };
+      const hasAny = Object.values(testConfig).some(v => !!v);
+      if (!hasAny) {
+        console.log(chalk.yellow('\n  ⚠ No alert channels configured.'));
+        console.log(chalk.dim('  Use --alert-slack <url>, --alert-discord <url>, --alert-ntfy <url>, etc.\n'));
+        return;
+      }
+      console.log(chalk.bold('\n  🔥 pyre alert test — firing test notification...\n'));
+      await sendTestAlert(testConfig);
+      console.log(chalk.green('  ✔ Test alert sent to all configured channels.\n'));
+    } else {
+      console.log(chalk.yellow('  Usage: pyre alert test'));
+    }
+    return;
+  }
+
+  if (cmd === 'netusage') {
+    const { runNetUsageCommand } = await import('./netUsageCmd.js');
+    await runNetUsageCommand({
+      top: opts.top ? parseInt(opts.top, 10) : 15,
+      sort: (opts.sort === 'rx' || opts.sort === 'tx') ? opts.sort : 'total',
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'serve') {
+    const { runServeCommand } = await import('./serveCmd.js');
+    const port = parseInt(opts.port, 10) || 8080;
+    await runServeCommand({
+      port,
+      apiKey: opts.apiKey,
+      detailed: opts.detailed,
+    });
+    return;
+  }
+
+  if (cmd === 'profile-proc') {
+    const targetPid = parseInt(program.args[1], 10);
+    if (isNaN(targetPid)) {
+      console.error(chalk.red('  ✖ Usage: pyre profile-proc <pid> [--duration <sec>]'));
+      process.exit(1);
+    }
+    const { runProfileProcCommand } = await import('./profileProcCmd.js');
+    const durationSec = parseFloat(opts.duration) || 5;
+    await runProfileProcCommand({
+      pid: targetPid,
+      durationSec,
+      raw: !!opts.raw,
+    });
+    return;
+  }
+
+  if (cmd === 'watchdog') {
+    const { runWatchdogCommand } = await import('./watchdogCmd.js');
+    await runWatchdogCommand({
+      configFile: opts.watchdogConfig,
+      dryRun: !!opts.dryRun,
+      interval: parseFloat(opts.interval) || 2,
+    });
+    return;
+  }
+
+  if (cmd === 'build') {
+    const { runBuildCommand } = await import('./buildCmd.js');
+    await runBuildCommand({
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'topo') {
+    const { runTopoCommand } = await import('./topoCmd.js');
+    await runTopoCommand({
+      scan: !!opts.scan,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'sync') {
+    const subcommand = program.args[1] || 'status';
+    const { runSyncCommand } = await import('./syncCmd.js');
+    await runSyncCommand(subcommand, {
+      syncDir: opts.syncDir,
+    });
     return;
   }
 
@@ -426,6 +606,12 @@ async function main() {
   if (opts.webhookUrl) config.webhookUrl = opts.webhookUrl;
   if (opts.alertCmd) config.alertCmd = opts.alertCmd;
   if (opts.exportDir) config.exportDir = opts.exportDir;
+  // Persist new alert channel options to config if provided
+  if (opts.alertSlack) config.slackAlertUrl = opts.alertSlack;
+  if (opts.alertDiscord) config.discordAlertUrl = opts.alertDiscord;
+  if (opts.alertPushoverToken) config.pushoverToken = opts.alertPushoverToken;
+  if (opts.alertPushoverUser) config.pushoverUser = opts.alertPushoverUser;
+  if (opts.alertNtfy) config.ntfyUrl = opts.alertNtfy;
   const tempUnit = opts.tempUnit === 'f' ? 'f' : 'c';
 
   if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
@@ -696,7 +882,7 @@ async function runInfoCommand(): Promise<void> {
   const tmStatus = await getTimeMachineStatus();
 
   const lines: string[] = [];
-  lines.push(chalk.bold('  pyre info — Mac System Information'));
+  lines.push(chalk.bold(`  pyre info — System Information (${data.header.os})`));
   lines.push('');
   lines.push(`  Hostname:  ${data.header.hostname}`);
   lines.push(`  OS:        ${data.header.os}`);
@@ -723,13 +909,15 @@ async function runInfoCommand(): Promise<void> {
     }
   }
 
-  lines.push('');
-  lines.push(chalk.cyan.bold('  ⏱ Time Machine Backup:'));
-  if (!tmStatus.configured) {
-    lines.push('    • Not configured');
-  } else {
-    lines.push(`    • Status: ${tmStatus.running ? chalk.yellow(`Backup in progress (${tmStatus.percent || 0}%)`) : chalk.green('Idle')}`);
-    lines.push(`    • Latest Backup: ${tmStatus.latestBackup}`);
+  if (process.platform === 'darwin') {
+    lines.push('');
+    lines.push(chalk.cyan.bold('  ⏱ Time Machine Backup:'));
+    if (!tmStatus.configured) {
+      lines.push('    • Not configured');
+    } else {
+      lines.push(`    • Status: ${tmStatus.running ? chalk.yellow(`Backup in progress (${tmStatus.percent || 0}%)`) : chalk.green('Idle')}`);
+      lines.push(`    • Latest Backup: ${tmStatus.latestBackup}`);
+    }
   }
 
   console.log(lines.join('\n'));
@@ -877,12 +1065,29 @@ async function runWebCommand(): Promise<number> {
   });
 }
 
+async function openBrowserUrl(url: string): Promise<void> {
+  const { spawn } = await import('node:child_process');
+  const platform = process.platform;
+  if (platform === 'win32') {
+    spawn('cmd.exe', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' });
+  } else if (platform === 'darwin') {
+    spawn('open', [url], { detached: true, stdio: 'ignore' });
+  } else {
+    spawn('xdg-open', [url], { detached: true, stdio: 'ignore' });
+  }
+}
+
 async function runUiCommand(): Promise<void> {
   // Use a random ephemeral port to avoid collisions
   opts.port = '0';
   const port = await runWebCommand();
-  
-  const swiftScript = `
+  const url = `http://localhost:${port}`;
+
+  if (process.platform === 'darwin') {
+    const { run } = await import('./monitors/run.js');
+    const hasSwift = (await run('which swift 2>/dev/null', '')).trim().length > 0;
+    if (hasSwift) {
+      const swiftScript = `
 import Cocoa
 import WebKit
 
@@ -985,23 +1190,31 @@ app.delegate = delegate
 app.run()
 `;
 
+      const scriptPath = path.join(os.tmpdir(), 'pyre-ui.swift');
+      fs.writeFileSync(scriptPath, swiftScript);
 
-  const scriptPath = path.join(os.tmpdir(), 'pyre-ui.swift');
-  fs.writeFileSync(scriptPath, swiftScript);
+      const { spawn } = await import('node:child_process');
+      console.log(chalk.cyan(`\n  Launching native UI window...`));
+      const ui = spawn('swift', [scriptPath], { stdio: 'inherit' });
+      
+      ui.on('close', () => {
+        console.log(chalk.dim('UI window closed, shutting down server...'));
+        process.exit(0);
+      });
 
-  const { spawn } = await import('node:child_process');
-  console.log(chalk.cyan(`\n  Launching native UI window...`));
-  const ui = spawn('swift', [scriptPath], { stdio: 'inherit' });
-  
-  ui.on('close', () => {
-    console.log(chalk.dim('UI window closed, shutting down server...'));
-    process.exit(0);
-  });
+      process.once('SIGINT', () => {
+        ui.kill();
+        process.exit(0);
+      });
+      return;
+    }
+  }
 
-  process.once('SIGINT', () => {
-    ui.kill();
-    process.exit(0);
-  });
+  // Cross-platform browser / app-mode launch for Linux, Windows, or macOS without Swift
+  console.log(chalk.cyan(`\n  Opening live UI dashboard at ${url}...`));
+  await openBrowserUrl(url);
+  console.log(chalk.dim('  Press Ctrl+C to stop server.\n'));
+  await new Promise(() => {});
 }
 
 async function runBenchCommand(benchCmd: string): Promise<void> {
@@ -1021,7 +1234,9 @@ async function runBenchCommand(benchCmd: string): Promise<void> {
   let accumulatedWattSeconds = 0;
   let powerSamplesCount = 0;
 
-  const child = spawn('sh', ['-c', benchCmd]);
+  const child = process.platform === 'win32'
+    ? spawn('cmd.exe', ['/c', benchCmd], { stdio: 'inherit' })
+    : spawn('sh', ['-c', benchCmd]);
   child.stdout.on('data', d => process.stdout.write(d));
   child.stderr.on('data', d => process.stdout.write(d));
 

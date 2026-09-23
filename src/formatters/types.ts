@@ -91,4 +91,6 @@ export interface TableOptions {
     inspectProcess?: any;
     /** Minimal mode: renders only CPU, GPU, Memory, and Temperature as large glanceable gauges. */
     minimal?: boolean;
+    /** Current selected AI diagnosis model ID. */
+    aiModel?: string;
 }

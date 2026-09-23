@@ -23,6 +23,7 @@ export interface StatsData {
    tasks: TaskData[];
    containers?: ContainerData[];
    blenderRenders?: BlenderRenderData[];
+   activeBuilds?: import('./buildTracker.js').ActiveBuild[];
 }
 
 export interface ContainerData {
@@ -111,12 +112,25 @@ export interface MemoryData {
   pressureLevel?: string;
 }
 
+export interface FanData {
+  /** Fan index (0-based) */
+  id: number;
+  /** Current fan speed in RPM */
+  rpm: number;
+  /** Minimum fan speed in RPM (from SMC), when available */
+  minRpm?: number;
+  /** Maximum fan speed in RPM (from SMC), when available */
+  maxRpm?: number;
+}
+
 export interface ThermalData {
   state: string;
   detail?: string;
   /** Normalized 0-3 scale (nominal/fair/serious/critical) derived from `state`, for graphing/coloring */
   pressureLevel: number;
   temperatures?: Record<string, number | null>;
+  /** Fan speeds from SMC (empty array when not available or no sudo) */
+  fans?: FanData[];
   error?: string;
 }
 
@@ -133,6 +147,7 @@ export interface BatteryData {
   dischargeRatePerHour?: number;
   powerWatts?: number;
   friendlySummary?: string;
+  smartPrediction?: import('./batteryPredictor.js').SmartBatteryPrediction;
 }
 
 export interface DiskData {

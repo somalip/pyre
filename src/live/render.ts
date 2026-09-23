@@ -15,6 +15,9 @@ import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, 
 import { detectAnomalies } from '../anomalies.js';
 import { state, setStatus, SIGNAL_OPTIONS, getToggleKey, MENU_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
+import { sendAlert, type AlertChannelConfig } from '../alertChannels.js';
+import { readConfig } from '../state/config.js';
+import { AVAILABLE_AI_MODELS } from '../ai/models.js';
 
 function formatTempForUnit(c: number): string {
   if (state.tempUnit === 'f') {
@@ -61,6 +64,7 @@ function tableCacheParams(): string {
     state.history.version,
     JSON.stringify(state.visiblePanels),
     JSON.stringify(state.panelLayout),
+    state.aiModel,
   ].join('|');
 }
 
@@ -142,6 +146,11 @@ function renderCustomizerOverlay(scrollOffset: number, maxVisibleItems: number):
          lines.push(`${prefix}${opt}: ${status}`);
        } else if (opt === 'Temperature Unit') {
          lines.push(`${prefix}${opt}: ${chalk.bold.green(state.tempUnit.toUpperCase())} [C, F]`);
+       } else if (opt === 'AI Model') {
+         const curModel = AVAILABLE_AI_MODELS.find(m => m.id === state.aiModel) || AVAILABLE_AI_MODELS[0];
+         lines.push(`${prefix}${opt}: ${chalk.bold.cyan(curModel.name)} ${chalk.dim(`[${curModel.badge}]`)}`);
+       } else if (opt === 'Grid Panel Order') {
+         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.panelLayout.join(' → '))}`);
        } else {
          const toggleKey = getToggleKey(opt);
          const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
@@ -220,6 +229,10 @@ function render() {
     writeFrame(renderDockerAlert(cols, rows));
     return;
   }
+  if (state.inputMode === 'ai-model') {
+    writeFrame(renderAiModelSelector(cols, rows));
+    return;
+  }
   const lines: string[] = [];
   const theme = THEMES[state.currentTheme] || THEMES.default;
 
@@ -262,6 +275,7 @@ function render() {
             selectedProcessIndex: state.processSelectionIndex,
             trackedPid: state.trackedPid,
             inspectProcess: state.inspectingProcess,
+            aiModel: state.aiModel,
           });
           _cachedTableData = state.lastData;
           _cachedTableParams = cacheParams;
@@ -377,6 +391,7 @@ function footerLine(): string[] {
      ['f', state.exportFormat],
      ['+/-', `${state.interval}s`],
      ['r', state.p2pServerRunning ? 'stop p2p' : 'start p2p'],
+     ['m', `ai:${state.aiModel.split('-')[0]}`],
    ];
    const fmt = (list: [string, string][]) => list.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
    const str1 = fmt(row1);
@@ -387,6 +402,7 @@ function footerLine(): string[] {
    if (state.logging) badges.push(chalk.red.bold('● REC'));
    if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
    if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
+   badges.push(chalk.magenta.bold(`AI:${state.aiModel}`));
    const badgeStr = badges.join('  ') || ' ';
 
    return [str1, str2, badgeStr];
@@ -457,6 +473,29 @@ function checkAlerts(data: StatsData) {
       }
       if (state.alertCmd) {
         exec(state.alertCmd, { env: { ...process.env, PYRE_ALERT: alertMsg } }, () => {});
+      }
+
+      // Multi-channel alert fan-out (Slack, Discord, Pushover, ntfy)
+      const cfg = readConfig();
+      const channelConfig: AlertChannelConfig = {
+        slackUrl: cfg.slackAlertUrl || undefined,
+        discordUrl: cfg.discordAlertUrl || undefined,
+        pushoverToken: cfg.pushoverToken || undefined,
+        pushoverUser: cfg.pushoverUser || undefined,
+        ntfyUrl: cfg.ntfyUrl || undefined,
+      };
+      const hasChannels = Object.values(channelConfig).some(v => !!v);
+      if (hasChannels) {
+        const severity = hasCriticalAnomaly ? 'critical' : 'warning';
+        sendAlert({
+          metric: reasons[0]?.split(' ')[0] ?? 'System',
+          value: data.cpu.usage,
+          threshold: state.CPU_ALERT_PCT,
+          unit: '%',
+          host: data.header.hostname,
+          timestamp: new Date().toISOString(),
+          severity,
+        }, channelConfig).catch(() => {});
       }
     } else if (!hot && !anomalyTriggered && !watchdogTriggered) {
      state.alerted = false;
@@ -592,6 +631,34 @@ function renderDockerAlert(cols: number, rows: number): string[] {
   content.push(chalk.dim('Press ↑/↓ to select, Enter to confirm, Esc to skip.'));
 
   out.push(...panel('DOCKER DETECTED', content, cols, chalk.red, chalk.dim, rows - 2));
+  return out;
+}
+
+function renderAiModelSelector(cols: number, rows: number): string[] {
+  const out: string[] = [];
+  const content: string[] = [
+    chalk.bold.hex('#ff6004')('Choose AI Anomaly Explanation Model'),
+    chalk.dim('Select your preferred diagnosis engine. Offline models run entirely in-process.'),
+    '',
+  ];
+
+  for (let i = 0; i < AVAILABLE_AI_MODELS.length; i++) {
+    const m = AVAILABLE_AI_MODELS[i];
+    const isSelected = i === state.modelSelectionIndex;
+    const isCurrent = m.id === state.aiModel;
+    const prefix = isSelected ? chalk.cyan.bold(' ▶ ') : '   ';
+    const curBadge = isCurrent ? chalk.bgGreen.black.bold(' ACTIVE ') : '';
+    const badgeStr = m.offline ? chalk.green(`[${m.badge}]`) : chalk.yellow(`[${m.badge}]`);
+
+    const nameStr = isSelected ? chalk.bgCyan.black.bold(` ${m.name} `) : chalk.bold.white(m.name);
+    content.push(`${prefix}${nameStr} ${badgeStr} ${curBadge}`);
+    content.push(chalk.dim(`     ${m.description}`));
+    content.push('');
+  }
+
+  content.push(chalk.dim('Use ↑/↓ or J/K to navigate · Enter/Space to select · Esc to cancel'));
+
+  out.push(...panel('AI MODEL SELECTOR', content, cols, chalk.cyan, chalk.dim, Math.max(1, rows - 2)));
   return out;
 }
 
