@@ -56,6 +56,10 @@ export interface PyreConfig {
   /** Optional API key for external cloud providers */
   aiApiKey?: string;
   dockerModeConfirmed?: boolean;
+  /** Use Firebase Firestore as the sync backend instead of a local folder */
+  firebaseSyncEnabled?: boolean;
+  /** Unique host identifier used as the Firestore document ID (defaults to os.hostname()) */
+  firebaseHostId?: string;
   visiblePanels?: {
     cpu?: boolean;
     mem?: boolean;
@@ -109,6 +113,8 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   aiModel: 'expert-rules-v1',
   aiApiKey: '',
   dockerModeConfirmed: false,
+  firebaseSyncEnabled: false,
+  firebaseHostId: '',
   visiblePanels: {
     cpu: true,
     mem: true,

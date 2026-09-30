@@ -3,1254 +3,737 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pyre® — Systems Built as Precision</title>
-  <meta name="description" content="Next-generation telemetry and system diagnostics for macOS, Linux, and Windows. Built as systems, not decorations." />
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>Pyre — System Monitoring</title>
+  <meta name="description" content="High-precision system monitoring CLI with real-time insights." />
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg-dark: #070709;
-      --bg-base: #0c0d11;
-      --bg-surface: #121318;
-      --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-hover: rgba(255, 255, 255, 0.16);
-      --text-main: #f4f4f6;
-      --text-muted: #94949e;
-      --text-dim: #666672;
-      --orange: #ff6b2b;
-      --orange-glow: rgba(255, 107, 43, 0.4);
-      --font-serif: 'DM Serif Display', Georgia, 'Times New Roman', serif;
-      --font-display: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
-      --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    html, body { 
+      width: 100%; 
+      min-height: 100%;
+      overflow-x: hidden;
     }
 
     html {
       scroll-behavior: smooth;
-      background: var(--bg-dark);
-      color: #ffffff;
-      font-family: var(--font-display);
-      -webkit-font-smoothing: antialiased;
     }
 
-    body { overflow-x: hidden; min-height: 100vh; }
-    ::selection { background: var(--orange); color: #fff; }
+    body {
+      background: #000;
+      color: #f5f5f7;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+      letter-spacing: -0.015em;
+    }
 
-    /* ─── HERO SECTION (SENTIRA LAYOUT) ────────────────────────────────── */
+    a { color: #ffffff; text-decoration: underline; }
+    a:hover { color: #cccccc; }
+
+    /* Hero Section */
     .hero {
       position: relative;
-      width: 100%;
-      min-height: 100vh;
-      background: var(--bg-dark);
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Three.js canvas container */
-    #three-container {
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 55%;
-      z-index: 1;
-    }
-
-    #three-container canvas {
-      display: block;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* ─── TOP NAV ──────────────────────────────────────────────────────── */
-    .top-nav {
-      position: relative;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 28px 48px;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 32px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      color: rgba(255,255,255,0.7);
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 400;
-      transition: color 0.2s;
-      letter-spacing: -0.01em;
-    }
-
-    .nav-links a:hover { color: #ffffff; }
-
-    .nav-center {
-      position: absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      text-decoration: none;
-    }
-
-    .nav-logo-text {
-      font-family: var(--font-serif);
-      font-size: 22px;
-      color: #ffffff;
-      letter-spacing: -0.01em;
-    }
-
-    .nav-logo-icon {
-      width: 28px;
-      height: 28px;
-      border: 2px solid rgba(255,255,255,0.8);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
       justify-content: center;
-      font-size: 12px;
-      color: var(--orange);
-      font-weight: 700;
-      font-family: var(--font-mono);
+      align-items: center;
+      background: #000;
     }
 
-    .nav-cta {
-      color: #ffffff;
-      text-decoration: none;
-      font-size: 14px;
-      font-weight: 500;
-      padding: 10px 24px;
-      border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 999px;
-      transition: all 0.2s;
-      letter-spacing: -0.01em;
-    }
-
-    .nav-cta:hover {
-      background: #ffffff;
-      color: #0a0a0a;
-      border-color: #ffffff;
-    }
-
-    /* ─── HERO CONTENT ─────────────────────────────────────────────────── */
     .hero-content {
       position: relative;
-      z-index: 5;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      z-index: 2;
       text-align: center;
-      padding: 0 48px 45vh;
-      pointer-events: none;
-    }
-
-    .hero-title {
-      font-family: var(--font-serif);
-      font-size: clamp(5rem, 14vw, 12rem);
-      font-weight: 400;
-      font-style: italic;
-      line-height: 0.9;
-      letter-spacing: -0.03em;
-      color: #ffffff;
-      margin-bottom: 28px;
-      text-shadow: 0 4px 60px rgba(0,0,0,0.5);
-    }
-
-    .hero-sub {
-      font-size: 16px;
-      line-height: 1.7;
-      color: rgba(255,255,255,0.6);
-      max-width: 520px;
-      margin-bottom: 36px;
-      font-weight: 400;
-      letter-spacing: -0.01em;
-    }
-
-    .hero-buttons {
-      display: flex;
-      gap: 14px;
+      max-width: 900px;
+      padding: 0 20px;
       pointer-events: auto;
     }
 
-    .btn-primary {
-      background: #ffffff;
-      color: #0a0a0a;
-      border: 1px solid #ffffff;
-      padding: 12px 28px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 600;
-      font-family: var(--font-display);
+    .hero-fire {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+      user-select: none;
+      opacity: 0.55;
+      mask-image: radial-gradient(ellipse 65% 55% at 50% 48%, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,1) 90%);
+      -webkit-mask-image: radial-gradient(ellipse 65% 55% at 50% 48%, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,1) 90%);
+    }
+
+    .hero-fire pre {
+      font-family: ui-monospace, 'SF Mono', Monaco, monospace;
+      font-size: clamp(8px, 1.1vw, 15px);
+      line-height: 0.95;
+      letter-spacing: -0.02em;
+      color: #ff6600;
+      white-space: pre;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      text-shadow: 0 0 10px rgba(255, 85, 0, 0.6), 0 0 20px rgba(255, 34, 0, 0.3);
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 100%, rgba(255, 85, 0, 0.12) 0%, rgba(0, 0, 0, 0) 75%);
+      opacity: 0.8;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .hero h1 {
+      font-size: clamp(3rem, 10vw, 5.5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 24px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.8s ease-out 0.2s forwards;
+      color: #ffffff;
+      text-shadow: 0 2px 20px rgba(0, 0, 0, 0.95), 0 0 40px rgba(0, 0, 0, 0.9);
+    }
+
+    .hero p {
+      font-size: clamp(1rem, 2vw, 1.3rem);
+      color: #f0f0f2;
+      margin-bottom: 36px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.8s ease-out 0.4s forwards;
+      font-weight: 450;
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.95), 0 0 24px rgba(0, 0, 0, 0.9);
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeInUp 0.8s ease-out 0.6s forwards;
+    }
+
+    .btn {
+      padding: 12px 32px;
+      border-radius: 980px;
+      border: none;
+      font-size: 15px;
+      font-weight: 500;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.3s ease;
+      font-family: inherit;
+      letter-spacing: -0.015em;
       text-decoration: none;
-      letter-spacing: -0.01em;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn:hover {
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: #fff;
+      color: #000;
     }
 
     .btn-primary:hover {
-      background: var(--orange);
-      border-color: var(--orange);
-      color: #ffffff;
+      background: #f5f5f7;
+      transform: scale(1.05);
     }
 
     .btn-secondary {
-      background: rgba(255,255,255,0.08);
-      color: #ffffff;
-      border: 1px solid rgba(255,255,255,0.2);
-      padding: 12px 28px;
-      border-radius: 999px;
-      font-size: 14px;
-      font-weight: 500;
-      font-family: var(--font-display);
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      letter-spacing: -0.01em;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.4);
     }
 
     .btn-secondary:hover {
-      background: rgba(255,255,255,0.15);
-      border-color: rgba(255,255,255,0.4);
+      border-color: #fff;
+      background: rgba(255, 255, 255, 0.1);
     }
 
-    .btn-arrow {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.15);
-      font-size: 11px;
-    }
-
-    /* ─── LOGOS / TRUST STRIP ──────────────────────────────────────────── */
-    .trust-strip {
+    /* Section Base */
+    .section {
       position: relative;
-      z-index: 10;
-      background: var(--bg-dark);
-      border-top: 1px solid rgba(255,255,255,0.06);
-      padding: 48px 48px 56px;
-      text-align: center;
+      padding: 120px 0;
+      overflow: hidden;
     }
 
-    .trust-label {
-      font-size: 13px;
-      color: rgba(255,255,255,0.35);
-      margin-bottom: 28px;
-      letter-spacing: 0.02em;
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 40px;
     }
 
-    .trust-logos {
-      display: flex;
+    /* Section with Image / ASCII Art */
+    .section-hero-image {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       align-items: center;
+      gap: 60px;
+      margin: 80px 0;
+    }
+
+    .section-content {
+      opacity: 0;
+      transform: translateY(30px);
+      display: flex;
+      flex-direction: column;
       justify-content: center;
-      gap: 56px;
+    }
+
+    .section-content.visible {
+      animation: fadeInUp 0.8s ease-out forwards;
+    }
+
+    .section-label {
+      font-size: 13px;
+      color: #a1a1a6;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 16px;
+      font-weight: 600;
+    }
+
+    .section h2 {
+      font-size: clamp(1.8rem, 5vw, 3.2rem);
+      font-weight: 700;
+      margin-bottom: 24px;
+      line-height: 1.2;
+    }
+
+    .section h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      margin-top: 32px;
+    }
+
+    .section p {
+      font-size: 15px;
+      color: #a1a1a6;
+      line-height: 1.8;
+      margin-bottom: 16px;
+      max-width: 500px;
+    }
+
+    .ascii-art {
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+      font-size: clamp(7.5px, 1.05vw, 12px);
+      line-height: 1.2;
+      letter-spacing: 0;
+      color: #e5e5e7;
+      white-space: pre;
+      user-select: none;
+      text-shadow: 0 0 4px rgba(255, 255, 255, 0.3);
+      display: block;
+      margin: 0 auto;
+      width: fit-content;
+      max-width: 100%;
+      overflow-x: auto;
+      text-align: left;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    /* Dark section */
+    .section-dark {
+      background: #000;
+    }
+
+    /* Features Grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 48px;
+      margin-top: 80px;
+    }
+
+    .feature-card {
+      position: relative;
+      padding: 32px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      opacity: 0;
+      transform: translateY(20px);
+    }
+
+    .feature-card.visible {
+      animation: fadeInUp 0.6s ease-out forwards;
+    }
+
+    .feature-card:nth-child(2).visible {
+      animation-delay: 0.1s;
+    }
+
+    .feature-card:nth-child(3).visible {
+      animation-delay: 0.2s;
+    }
+
+    .feature-card:nth-child(4).visible {
+      animation-delay: 0.3s;
+    }
+
+    .feature-card h3 {
+      font-size: 1.3rem;
+      margin-bottom: 12px;
+      color: #f5f5f7;
+    }
+
+    .feature-card p {
+      font-size: 13px;
+      color: #86868b;
+    }
+
+    /* Comparison Table */
+    .comparison-section {
+      background: #000;
+      padding: 80px 0;
+    }
+
+    .comparison-content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 0 0 0;
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .comparison-table {
+      width: 100%;
+      max-width: 960px;
+      border-collapse: collapse;
+      font-size: 13px;
+      opacity: 0;
+      animation: fadeIn 0.8s ease-out forwards;
+    }
+
+    .comparison-table th {
+      text-align: left;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      color: #a1a1a6;
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .comparison-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      color: #f5f5f7;
+    }
+
+    .comparison-table th.col-pyre,
+    .comparison-table td.col-pyre {
+      color: #ffffff;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .comparison-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* CTA Banner */
+    .cta-banner {
+      text-align: center;
+      padding: 120px 40px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(0, 0, 0, 0) 100%);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .cta-banner h2 {
+      font-size: clamp(2rem, 5vw, 3rem);
+      margin-bottom: 32px;
+    }
+
+    .cta-banner-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
       flex-wrap: wrap;
     }
 
-    .trust-logo {
-      font-family: var(--font-display);
-      font-size: 16px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.25);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      transition: color 0.2s;
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
-    .trust-logo:hover { color: rgba(255,255,255,0.5); }
-
-    .trust-logo .mono { font-family: var(--font-mono); }
-
-    /* ─── CONTENT SECTIONS ────────────────────────────────────────────── */
-    .section-light,
-    .section-dark {
-      background: var(--bg-dark);
-      color: var(--text-main);
-      padding: 120px 48px;
-      position: relative;
-      border-top: 1px solid var(--border-subtle);
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
-    #editorial {
-      background: #09090c;
+    @keyframes scaleIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
     }
 
-    #specimens {
-      background: #0b0c10;
-    }
-
-    #features {
-      background: #090a0d;
-    }
-
-    #install {
-      background: #070709;
-    }
-
-    .container { max-width: 1280px; margin: 0 auto; }
-
-    .section-eyebrow {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.14em;
-      margin-bottom: 20px;
-      color: var(--orange);
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .section-eyebrow::before {
-      content: '';
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--orange);
-      box-shadow: 0 0 8px var(--orange);
-    }
-
-    .section-dark .section-eyebrow,
-    .section-light .section-eyebrow {
-      color: var(--orange);
-    }
-
-    /* ─── EDITORIAL STATEMENT ──────────────────────────────────────────── */
-    .editorial-statement {
-      font-size: clamp(2.2rem, 4.4vw, 4.2rem);
-      font-weight: 700;
-      line-height: 1.1;
-      letter-spacing: -0.035em;
-      max-width: 1100px;
-      margin-bottom: 50px;
-    }
-
-    .section-dark .editorial-statement { color: #ffffff; }
-    .section-dark .editorial-statement em { font-style: normal; color: #888892; }
-
-    .pyre-glow {
-      color: var(--orange);
-      text-shadow: 0 0 8px var(--orange-glow);
-    }
-
-    /* ─── STATS ────────────────────────────────────────────────────────── */
-    .stats-trio {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 40px;
-      padding-top: 60px;
-      border-top: 1px solid rgba(255,255,255,0.12);
-    }
-
-    .stat-item h3 {
-      font-size: clamp(2.8rem, 4.5vw, 4rem);
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      color: #ffffff;
-      margin-bottom: 8px;
-    }
-
-    .stat-item p { font-size: 15px; color: #8e8e94; line-height: 1.5; }
-
-    /* ─── SPECIMEN CARDS ───────────────────────────────────────────────── */
-    .specimen-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-bottom: 64px;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: 24px;
-    }
-
-    .specimen-header h2 {
-      font-size: clamp(2.2rem, 4vw, 3.4rem);
-      font-weight: 800;
-      letter-spacing: -0.035em;
-      line-height: 1;
-    }
-
-    .specimen-header p {
-      color: var(--text-muted);
-      font-size: 16px;
-      max-width: 440px;
-      line-height: 1.4;
-    }
-
-    .specimen-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 32px;
-    }
-
-    .specimen-card {
-      background: rgba(255, 255, 255, 0.02);
-      border-radius: 20px;
-      padding: 36px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      min-height: 380px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      position: relative;
-      transform-style: preserve-3d;
-      perspective: 1000px;
-      transition: transform 0.4s var(--ease), border-color 0.3s ease, box-shadow 0.4s var(--ease);
-      will-change: transform;
-      cursor: pointer;
-    }
-
-    .specimen-card:hover {
-      border-color: rgba(255, 107, 43, 0.35);
-      box-shadow: 0 24px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(255, 107, 43, 0.1);
-    }
-
-    /* Inner realistic ambient glare */
-    .specimen-card::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      border-radius: 20px;
-      background: radial-gradient(
-        circle 320px at var(--mouse-x, 50%) var(--mouse-y, 50%),
-        rgba(255, 255, 255, 0.08) 0%,
-        rgba(255, 107, 43, 0.05) 35%,
-        transparent 75%
-      );
-      opacity: 0;
-      transition: opacity 0.35s ease;
-      pointer-events: none;
-      z-index: 10;
-    }
-
-    .specimen-card:hover::after {
-      opacity: 1;
-    }
-
-    /* Layered 3D element pop */
-    .specimen-card .specimen-top,
-    .specimen-card .specimen-mid,
-    .specimen-card .specimen-live-data {
-      transform-style: preserve-3d;
-      transition: transform 0.2s ease-out;
-    }
-
-    .specimen-card:hover .specimen-title {
-      color: #ffffff;
-    }
-
-    .specimen-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-
-    .specimen-index {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--orange);
-    }
-
-    .specimen-tag {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      background: rgba(255, 255, 255, 0.06);
-      padding: 4px 10px;
-      border-radius: 999px;
-      color: #c4c4cc;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .specimen-mid { margin: 28px 0; }
-
-    .specimen-title {
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: -0.025em;
-      margin-bottom: 12px;
-      color: #ffffff;
-    }
-
-    .specimen-desc {
-      font-size: 14px;
-      color: var(--text-muted);
-      line-height: 1.55;
-    }
-
-    .specimen-live-data {
-      background: rgba(0, 0, 0, 0.45);
+    /* Terminal Display */
+    .terminal-display {
+      background: #0a0a0a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
-      padding: 14px 18px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-family: var(--font-mono);
+      padding: 20px;
+      font-family: ui-monospace, 'SF Mono', Monaco, 'Courier New', monospace;
       font-size: 12px;
-      color: #a1a1aa;
-    }
-
-    .live-dot {
-      width: 7px; height: 7px;
-      background: #10b981;
-      border-radius: 50%;
-      display: inline-block;
-      margin-right: 8px;
-      box-shadow: 0 0 0 3px rgba(16,185,129,0.2);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.15); opacity: 0.7; }
-    }
-
-    .live-val { font-weight: 600; color: #ffffff; }
-
-    /* ─── FEATURES GRID ────────────────────────────────────────────────── */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 28px;
-    }
-
-    .features-grid .specimen-card { min-height: 360px; }
-
-    .specimen-badge-row { display: flex; align-items: center; gap: 8px; }
-
-    .specimen-cli-badge {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 500;
-      color: #e4e4e8;
-      background: rgba(255, 255, 255, 0.06);
-      padding: 3px 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    /* Card Expand Indicator */
-    .card-expand-hint {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      font-weight: 600;
-      color: #92929e;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 3px 9px;
-      border-radius: 999px;
-      transition: all 0.25s var(--ease);
-      transform: translateZ(18px);
-    }
-
-    .specimen-card:hover .card-expand-hint {
-      color: var(--orange);
-      background: rgba(255,107,43,0.1);
-      border-color: rgba(255,107,43,0.25);
-      transform: translateZ(24px) scale(1.04);
-    }
-
-    .card-expand-hint svg {
-      transition: transform 0.2s ease;
-    }
-
-    .specimen-card:hover .card-expand-hint svg {
-      transform: translate(1px, -1px);
-    }
-
-    /* ─── VIEW MORE FEATURES ACCORDION ─────────────────────────────────── */
-    .features-more-wrapper {
-      max-height: 0;
+      color: #a1a1a6;
+      line-height: 1.6;
+      margin-top: 40px;
+      overflow-x: auto;
+      animation: fadeIn 1s ease-out 0.5s;
       opacity: 0;
+      animation: fadeIn 1s ease-out 0.5s forwards;
+    }
+
+    .terminal-display code {
+      color: #86868b;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .section-hero-image {
+        grid-template-columns: 1fr;
+        gap: 40px;
+        margin: 50px 0;
+      }
+
+      /* Keep text first, ASCII art second on smaller screens */
+      .section-hero-image > .section-content {
+        order: 1;
+      }
+
+      .section-hero-image > .ascii-art {
+        order: 2;
+        font-size: clamp(7px, 2.1vw, 11px);
+        margin: 0 auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .features {
+        grid-template-columns: 1fr;
+      }
+
+      .container {
+        padding: 0 20px;
+      }
+
+      .section {
+        padding: 60px 0;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .ascii-art {
+        font-size: clamp(6px, 2.6vw, 8px);
+        padding: 8px 4px;
+      }
+    }
+
+    /* Modals & Dialogs */
+    dialog.modal {
+      margin: auto;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 20px;
+      background: #0d0d10;
+      color: #f5f5f7;
+      max-width: 660px;
+      width: calc(100vw - 40px);
+      max-height: 85vh;
+      padding: 0;
+      box-shadow: 0 32px 80px rgba(0, 0, 0, 0.95), 0 0 40px rgba(255, 102, 0, 0.12);
       overflow: hidden;
-      transition: max-height 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-                  opacity 0.45s ease,
-                  margin-top 0.4s ease;
-      margin-top: 0;
+      outline: none;
     }
 
-    .features-more-wrapper.open {
-      max-height: 1600px;
-      opacity: 1;
-      margin-top: 28px;
-      overflow: visible;
-    }
-
-    .view-more-action {
-      display: flex;
-      justify-content: center;
-      margin-top: 48px;
-    }
-
-    .view-more-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      background: rgba(255, 255, 255, 0.05);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
-      font-family: var(--font-display);
-      font-size: 14px;
-      font-weight: 600;
-      padding: 13px 30px;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: all 0.25s var(--ease);
-    }
-
-    .view-more-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: var(--orange);
-      color: var(--orange);
-      transform: translateY(-2px);
-      box-shadow: 0 10px 28px rgba(255, 107, 43, 0.2);
-    }
-
-    .view-more-btn .btn-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-      transition: transform 0.35s var(--ease), background 0.2s ease;
-    }
-
-    .view-more-btn:hover .btn-icon {
-      background: rgba(255, 107, 43, 0.2);
-    }
-
-    .view-more-btn.expanded .btn-icon {
-      transform: rotate(180deg);
-    }
-
-    /* ─── CARD DETAIL MODAL (Apple Developer / Hardware Sheet Style) ───── */
-    .card-modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(7, 7, 9, 0.78);
-      backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(28px) saturate(180%);
-      z-index: 99999;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
-    }
-
-    .card-modal-backdrop.active {
-      opacity: 1;
-      visibility: visible;
-    }
-
-    .card-modal-dialog {
-      background: #111114;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      box-shadow: 0 40px 100px -15px rgba(0,0,0,0.9), 0 0 50px rgba(255,107,43,0.15);
-      border-radius: 24px;
-      max-width: 760px;
-      width: 100%;
-      max-height: 88vh;
-      overflow-y: auto;
-      color: #f4f4f6;
-      padding: 40px;
-      transform: scale(0.92) translateY(24px);
-      transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-    }
-
-    .card-modal-backdrop.active .card-modal-dialog {
-      transform: scale(1) translateY(0);
-    }
-
-    .modal-close-btn {
-      position: absolute;
-      top: 24px;
-      right: 24px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(255,255,255,0.06);
-      color: #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-size: 16px;
-    }
-
-    .modal-close-btn:hover {
-      background: #ffffff;
-      color: #0a0a0a;
-      transform: rotate(90deg);
-    }
-
-    .modal-header-meta {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 14px;
-    }
-
-    .modal-index {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--orange);
-      letter-spacing: 0.04em;
-    }
-
-    .modal-tag {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      background: rgba(255,255,255,0.1);
-      padding: 3px 10px;
-      border-radius: 999px;
-      color: #e4e4e7;
-    }
-
-    .modal-title {
-      font-family: var(--font-display);
-      font-size: clamp(1.8rem, 3.2vw, 2.4rem);
-      font-weight: 800;
-      letter-spacing: -0.03em;
-      margin-bottom: 14px;
-      color: #ffffff;
-      line-height: 1.15;
-    }
-
-    .modal-desc {
-      font-size: 15px;
-      line-height: 1.6;
-      color: #a1a1aa;
-      margin-bottom: 28px;
-    }
-
-    .modal-section-title {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #71717a;
-      margin-bottom: 10px;
-    }
-
-    .modal-cli-box {
-      background: #18191e;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 14px;
-      padding: 14px 18px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .modal-cli-code {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      color: #f4f4f5;
-      overflow-x: auto;
-      white-space: nowrap;
-    }
-
-    .modal-cli-code .prefix {
-      color: var(--orange);
-      margin-right: 6px;
-    }
-
-    .modal-copy-btn {
-      background: rgba(255,255,255,0.12);
-      border: none;
-      color: #ffffff;
-      font-family: var(--font-display);
-      font-size: 12px;
-      font-weight: 600;
-      padding: 6px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.15s ease;
-      flex-shrink: 0;
-    }
-
-    .modal-copy-btn:hover {
-      background: #ffffff;
-      color: #000000;
-    }
-
-    /* Flags Table */
-    .modal-flags-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 28px;
-    }
-
-    .modal-flag-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 13px;
-      gap: 16px;
-    }
-
-    .modal-flag-name {
-      font-family: var(--font-mono);
-      color: var(--orange);
-      font-weight: 600;
-      white-space: nowrap;
-      font-size: 12px;
-    }
-
-    .modal-flag-desc {
-      color: #9ca3af;
-      font-size: 13px;
-      text-align: right;
-    }
-
-    /* Live Output Box */
-    .modal-output-preview {
-      background: #090a0c;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 18px 20px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.6;
-      color: #34d399;
-      white-space: pre-wrap;
-      overflow-x: auto;
-      margin-bottom: 24px;
-    }
-
-    .modal-output-preview .meta-line {
-      color: #64748b;
-    }
-
-    .modal-output-preview .accent-line {
-      color: #fbbf24;
-    }
-
-    .modal-footer-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 12px;
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .modal-btn-done {
-      background: #ffffff;
-      color: #0a0a0a;
-      border: none;
-      padding: 10px 24px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 600;
-      font-family: var(--font-display);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .modal-btn-done:hover {
-      background: var(--orange);
-      color: #ffffff;
-    }
-    .section-install {
-      background: #0f1013;
-      color: #ffffff;
-      padding: 140px 60px;
-    }
-
-    .install-box {
+    dialog.modal-wide {
       max-width: 860px;
-      margin: 0 auto;
-      text-align: center;
     }
 
-    .install-box h2 {
-      font-size: clamp(2.4rem, 4.8vw, 4rem);
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      margin-bottom: 16px;
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.78);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
 
-    .install-box p.sub {
-      color: #92929a;
-      font-size: 17px;
-      margin-bottom: 40px;
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 22px 28px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .install-tabs {
-      display: inline-flex;
-      background: rgba(255,255,255,0.07);
-      padding: 4px;
-      border-radius: 999px;
-      margin-bottom: 24px;
-      border: 1px solid rgba(255,255,255,0.1);
+    .modal-header h3 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      color: #f5f5f7;
+    }
+
+    .modal-close {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #a1a1a6;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      transition: all 0.2s ease;
+    }
+
+    .modal-close:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #ffffff;
+      transform: scale(1.08);
+    }
+
+    .modal-body {
+      padding: 24px 28px;
+      overflow-y: auto;
+      max-height: calc(85vh - 120px);
+    }
+
+    /* Tabs */
+    .tab-list {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
     }
 
     .tab-btn {
-      background: transparent;
-      border: none;
-      color: #a0a0a8;
-      padding: 8px 20px;
-      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #a1a1a6;
+      padding: 7px 18px;
+      border-radius: 980px;
       font-size: 13px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
       transition: all 0.2s ease;
-      font-family: var(--font-display);
+      font-family: inherit;
+    }
+
+    .tab-btn:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.12);
     }
 
     .tab-btn.active {
       background: #ffffff;
-      color: #0a0a0a;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      color: #000000;
+      border-color: #ffffff;
+      font-weight: 600;
     }
 
-    .cli-command-pill {
-      background: #18191e;
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      padding: 18px 24px;
+    /* Code Block & Copy Button */
+    .code-block {
+      background: #050507;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      font-family: var(--font-mono);
-      font-size: 15px;
-      box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+      margin: 12px 0 16px;
+      font-family: ui-monospace, 'SF Mono', Monaco, monospace;
+      font-size: 13.5px;
     }
 
-    .command-text {
-      color: #e4e4e7;
+    .code-block code {
+      color: #ff8533;
+      word-break: break-all;
       user-select: all;
-      text-align: left;
-      overflow-x: auto;
-      white-space: nowrap;
     }
-
-    .command-text span.prefix { color: #63636e; margin-right: 6px; }
 
     .copy-btn {
-      background: rgba(255,255,255,0.12);
-      border: none;
-      color: #ffffff;
-      font-family: var(--font-display);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 18px;
-      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.09);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      color: #f5f5f7;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: all 0.18s ease;
+      white-space: nowrap;
+      transition: all 0.2s ease;
       flex-shrink: 0;
+      font-family: inherit;
     }
 
-    .copy-btn:hover { background: #ffffff; color: #000; }
-
-    .cli-mini-terminal {
-      margin-top: 36px;
-      background: #090a0c;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.08);
-      padding: 24px;
-      text-align: left;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      line-height: 1.7;
-      color: #a1a1aa;
-    }
-
-    .term-dots { display: flex; gap: 6px; margin-bottom: 16px; }
-    .term-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); }
-    .term-val { color: #ffffff; font-weight: 600; }
-    .term-accent { color: #10b981; }
-
-    @keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
-    .cursor-blink {
-      display: inline-block; width: 8px; height: 14px;
-      background: var(--orange); animation: blink 1s step-end infinite;
-      vertical-align: text-bottom; margin-left: 4px; border-radius: 1px;
-    }
-
-    /* ─── FOOTER ────────────────────────────────────────────────────────── */
-    footer {
-      background: #0a0a0c;
-      color: #71717a;
-      padding: 60px;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      font-size: 13px;
-    }
-
-    .footer-inner {
-      max-width: 1280px;
-      margin: 0 auto;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .footer-links { display: flex; gap: 28px; list-style: none; }
-    .footer-links a { color: #a1a1aa; text-decoration: none; transition: color 0.15s; }
-    .footer-links a:hover { color: #ffffff; }
-
-    /* ─── RESPONSIVE ───────────────────────────────────────────────────── */
-    @media (max-width: 960px) {
-      .top-nav { padding: 20px 24px; }
-      .nav-links { gap: 20px; }
-      .hero-content { padding: 0 24px 120px; }
-      .section-light, .section-dark, .section-install { padding: 90px 24px; }
-      .specimen-grid { grid-template-columns: 1fr; }
-      .features-grid { grid-template-columns: 1fr; }
-      .stats-trio { grid-template-columns: 1fr; gap: 32px; }
-      .footer-inner { flex-direction: column; gap: 20px; align-items: flex-start; }
-      .trust-logos { gap: 32px; }
-      .specimen-header { flex-direction: column; gap: 16px; align-items: flex-start; }
-    }
-
-    @media (max-width: 600px) {
-      .nav-links { display: none; }
-      .nav-center { position: relative; left: auto; transform: none; }
-      .hero-title { font-size: clamp(3.5rem, 16vw, 5rem); }
-      .hero-buttons { flex-direction: column; width: 100%; max-width: 280px; }
-      .btn-primary, .btn-secondary { text-align: center; justify-content: center; }
-      .cli-command-pill { flex-direction: column; align-items: stretch; }
-      .copy-btn { justify-content: center; }
-      .trust-logos { flex-direction: column; gap: 20px; }
-    }
-    /* ─── APPLE-STYLE PAGE SCROLL TRANSITIONS ──────────────────────────── */
-
-    /* Hero entrance on initial load */
-    .hero-content > * {
-      opacity: 0;
-      transform: translateY(30px);
-      animation: heroEntrance 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    }
-    .hero-content > *:nth-child(1) { animation-delay: 0.15s; }
-    .hero-content > *:nth-child(2) { animation-delay: 0.35s; }
-    .hero-content > *:nth-child(3) { animation-delay: 0.55s; }
-
-    @keyframes heroEntrance {
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .top-nav {
-      opacity: 0;
-      animation: fadeDown 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
-    }
-
-    @keyframes fadeDown {
-      from { opacity: 0; transform: translateY(-20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* Page sections: Fluid, continuous layout */
-    .page-section {
-      position: relative;
-      width: 100%;
-      scroll-margin-top: 40px;
-    }
-
-
-
-    /* Specimen card screenshot viewport */
-    .card-screenshot-stage {
-      position: relative;
-      border-radius: 14px;
-      background: #090a0e;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      overflow: hidden;
-      margin: 18px 0 16px;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.08);
-    }
-
-    .section-dark .card-screenshot-stage {
-      background: #07080a;
-      border-color: rgba(255, 255, 255, 0.08);
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 14px 34px rgba(0, 0, 0, 0.5);
-    }
-
-    .card-screenshot-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 7px 12px;
-      background: rgba(255, 255, 255, 0.03);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .card-screenshot-dots {
-      display: flex;
-      gap: 5px;
-    }
-
-    .card-screenshot-dots span {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
+    .copy-btn:hover {
       background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.35);
+      transform: translateY(-1px);
     }
 
-    .card-screenshot-path {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: #71717a;
+    .copy-btn.copied {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #4ade80;
     }
 
-    .card-screenshot-body {
-      padding: 12px 14px;
-      min-height: 84px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #0b0c10;
+    .install-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 32px;
+      margin-top: 36px;
+      max-width: 820px;
     }
 
-    .card-screenshot-img {
-      display: none;
-      width: 100%;
-      height: auto;
-      max-height: 140px;
-      object-fit: cover;
-      border-radius: 6px;
+    .install-quickstart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 
-    .card-screenshot-img.img-loaded {
-      display: block;
-    }
-
-    .card-screenshot-img.img-loaded + .card-screenshot-fallback-ui {
-      display: none;
-    }
-
-    .card-screenshot-img.img-fallback {
-      display: none !important;
-    }
-
-    .card-screenshot-fallback-ui {
-      width: 100%;
+    .quickstart-item {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
 
-    .card-fallback-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      font-family: var(--font-mono);
-      letter-spacing: 0.03em;
-    }
-
-    .card-fb-label {
-      color: #71717a;
-      text-transform: uppercase;
-      font-size: 9.5px;
-    }
-
-    .card-fb-val {
+    .cmd-badge {
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: #ff6600;
       font-weight: 600;
     }
 
-    .card-fb-bar {
+    .cmd-desc {
+      font-size: 12px;
+      color: #86868b;
+    }
+
+    .install-platform-note {
+      font-size: 12.5px;
+      color: #86868b;
+      margin-top: 6px;
+      margin-bottom: 0;
+    }
+
+    .modal-footer-box {
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+    }
+
+    .modal-footer-actions {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    /* Documentation Table Styles */
+    .docs-table {
       width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.07);
-      border-radius: 99px;
-      overflow: hidden;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 16px 0;
     }
 
-    .card-fb-fill {
-      height: 100%;
-      border-radius: 99px;
-      transition: width 0.4s ease;
+    .docs-table th {
+      text-align: left;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: #a1a1a6;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
-    .card-fb-fill.orange { background: var(--orange); }
-    .card-fb-fill.cyan { background: #38bdf8; }
-    .card-fb-fill.amber { background: #f59e0b; }
-    .card-fb-fill.green { background: #10b981; }
-    .card-fb-fill.blue { background: #60a5fa; }
-    .card-fb-fill.emerald { background: #34d399; }
-
-    .text-orange { color: var(--orange); }
-    .text-cyan { color: #38bdf8; }
-    .text-amber { color: #f59e0b; }
-    .text-green { color: #10b981; }
-    .text-blue { color: #60a5fa; }
-    .text-emerald { color: #34d399; }
-
-
-    /* Trust logos: clean visibility without individual pop-in */
-    .trust-logo {
-      opacity: 0.65;
-      transition: opacity 0.2s ease, color 0.2s ease;
-    }
-    .trust-logo:hover {
-      opacity: 1;
-      color: rgba(255, 255, 255, 0.85);
+    .docs-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      color: #f5f5f7;
     }
 
-    /* Stat counter glow */
-    .stat-item h3 {
-      transition: text-shadow 0.6s ease;
-    }
-    .stat-item.counted h3 {
-      text-shadow: 0 0 30px rgba(255,107,43,0.3);
+    .docs-table code {
+      color: #ff8533;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
     }
 
-    /* Reduce motion preference */
+    .docs-key {
+      display: inline-block;
+      padding: 2px 7px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      color: #ffffff;
+    }
+
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
+      * {
         animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
       }
     }
@@ -1258,1197 +741,949 @@
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- HERO & INFRASTRUCTURE                                               -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <section class="hero page-section" id="hero">
-      <!-- Three.js dot-matrix terrain lives here -->
-      <div id="three-container"></div>
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <h1>Pyre</h1>
+    <p>System monitoring reimagined. Real-time insights into your machine.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" id="hero-get-started">Get Started</button>
+      <button class="btn btn-secondary" id="hero-learn-more">Learn More</button>
+    </div>
+  </div>
+  <div class="hero-fire" id="hero-fire-container">
+    <pre id="ascii-hero-fire"></pre>
+  </div>
+</section>
 
-      <!-- Top Navigation -->
-      <nav class="top-nav">
-        <ul class="nav-links">
-          <li><a href="#editorial">Philosophy</a></li>
-          <li><a href="#specimens">Architecture</a></li>
-          <li><a href="#features">Features</a></li>
-        </ul>
-
-        <a href="#hero" class="nav-center">
-          <span class="nav-logo-icon">⬡</span>
-          <span class="nav-logo-text">Pyre</span>
-        </a>
-
-        <a href="#install" class="nav-cta">Get started</a>
-      </nav>
-
-      <!-- Hero Content -->
-      <div class="hero-content">
-        <h1 class="hero-title">Pyre</h1>
-        <p class="hero-sub">
-          Zero-overhead native telemetry for macOS, Linux &amp; Windows.
-          Sub-millisecond probes, silicon analytics, and packet-level
-          forensics — without the guesswork.
+<!-- Silicon Section -->
+<section class="section" id="silicon">
+  <div class="container">
+    <div class="section-hero-image">
+      <div class="section-content">
+        <div class="section-label">Performance</div>
+        <h2>See inside your Silicon</h2>
+        <p>Direct register probes give you insight into CPU cluster loads, memory bandwidth, and Neural Engine states in real time. Know exactly what your machine is doing.</p>
+        <p style="color: #86868b; font-size: 13px; margin-top: 32px;">
+          <strong style="color: #f5f5f7;">Command:</strong><br>
+          <code style="font-family: ui-monospace;">$ pyre live</code>
         </p>
-        <div class="hero-buttons">
-          <a href="#install" class="btn-primary">Install CLI</a>
-          <a href="#editorial" class="btn-secondary">
-            How it works
-            <span class="btn-arrow">→</span>
-          </a>
-        </div>
       </div>
-
-      <!-- ═══ Trust / Logo Strip ═══ -->
-      <div class="trust-strip">
-        <p class="trust-label">Built for teams who ship precision infrastructure:</p>
-        <div class="trust-logos">
-          <span class="trust-logo">Darwin</span>
-          <span class="trust-logo"><span class="mono">Linux</span></span>
-          <span class="trust-logo">Win32</span>
-          <span class="trust-logo"><span class="mono">ARM64</span></span>
-          <span class="trust-logo">x86_64</span>
-        </div>
-      </div>
-    </section>
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- PHILOSOPHY                                                          -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <section class="section-dark page-section" id="editorial">
-    <div class="container">
-      <div class="section-eyebrow">Guiding Principles</div>
-      <p class="editorial-statement">
-        Modern system monitors waste precious machine cycles rendering decorative animations.
-        <em><span class="pyre-glow">Pyre</span> treats telemetry as a disciplined instrument</em> — zero-overhead native probes,
-        sub-millisecond sampling, and uncompromising precision.
-      </p>
-
-      <div class="stats-trio">
-        <div class="stat-item" data-delay="1">
-          <h3 data-count="0.1" data-prefix="< " data-suffix="%">&lt; 0.1%</h3>
-          <p>CPU footprint under continuous background multi-core and GPU telemetry polling.</p>
-        </div>
-        <div class="stat-item" data-delay="2">
-          <h3 data-count="0.8" data-suffix="ms">0.8ms</h3>
-          <p>Kernel probe latency for temperature sensors, memory pressure, and socket dispatch.</p>
-        </div>
-        <div class="stat-item" data-delay="3">
-          <h3 data-count="0" data-suffix=" MB">0 MB</h3>
-          <p>Electron dependencies. Pure native compiled runtime with surgical precision.</p>
-        </div>
-      </div>
+      <pre class="ascii-art" id="ascii-silicon"></pre>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- TELEMETRY ARCHITECTURE                                              -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <section class="section-dark page-section" id="specimens">
-    <div class="container">
-      <div class="specimen-header">
-        <div>
-          <div class="section-eyebrow">Telemetry Architecture</div>
-          <h2>Architected for depth.</h2>
-        </div>
-        <p>Four native telemetry systems engineered to surface hardware truth without interfering with your production workloads.</p>
-      </div>
-
-      <div class="specimen-grid">
-        <div class="specimen-card" data-delay="1" data-modal-card="silicon">
-          <div class="specimen-top">
-            <span class="specimen-index">SPECIMEN // 01</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-tag">Silicon</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Apple Silicon &amp; Heterogeneous Compute</h3>
-            <p class="specimen-desc">Direct registers for Performance and Efficiency cluster loads, unified memory throughput, and neural engine throttling states.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>M-Series Cluster Load</span></div>
-            <div class="live-val" id="liveSilicon">P-Core: 18% &bull; E-Core: 4%</div>
-          </div>
-        </div>
-
-        <div class="specimen-card" data-delay="2" data-modal-card="thermals">
-          <div class="specimen-top">
-            <span class="specimen-index">SPECIMEN // 02</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-tag">Thermals</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Thermals &amp; Dynamic Fan Curves</h3>
-            <p class="specimen-desc">SMC &amp; ACPI thermistor arrays monitoring heatpipe dissipation, throttling thresholds, and tachometer fan hysteresis.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Die Temp / Fan RPM</span></div>
-            <div class="live-val" id="liveThermal">43.2°C &bull; 1,420 RPM</div>
-          </div>
-        </div>
-
-        <div class="specimen-card" data-delay="3" data-modal-card="network">
-          <div class="specimen-top">
-            <span class="specimen-index">SPECIMEN // 03</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-tag">Network</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Micro-Packet Flow &amp; Socket Tracking</h3>
-            <p class="specimen-desc">Non-intrusive nettop kernel streaming that correlates delta egress/ingress with precise PID lineages and open file descriptors.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Socket Throughput</span></div>
-            <div class="live-val" id="liveNet">↓ 4.8 MB/s &bull; ↑ 182 KB/s</div>
-          </div>
-        </div>
-
-        <div class="specimen-card" data-delay="4" data-modal-card="power">
-          <div class="specimen-top">
-            <span class="specimen-index">SPECIMEN // 04</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-tag">Power</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Battery Degradation &amp; Cycle Analytics</h3>
-            <p class="specimen-desc">Coulomb counter telemetry projecting degradation trajectories, active milliwatt draw, and charging temperature curves.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Power Health</span></div>
-            <div class="live-val" id="livePower">96.4% Health &bull; 4.2W Draw</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- CORE CAPABILITIES                                                   -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <section class="section-dark page-section" id="features">
-    <div class="container">
-      <div class="specimen-header">
-        <div>
-          <div class="section-eyebrow">Core Capabilities</div>
-          <h2>Precision systems.</h2>
-        </div>
-        <p>Engineered for high-frequency telemetry, cross-platform hardware monitoring, and multi-host fleet visibility. Click any card to inspect commands.</p>
-      </div>
-
-      <!-- Flagship Core Features (Top 3) -->
-      <div class="features-grid">
-        <div class="specimen-card" data-delay="1" data-modal-card="tui">
-          <div class="specimen-top">
-            <span class="specimen-index">Interactive TUI</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-cli-badge">pyre live</span>
-              <span class="specimen-tag">TUI</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Interactive Terminal Dashboard</h3>
-            <p class="specimen-desc">Full-screen keyboard &amp; mouse-driven TUI. Live sparklines, bar graphs, process trees, interactive kill signals, and 6 built-in colorways.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Refresh Cycle</span></div>
-            <div class="live-val">250ms &bull; 6 Themes</div>
-          </div>
-        </div>
-
-        <div class="specimen-card" data-delay="2" data-modal-card="fleet">
-          <div class="specimen-top">
-            <span class="specimen-index">Fleet Aggregator</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-cli-badge">pyre fleet</span>
-              <span class="specimen-tag">Fleet</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Multi-Host Fleet &amp; Remote SSH</h3>
-            <p class="specimen-desc">Monitor remote servers over SSH or aggregate multiple Darwin, Linux, and Windows nodes into a tiled unified multi-host dashboard.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Remote Mesh</span></div>
-            <div class="live-val">Multi-Host Aggregator</div>
-          </div>
-        </div>
-
-        <div class="specimen-card" data-delay="3" data-modal-card="anomalies">
-          <div class="specimen-top">
-            <span class="specimen-index">Anomaly Radar</span>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="specimen-cli-badge">pyre anomalies</span>
-              <span class="specimen-tag">Analytics</span>
-              <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-            </div>
-          </div>
-          <div class="specimen-mid">
-            <h3 class="specimen-title">Statistical Anomaly Digest</h3>
-            <p class="specimen-desc">Per-tick continuous CSV logging with rolling window z-score spike detection. Surfaces runaway CPU/memory anomalies automatically.</p>
-          </div>
-          <div class="specimen-live-data">
-            <div><span class="live-dot"></span><span>Detection Engine</span></div>
-            <div class="live-val">Z-Score Spike Model</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Secondary Capabilities (Collapsible Accordion) -->
-      <div class="features-more-wrapper" id="moreFeaturesWrapper">
-        <div class="features-grid">
-          <div class="specimen-card" data-modal-card="p2p">
-            <div class="specimen-top">
-              <span class="specimen-index">Encrypted P2P</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="specimen-cli-badge">pyre p2p</span>
-                <span class="specimen-tag">Network</span>
-                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-              </div>
-            </div>
-            <div class="specimen-mid">
-              <h3 class="specimen-title">Encrypted P2P Live Streaming</h3>
-              <p class="specimen-desc">Zero-broker TCP streaming over LAN. Hardened with TLS encryption, SHA-256 challenge-response auth, HMAC signing, and audit trails.</p>
-            </div>
-            <div class="specimen-live-data">
-              <div><span class="live-dot"></span><span>P2P Protocol</span></div>
-              <div class="live-val">TLS &bull; HMAC-SHA256</div>
-            </div>
-          </div>
-
-          <div class="specimen-card" data-modal-card="web">
-            <div class="specimen-top">
-              <span class="specimen-index">Web Portal</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="specimen-cli-badge">pyre web</span>
-                <span class="specimen-tag">Portal</span>
-                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-              </div>
-            </div>
-            <div class="specimen-mid">
-              <h3 class="specimen-title">Web Portal &amp; Native App</h3>
-              <p class="specimen-desc">Instant real-time browser dashboard powered by Server-Sent Events (SSE) on localhost, paired with a lightweight native macOS app window.</p>
-            </div>
-            <div class="specimen-live-data">
-              <div><span class="live-dot"></span><span>Transport Layer</span></div>
-              <div class="live-val">SSE Real-Time Stream</div>
-            </div>
-          </div>
-
-          <div class="specimen-card" data-modal-card="bench">
-            <div class="specimen-top">
-              <span class="specimen-index">Energy Profiler</span>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="specimen-cli-badge">pyre bench</span>
-                <span class="specimen-tag">Energy</span>
-                <span class="card-expand-hint">Inspect <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg></span>
-              </div>
-            </div>
-            <div class="specimen-mid">
-              <h3 class="specimen-title">Micro-Benchmarking &amp; Energy</h3>
-              <p class="specimen-desc">Profile arbitrary shell commands with granular milliwatt precision. Measures wall time, multi-core impact, and kWh power draw costs.</p>
-            </div>
-            <div class="specimen-live-data">
-              <div><span class="live-dot"></span><span>Power Telemetry</span></div>
-              <div class="live-val">Granular kWh &amp; Joules</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- View More Capabilities Trigger -->
-      <div class="view-more-action">
-        <button id="toggleMoreFeaturesBtn" class="view-more-btn" aria-expanded="false">
-          <span class="btn-text">View More Capabilities (3)</span>
-          <span class="btn-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </span>
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- CLI INSTALL & DEPLOY                                                -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <section class="section-install page-section" id="install">
-    <div class="container">
-      <div class="install-box">
-        <div class="section-eyebrow">Deployment</div>
-        <h2>One command. Zero bloat.</h2>
-        <p class="sub">Deploy the <span class="pyre-glow">Pyre</span> telemetry daemon or run it ad-hoc directly from your shell.</p>
-
-        <div class="install-tabs" role="tablist">
-          <button class="tab-btn active" data-cmd="brew install somalip/pyre/pyre">Homebrew</button>
-          <button class="tab-btn" data-cmd="curl -fsSL https://raw.githubusercontent.com/somalip/pyre/main/install.sh | bash">Shell Script</button>
-          <button class="tab-btn" data-cmd="npm install -g pyre-cli">npm</button>
-          <button class="tab-btn" data-cmd="cargo install pyre-cli">Cargo</button>
-        </div>
-
-        <div class="cli-command-pill">
-          <div class="command-text" id="commandDisplay">
-            <span class="prefix">$</span>brew install somalip/pyre/pyre
-          </div>
-          <button class="copy-btn" id="copyBtn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            <span id="copyText">Copy</span>
-          </button>
-        </div>
-
-        <div class="cli-mini-terminal">
-          <div class="term-dots">
-            <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
-          </div>
-          <p><span class="term-accent">✔</span> <span class="term-val">pyre v10.1.0</span> initialized in 4.2ms [darwin-arm64]</p>
-          <p>Probing 14 thermal sensors &bull; CPU cluster 8P+4E &bull; Unified RAM 32GB</p>
-          <p style="color: #64748b;">$ pyre live --rate 250ms --format compact</p>
-          <p><span class="term-accent">●</span> <span style="color: #f59e0b;">LIVE</span> streaming 12 channels @ 250ms <span class="cursor-blink"></span></p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ═══ FOOTER ═══ -->
-    <footer>
-      <div class="footer-inner">
-        <div><span>© 2026 <span class="pyre-glow">Pyre</span>®. Systems built as precision.</span></div>
-        <ul class="footer-links">
-          <li><a href="https://github.com/somalip/pyre" target="_blank" rel="noreferrer">GitHub</a></li>
-          <li><a href="#specimens">Architecture</a></li>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#install">Install</a></li>
-        </ul>
-      </div>
-    </footer>
-  </section>
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- CARD INSPECTION MODAL (Apple Style Hardware Sheet)                 -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <div class="card-modal-backdrop" id="cardDetailModal" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="card-modal-dialog">
-      <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close dialog">✕</button>
-      <div class="modal-header-meta">
-        <span class="modal-index" id="modalIndex">Silicon Architecture</span>
-        <span class="modal-tag" id="modalTag">Silicon</span>
-      </div>
-      <h2 class="modal-title" id="modalTitle">Apple Silicon &amp; Heterogeneous Compute</h2>
-      <p class="modal-desc" id="modalDesc">Direct registers for Performance and Efficiency cluster loads, unified memory throughput, and neural engine throttling states.</p>
-
-      <div class="modal-section-title">Terminal Execution</div>
-      <div class="modal-cli-box">
-        <div class="modal-cli-code"><span class="prefix">$</span><span id="modalCommand">pyre top --silicon</span></div>
-        <button class="modal-copy-btn" id="modalCopyBtn">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-          <span id="modalCopyText">Copy</span>
-        </button>
-      </div>
-
-      <div class="modal-section-title">Telemetry Flags &amp; Subsystems</div>
-      <div class="modal-flags-list" id="modalFlagsList">
-        <!-- Injected dynamically -->
-      </div>
-
-      <div class="modal-section-title">Live Hardware Stream Output</div>
-      <div class="modal-output-preview" id="modalOutputPreview">
-        <!-- Injected dynamically -->
-      </div>
-
-      <div class="modal-footer-actions">
-        <button class="modal-btn-done" id="modalDoneBtn">Done</button>
+<!-- Thermals Section -->
+<section class="section section-dark">
+  <div class="container">
+    <div class="section-hero-image">
+      <pre class="ascii-art" id="ascii-thermals"></pre>
+      <div class="section-content">
+        <div class="section-label">Temperature</div>
+        <h2>Thermals at a glance</h2>
+        <p>SMC sensor integration gives you precise thermal readings across your machine. Watch heatpipe dissipation, fan curves, and throttling states in real time.</p>
+        <p style="color: #86868b; font-size: 13px; margin-top: 32px;">
+          <strong style="color: #f5f5f7;">Command:</strong><br>
+          <code style="font-family: ui-monospace;">$ pyre check</code>
+        </p>
       </div>
     </div>
   </div>
+</section>
 
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- THREE.JS: 3D DOT-MATRIX TERRAIN                                   -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js"
+<!-- Network Section -->
+<section class="section">
+  <div class="container">
+    <div class="section-hero-image">
+      <div class="section-content">
+        <div class="section-label">Connectivity</div>
+        <h2>Network socket visibility</h2>
+        <p>Trace every connection on your machine. Link socket egress and ingress to precise process IDs, and monitor bandwidth per connection in real time.</p>
+        <p style="color: #86868b; font-size: 13px; margin-top: 32px;">
+          <strong style="color: #f5f5f7;">Command:</strong><br>
+          <code style="font-family: ui-monospace;">$ pyre netusage</code>
+        </p>
+      </div>
+      <pre class="ascii-art" id="ascii-network"></pre>
+    </div>
+  </div>
+</section>
+
+<!-- Power Section -->
+<section class="section section-dark">
+  <div class="container">
+    <div class="section-hero-image">
+      <pre class="ascii-art" id="ascii-power"></pre>
+      <div class="section-content">
+        <div class="section-label">Energy</div>
+        <h2>Battery and power metrics</h2>
+        <p>Coulomb counter telemetry tracks battery health, subsystem power draw, and charge cycles. Predict runtime and identify power-hungry processes.</p>
+        <p style="color: #86868b; font-size: 13px; margin-top: 32px;">
+          <strong style="color: #f5f5f7;">Command:</strong><br>
+          <code style="font-family: ui-monospace;">$ pyre bench &quot;&lt;command&gt;&quot;</code>
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Features -->
+<section class="section">
+  <div class="container">
+    <div class="section-label">Capabilities</div>
+    <h2>Everything you need</h2>
+    <div class="features">
+      <div class="feature-card">
+        <h3>Live Dashboard</h3>
+        <p>Full-screen TUI with real-time sparklines, process trees, and keyboard controls.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Web Portal</h3>
+        <p>Browser interface powered by Server-Sent Events for remote monitoring.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Fleet Monitoring</h3>
+        <p>Monitor multiple remote servers over SSH in adaptive multi-grid layout.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Anomaly Detection</h3>
+        <p>Statistical z-score detection surfaces runaway processes automatically.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Energy Profiling</h3>
+        <p>Benchmark command execution with milliwatt-precision energy measurement.</p>
+      </div>
+      <div class="feature-card">
+        <h3>P2P Streaming</h3>
+        <p>Zero-broker TLS streaming over LAN with HMAC authentication.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison Section -->
+<section class="section section-dark">
+  <div class="container">
+    <div class="section-label">Comparison</div>
+    <h2>How Pyre compares</h2>
+    <p style="color: #a1a1a6; font-size: 15px; margin-bottom: 24px;">Built for modern systems with hardware-level telemetry, encrypted peer-to-peer streaming, and native web portal integration.</p>
+    <div class="comparison-content">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="col-pyre" style="text-align: center;">Pyre</th>
+            <th style="text-align: center;">btop</th>
+            <th style="text-align: center;">htop</th>
+            <th style="text-align: center;">Glances</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Interactive TUI & Themes</td>
+            <td class="col-pyre" style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.8;">(6 themes)</span></td>
+            <td style="text-align: center;">✓</td>
+            <td style="text-align: center;">Limited</td>
+            <td style="text-align: center;">✓</td>
+          </tr>
+          <tr>
+            <td>Encrypted P2P Streaming</td>
+            <td class="col-pyre" style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.8;">(TLS + HMAC)</span></td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">Partial <span style="font-size: 11px; opacity: 0.6;">(Plain)</span></td>
+          </tr>
+          <tr>
+            <td>Multi-Host Fleet View</td>
+            <td class="col-pyre" style="text-align: center;">✓</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.6;">(Web)</span></td>
+          </tr>
+          <tr>
+            <td>Web Portal (SSE Stream)</td>
+            <td class="col-pyre" style="text-align: center;">✓</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">✓</td>
+          </tr>
+          <tr>
+            <td>Apple Silicon & Power Draw</td>
+            <td class="col-pyre" style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.8;">(Watts + P/E)</span></td>
+            <td style="text-align: center;">Partial</td>
+            <td style="text-align: center;">Partial</td>
+            <td style="text-align: center;">Partial</td>
+          </tr>
+          <tr>
+            <td>Socket & Packet Forensics</td>
+            <td class="col-pyre" style="text-align: center;">✓</td>
+            <td style="text-align: center;">Partial</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">Partial</td>
+          </tr>
+          <tr>
+            <td>Statistical Anomaly Digest</td>
+            <td class="col-pyre" style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.8;">(Z-Score)</span></td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+          </tr>
+          <tr>
+            <td>Command Energy Profiler</td>
+            <td class="col-pyre" style="text-align: center;">✓ <span style="font-size: 11px; opacity: 0.8;">(kWh / Joules)</span></td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+          </tr>
+          <tr>
+            <td>Platform Security Doctor</td>
+            <td class="col-pyre" style="text-align: center;">✓</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+          </tr>
+          <tr>
+            <td>Multi-Format Export</td>
+            <td class="col-pyre" style="text-align: center;">JSON, CSV, HTML, MD</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">—</td>
+            <td style="text-align: center;">InfluxDB, CSV</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Install Section -->
+<section class="section" id="install">
+  <div class="container" style="text-align: center;">
+    <div class="section-label">Installation</div>
+    <h2>Get Pyre in seconds</h2>
+    <p style="max-width: 580px; margin: 0 auto 36px; color: #a1a1a6;">
+      Zero configuration required. Install globally via npm to monitor your machine with full telemetry.
+    </p>
+
+    <pre class="ascii-art" id="ascii-install"></pre>
+
+    <div class="code-block" style="max-width: 440px; margin: 28px auto 0;">
+      <code>npm install -g pyre-cli</code>
+      <button class="copy-btn" data-copy="npm install -g pyre-cli" aria-label="Copy command">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span>Copy</span>
+      </button>
+    </div>
+    <p style="font-size: 13px; color: #86868b; margin-top: 14px;">
+      Requires Node.js 18+. Run <code style="font-family: ui-monospace; color: #f5f5f7;">pyre live</code> after installing.
+    </p>
+    <div style="margin-top: 24px;">
+      <button class="btn btn-secondary" id="cta-docs-btn" aria-haspopup="dialog">View Documentation</button>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Scroll animations
+  const observerOptions = {
+    threshold: 0.2,
+    rootMargin: '0px 0px -100px 0px'
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, observerOptions);
+
+  document.querySelectorAll('.section-content, .feature-card').forEach(el => {
+    observer.observe(el);
+  });
+
+  // Parallax effect on scroll
+  let ticking = false;
+  const parallaxElements = document.querySelectorAll('.section-image.parallax');
+
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      window.requestAnimationFrame(() => {
+        parallaxElements.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          const scrolled = window.scrollY;
+          const elementTop = el.offsetTop;
+          const distance = scrolled - (elementTop - window.innerHeight / 2);
+          const move = distance * 0.5;
+          el.style.transform = `translateY(${move * 0.3}px)`;
+        });
+        ticking = false;
+      });
+      ticking = true;
+    }
+  });
+
+  // Button interactions
+  document.querySelectorAll('.btn').forEach(btn => {
+    btn.addEventListener('mouseenter', function() {
+      this.style.transform = 'scale(1.05)';
+    });
+    btn.addEventListener('mouseleave', function() {
+      this.style.transform = 'scale(1)';
+    });
+  });
+
+  // Animated ASCII Art Generators
+  let frameCount = 0;
+  const W = 46; // Inner width between outer box borders (total width: 48)
+
+  function pad(text, total_w = W, align = 'left') {
+    const s = String(text);
+    if (s.length >= total_w) return s.slice(0, total_w);
+    const rem = total_w - s.length;
+    if (align === 'center') {
+      const left = Math.floor(rem / 2);
+      const right = rem - left;
+      return ' '.repeat(left) + s + ' '.repeat(right);
+    } else if (align === 'right') {
+      return ' '.repeat(rem) + s;
+    } else {
+      return s + ' '.repeat(rem);
     }
   }
-  </script>
 
-  <script type="module">
-    import * as THREE from 'three';
+  function renderSiliconASCII(frame) {
+    const bars = ['░', '▒', '▓', '█'];
+    const p1 = Math.floor(40 + Math.sin(frame * 0.1) * 35);
+    const p2 = Math.floor(55 + Math.cos(frame * 0.12) * 30);
+    const e1 = Math.floor(20 + Math.sin(frame * 0.08) * 15);
+    const e2 = Math.floor(15 + Math.cos(frame * 0.15) * 10);
 
-    // ─── SIMPLEX NOISE (inline, compact) ───────────────────────────────
-    // Adapted from simplex-noise.js by Jonas Wagner (MIT)
-    const F2 = 0.5 * (Math.sqrt(3) - 1);
-    const G2 = (3 - Math.sqrt(3)) / 6;
-    const F3 = 1 / 3;
-    const G3 = 1 / 6;
-    const grad3 = [
-      [1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],
-      [1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],
-      [0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]
-    ];
-    const perm = new Uint8Array(512);
-    const p = new Uint8Array(256);
-    for (let i = 0; i < 256; i++) p[i] = i;
-    for (let i = 255; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [p[i], p[j]] = [p[j], p[i]];
-    }
-    for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
-
-    function simplex2(x, y) {
-      let n0, n1, n2;
-      const s = (x + y) * F2;
-      const i = Math.floor(x + s);
-      const j = Math.floor(y + s);
-      const t = (i + j) * G2;
-      const X0 = i - t;
-      const Y0 = j - t;
-      const x0 = x - X0;
-      const y0 = y - Y0;
-      let i1, j1;
-      if (x0 > y0) { i1 = 1; j1 = 0; }
-      else { i1 = 0; j1 = 1; }
-      const x1 = x0 - i1 + G2;
-      const y1 = y0 - j1 + G2;
-      const x2 = x0 - 1 + 2 * G2;
-      const y2 = y0 - 1 + 2 * G2;
-      const ii = i & 255;
-      const jj = j & 255;
-      const gi0 = perm[ii + perm[jj]] % 12;
-      const gi1 = perm[ii + i1 + perm[jj + j1]] % 12;
-      const gi2 = perm[ii + 1 + perm[jj + 1]] % 12;
-      let t0 = 0.5 - x0 * x0 - y0 * y0;
-      if (t0 < 0) n0 = 0;
-      else { t0 *= t0; n0 = t0 * t0 * (grad3[gi0][0] * x0 + grad3[gi0][1] * y0); }
-      let t1 = 0.5 - x1 * x1 - y1 * y1;
-      if (t1 < 0) n1 = 0;
-      else { t1 *= t1; n1 = t1 * t1 * (grad3[gi1][0] * x1 + grad3[gi1][1] * y1); }
-      let t2 = 0.5 - x2 * x2 - y2 * y2;
-      if (t2 < 0) n2 = 0;
-      else { t2 *= t2; n2 = t2 * t2 * (grad3[gi2][0] * x2 + grad3[gi2][1] * y2); }
-      return 70 * (n0 + n1 + n2);
-    }
-
-    // ─── SCENE SETUP ───────────────────────────────────────────────────
-    const container = document.getElementById('three-container');
-    const scene = new THREE.Scene();
-
-    const camera = new THREE.PerspectiveCamera(55, container.clientWidth / container.clientHeight, 0.1, 200);
-    camera.position.set(0, 12, 22);
-    camera.lookAt(0, -2, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-
-    // ─── DOT-MATRIX TERRAIN (CIRCULAR DISC) ──────────────────────────
-    const gridW = 200;
-    const gridH = 200;
-    const spacing = 0.28;
-    const radius = (gridW / 2) * spacing; // world-space radius
-
-    // First pass: count how many dots fall inside the circle
-    const tempPts = [];
-    for (let iy = 0; iy < gridH; iy++) {
-      for (let ix = 0; ix < gridW; ix++) {
-        const x = (ix - gridW / 2) * spacing;
-        const z = (iy - gridH / 2) * spacing;
-        const r = Math.sqrt(x * x + z * z);
-        if (r > radius) continue;
-        tempPts.push({ x, z, r });
+    const getBar = (pct) => {
+      const len = 16;
+      const filled = Math.floor((pct / 100) * len);
+      let s = '';
+      for (let i = 0; i < len; i++) {
+        s += i < filled ? bars[Math.min(3, Math.floor((pct % 25) / 6))] : ' ';
       }
-    }
-
-    const count = tempPts.length;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
-    const edgeFades = new Float32Array(count);
-    const basePositions = new Float32Array(count * 3);
-
-    const colorOrange = new THREE.Color(0xff6b2b);
-    const colorRed = new THREE.Color(0xcc2200);
-    const colorAmber = new THREE.Color(0xff9500);
-    const colorDarkRed = new THREE.Color(0x661100);
-    const tempColor = new THREE.Color();
-
-    for (let idx = 0; idx < count; idx++) {
-      const i3 = idx * 3;
-      const { x, z, r } = tempPts[idx];
-
-      // Multi-octave terrain
-      const n1 = simplex2(x * 0.08, z * 0.08) * 3.5;
-      const n2 = simplex2(x * 0.15 + 5, z * 0.15 + 5) * 1.8;
-      const n3 = simplex2(x * 0.3 + 10, z * 0.3 + 10) * 0.6;
-      let y = n1 + n2 + n3;
-
-      // Smooth circular fade at edges
-      const normR = r / radius;
-      const edgeFade = Math.max(0, 1 - Math.pow(normR, 2));
-      y *= edgeFade;
-      edgeFades[idx] = edgeFade;
-
-      positions[i3] = x;
-      positions[i3 + 1] = y;
-      positions[i3 + 2] = z;
-      basePositions[i3] = x;
-      basePositions[i3 + 1] = y;
-      basePositions[i3 + 2] = z;
-
-      // Color: blend orange → red based on height
-      const hn = (y + 4) / 8;
-      if (hn > 0.6) {
-        tempColor.lerpColors(colorOrange, colorAmber, (hn - 0.6) / 0.4);
-      } else if (hn > 0.3) {
-        tempColor.lerpColors(colorRed, colorOrange, (hn - 0.3) / 0.3);
-      } else {
-        tempColor.lerpColors(colorDarkRed, colorRed, Math.max(0, hn / 0.3));
-      }
-
-      colors[i3] = tempColor.r;
-      colors[i3 + 1] = tempColor.g;
-      colors[i3 + 2] = tempColor.b;
-
-      sizes[idx] = (1.5 + hn * 3.0) * edgeFade;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-    geometry.setAttribute('edgeFade', new THREE.BufferAttribute(edgeFades, 1));
-
-    // Custom shader for round dots with per-vertex size and color
-    const vertexShader = `
-      attribute float size;
-      attribute float edgeFade;
-      varying vec3 vColor;
-      varying float vAlpha;
-
-      void main() {
-        vColor = color;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-
-        // Fade alpha for dots further away + edge fade
-        float dist = -mvPosition.z;
-        vAlpha = smoothstep(60.0, 10.0, dist) * edgeFade;
-
-        gl_PointSize = size * (180.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `;
-
-    const fragmentShader = `
-      varying vec3 vColor;
-      varying float vAlpha;
-
-      void main() {
-        vec2 center = gl_PointCoord - vec2(0.5);
-        float dist = length(center);
-        if (dist > 0.5) discard;
-
-        float alpha = smoothstep(0.5, 0.25, dist) * vAlpha;
-        gl_FragColor = vec4(vColor, alpha);
-      }
-    `;
-
-    const material = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
-      transparent: true,
-      depthWrite: false,
-      vertexColors: true,
-    });
-
-    const points = new THREE.Points(geometry, material);
-    scene.add(points);
-
-    // ─── MOUSE INTERACTION ─────────────────────────────────────────────
-    let mouseX = 0, mouseY = 0;
-    let targetMouseX = 0, targetMouseY = 0;
-
-    window.addEventListener('mousemove', (e) => {
-      targetMouseX = (e.clientX / window.innerWidth - 0.5) * 2;
-      targetMouseY = (e.clientY / window.innerHeight - 0.5) * 2;
-    });
-
-    // ─── RESIZE ────────────────────────────────────────────────────────
-    window.addEventListener('resize', () => {
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(container.clientWidth, container.clientHeight);
-    });
-
-    // ─── ANIMATION LOOP ───────────────────────────────────────────────
-    const clock = new THREE.Clock();
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      const time = clock.getElapsedTime();
-
-      // Smooth mouse
-      mouseX += (targetMouseX - mouseX) * 0.04;
-      mouseY += (targetMouseY - mouseY) * 0.04;
-
-      // Subtle camera orbit based on mouse
-      camera.position.x = mouseX * 4;
-      camera.position.y = 12 - mouseY * 2;
-      camera.lookAt(0, -2, 0);
-
-      // Animate terrain: gentle waves + mouse ripple
-      const posArr = geometry.attributes.position.array;
-      const sizeArr = geometry.attributes.size.array;
-      const colArr = geometry.attributes.color.array;
-
-      for (let idx = 0; idx < count; idx++) {
-        const i3 = idx * 3;
-
-        const bx = basePositions[i3];
-        const by = basePositions[i3 + 1];
-        const bz = basePositions[i3 + 2];
-
-        // Gentle wave over time
-        const wave = Math.sin(bx * 0.3 + time * 0.8) * 0.3 +
-                     Math.cos(bz * 0.25 + time * 0.6) * 0.25 +
-                     Math.sin((bx + bz) * 0.15 + time * 0.4) * 0.4;
-
-        // Mouse-driven ripple
-        const mWorldX = mouseX * 15;
-        const mWorldZ = mouseY * 10;
-        const dx = bx - mWorldX;
-        const dz = bz - mWorldZ;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        const ripple = Math.sin(dist * 0.6 - time * 3) * Math.max(0, 1.5 - dist * 0.08);
-
-        const newY = by + wave + ripple;
-        posArr[i3 + 1] = newY;
-
-        // Dynamic color based on new height
-        const hn = Math.max(0, Math.min(1, (newY + 4) / 8));
-        if (hn > 0.6) {
-          tempColor.lerpColors(colorOrange, colorAmber, (hn - 0.6) / 0.4);
-        } else if (hn > 0.3) {
-          tempColor.lerpColors(colorRed, colorOrange, (hn - 0.3) / 0.3);
-        } else {
-          tempColor.lerpColors(colorDarkRed, colorRed, hn / 0.3);
-        }
-
-        colArr[i3] = tempColor.r;
-        colArr[i3 + 1] = tempColor.g;
-        colArr[i3 + 2] = tempColor.b;
-
-        sizeArr[idx] = 1.5 + hn * 3.0;
-      }
-
-      geometry.attributes.position.needsUpdate = true;
-      geometry.attributes.color.needsUpdate = true;
-      geometry.attributes.size.needsUpdate = true;
-
-      renderer.render(scene, camera);
-    }
-
-    animate();
-  </script>
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- INTERACTIVE SCRIPTS (Tabs, Copy, Telemetry)                        -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <script>
-    /* ─── INSTALL TABS & CLIPBOARD ───────────────────────────────────── */
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const commandDisplay = document.getElementById('commandDisplay');
-    const copyBtn = document.getElementById('copyBtn');
-    const copyText = document.getElementById('copyText');
-    let currentCommand = 'brew install somalip/pyre/pyre';
-
-    tabBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        tabBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentCommand = btn.getAttribute('data-cmd');
-        commandDisplay.innerHTML = `<span class="prefix">$</span>${currentCommand}`;
-      });
-    });
-
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(currentCommand);
-        copyText.textContent = 'Copied!';
-        setTimeout(() => { copyText.textContent = 'Copy'; }, 2000);
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = currentCommand;
-        document.body.appendChild(ta); ta.select();
-        document.execCommand('copy'); document.body.removeChild(ta);
-        copyText.textContent = 'Copied!';
-        setTimeout(() => { copyText.textContent = 'Copy'; }, 2000);
-      }
-    });
-
-    /* ─── LIVE TELEMETRY SIMULATION ──────────────────────────────────── */
-    const elS = document.getElementById('liveSilicon');
-    const elT = document.getElementById('liveThermal');
-    const elN = document.getElementById('liveNet');
-    const elP = document.getElementById('livePower');
-
-    setInterval(() => {
-      if (elS) elS.textContent = `P-Core: ${(14+Math.random()*18).toFixed(1)}% • E-Core: ${(2+Math.random()*6).toFixed(1)}%`;
-      if (elT) elT.textContent = `${(41.8+Math.random()*3.4).toFixed(1)}°C • ${Math.floor(1380+Math.random()*90).toLocaleString()} RPM`;
-      if (elN) elN.textContent = `↓ ${(3.2+Math.random()*2.8).toFixed(1)} MB/s • ↑ ${Math.floor(140+Math.random()*90)} KB/s`;
-      if (elP) elP.textContent = `96.4% Health • ${(3.8+Math.random()*1.5).toFixed(1)}W Draw`;
-    }, 1800);
-  </script>
-
-
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <!-- STAT COUNTER ANIMATION                                              -->
-  <!-- ═══════════════════════════════════════════════════════════════════ -->
-  <script>
-
-    /* ─── Stat Counter Animation ─────────────────────────────────────── */
-    const counterObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const h3 = entry.target.querySelector('h3');
-          if (!h3) return;
-          const target = parseFloat(h3.dataset.count);
-          const prefix = h3.dataset.prefix || '';
-          const suffix = h3.dataset.suffix || '';
-          const duration = 1200;
-          const start = performance.now();
-
-          function tick(now) {
-            const elapsed = now - start;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            const current = target * eased;
-
-            if (target === 0) {
-              h3.textContent = prefix + '0' + suffix;
-            } else if (target < 1) {
-              h3.textContent = prefix + current.toFixed(1) + suffix;
-            } else {
-              h3.textContent = prefix + current.toFixed(1) + suffix;
-            }
-
-            if (progress < 1) {
-              requestAnimationFrame(tick);
-            } else {
-              if (target === 0) {
-                h3.textContent = prefix + '0' + suffix;
-              } else if (target < 1) {
-                h3.textContent = prefix + target.toFixed(1) + suffix;
-              } else {
-                h3.textContent = prefix + target + suffix;
-              }
-            }
-          }
-
-          requestAnimationFrame(tick);
-          entry.target.classList.add('counted');
-          counterObserver.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.4 });
-
-    document.querySelectorAll('.stat-item[data-delay]').forEach(el => {
-      counterObserver.observe(el);
-    });
-
-    /* ─── Interactive 3D Card Reaction (Tilt & Layered Depth) ────── */
-    const cards = document.querySelectorAll('.specimen-card');
-
-    cards.forEach(card => {
-      let bounds;
-      let mouseX = 0;
-      let mouseY = 0;
-      let isHovered = false;
-      let rafId = null;
-
-      function updateCard() {
-        if (!isHovered || !bounds) return;
-
-        const width = bounds.width;
-        const height = bounds.height;
-        const centerX = width / 2;
-        const centerY = height / 2;
-
-        const normX = (mouseX - centerX) / centerX;
-        const normY = (mouseY - centerY) / centerY;
-
-        const maxRotateX = 14;
-        const maxRotateY = 14;
-        const rotateX = -normY * maxRotateX;
-        const rotateY = normX * maxRotateY;
-
-        card.style.transform = `perspective(1000px) rotateX(${rotateX.toFixed(2)}deg) rotateY(${rotateY.toFixed(2)}deg) translateZ(12px) scale3d(1.025, 1.025, 1.025)`;
-
-        // Parallax inner elements for tactile 3D depth
-        const topEl = card.querySelector('.specimen-top');
-        const midEl = card.querySelector('.specimen-mid');
-        const liveEl = card.querySelector('.specimen-live-data');
-
-        if (topEl) topEl.style.transform = `translateZ(20px) translateX(${(-normX * 4).toFixed(1)}px) translateY(${(-normY * 4).toFixed(1)}px)`;
-        if (midEl) midEl.style.transform = `translateZ(32px) translateX(${(-normX * 8).toFixed(1)}px) translateY(${(-normY * 8).toFixed(1)}px)`;
-        if (liveEl) liveEl.style.transform = `translateZ(26px) translateX(${(-normX * 5).toFixed(1)}px) translateY(${(-normY * 5).toFixed(1)}px)`;
-
-        // Dynamic specular glare location
-        card.style.setProperty('--mouse-x', `${((mouseX / width) * 100).toFixed(1)}%`);
-        card.style.setProperty('--mouse-y', `${((mouseY / height) * 100).toFixed(1)}%`);
-      }
-
-      card.addEventListener('mouseenter', () => {
-        isHovered = true;
-        bounds = card.getBoundingClientRect();
-        card.style.transition = 'transform 0.12s ease-out, box-shadow 0.25s ease';
-      });
-
-      card.addEventListener('mousemove', (e) => {
-        if (!bounds) bounds = card.getBoundingClientRect();
-        mouseX = e.clientX - bounds.left;
-        mouseY = e.clientY - bounds.top;
-
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(updateCard);
-      });
-
-      card.addEventListener('mouseleave', () => {
-        isHovered = false;
-        if (rafId) cancelAnimationFrame(rafId);
-
-        card.style.transition = 'transform 0.6s var(--ease), box-shadow 0.6s var(--ease)';
-        card.style.transform = '';
-
-        const topEl = card.querySelector('.specimen-top');
-        const midEl = card.querySelector('.specimen-mid');
-        const liveEl = card.querySelector('.specimen-live-data');
-
-        if (topEl) {
-          topEl.style.transition = 'transform 0.6s var(--ease)';
-          topEl.style.transform = '';
-        }
-        if (midEl) {
-          midEl.style.transition = 'transform 0.6s var(--ease)';
-          midEl.style.transform = '';
-        }
-        if (liveEl) {
-          liveEl.style.transition = 'transform 0.6s var(--ease)';
-          liveEl.style.transform = '';
-        }
-      });
-    });
-
-    /* ─── Collapsible Features Library Toggle ("View More") ───────────── */
-    const toggleBtn = document.getElementById('toggleMoreFeaturesBtn');
-    const moreWrapper = document.getElementById('moreFeaturesWrapper');
-
-    if (toggleBtn && moreWrapper) {
-      toggleBtn.addEventListener('click', () => {
-        const isOpen = moreWrapper.classList.toggle('open');
-        toggleBtn.classList.toggle('expanded', isOpen);
-        toggleBtn.setAttribute('aria-expanded', isOpen);
-
-        const btnText = toggleBtn.querySelector('.btn-text');
-        if (btnText) {
-          btnText.textContent = isOpen ? 'Show Less Capabilities' : 'View More Capabilities (3)';
-        }
-      });
-    }
-
-    /* ─── Card Inspection Modal Engine (Apple Hardware Inspector) ────── */
-    const CARD_METADATA = {
-      silicon: {
-        index: 'Silicon Architecture',
-        tag: 'Silicon',
-        title: 'Apple Silicon & Heterogeneous Compute',
-        desc: 'Direct register probes for Performance and Efficiency cluster loads, unified memory bus throughput, and Apple Neural Engine throttling states.',
-        command: 'pyre top --silicon --clusters all',
-        flags: [
-          { flag: '--clusters <p|e|all>', desc: 'Isolate Performance (Firestorm/Avalanche) or Efficiency cores' },
-          { flag: '--ane-watch', desc: 'Monitor Apple Neural Engine active TOPS and thermal throttling' },
-          { flag: '--interval <ms>', desc: 'Hardware register sampling frequency (default: 250ms)' },
-          { flag: '--json', desc: 'Stream structured JSON telemetry for downstream aggregators' }
-        ],
-        output: `[PYRE] M-SERIES SILICON REGISTER PROBE [darwin-arm64]
-├─ P-Cluster [0..7]: 18.4% active (3.49 GHz) · IPC: 2.81 · 2.4 W
-├─ E-Cluster [0..3]:  4.1% active (2.06 GHz) · IPC: 1.14 · 0.4 W
-├─ Apple Neural Engine: IDLE (0.00 TOPS) · Temp: 38.2°C
-└─ Unified Memory Bus: 68.2 GB/s Bandwidth [14.2% Saturation]`
-      },
-      thermals: {
-        index: 'Thermals & SMC',
-        tag: 'Thermals',
-        title: 'Thermals & Dynamic Fan Curves',
-        desc: 'SMC & ACPI thermistor arrays monitoring heatpipe dissipation, throttling thresholds, and tachometer fan hysteresis curves in real-time.',
-        command: 'pyre sensors --thermals --fan-curve',
-        flags: [
-          { flag: '--sensors <all|die|ambient>', desc: 'Select target thermistor channel groups' },
-          { flag: '--fan-curve', desc: 'Display active PID RPM curve vs target thermal junction' },
-          { flag: '--hysteresis <ms>', desc: 'Adjust sensor damping window to eliminate thermal jitter' },
-          { flag: '--alert-temp <degC>', desc: 'Trigger shell exit code or alert on junction breach' }
-        ],
-        output: `[PYRE] THERMAL JUNCTION & SMC TACHOMETER [14 Sensors Active]
-├─ CPU Die Core Max:   43.2°C [Throttling Junction: 102.0°C]
-├─ GPU Core Average:   41.8°C [Throttling Junction:  98.0°C]
-├─ Left Fan Tachometer: 1,420 RPM [Profile: Whisper / Silent]
-└─ Heatpipe Delta:     +3.6°C / 10s · Dissipation Headroom: 88.4%`
-      },
-      network: {
-        index: 'Kernel Flow',
-        tag: 'Network',
-        title: 'Micro-Packet Flow & Socket Tracking',
-        desc: 'Non-intrusive nettop kernel streaming that correlates delta egress/ingress with precise PID lineages and open file descriptors.',
-        command: 'pyre net --sockets --resolve-pid',
-        flags: [
-          { flag: '--interface <en0|eth0>', desc: 'Bind socket inspection to specific network adapter' },
-          { flag: '--resolve-pid', desc: 'Trace each socket stream to binary path and parent PID' },
-          { flag: '--min-kb <n>', desc: 'Filter out background keep-alives under specified rate' },
-          { flag: '--export-pcap <file>', desc: 'Stream forensic capture directly to Wireshark/pcap' }
-        ],
-        output: `[PYRE] PACKET FLOW DELTA & SOCKET CORRELATION
-├─ [PID 4180 / pyre-daemon] TCP 127.0.0.1:9042 -> ESTABLISHED
-│  └─ Delta In: 4.8 MB/s · Delta Out: 182 KB/s · Latency: 0.2ms
-├─ [PID 1204 / curl]        TLS 192.168.1.14:443 -> CLOSED_WAIT
-└─ Buffer Bloat: 0.11ms · Packet Drops: 0.00% · Retransmits: 0`
-      },
-      power: {
-        index: 'Power Dynamics',
-        tag: 'Power',
-        title: 'Battery Degradation & Cycle Analytics',
-        desc: 'Coulomb counter telemetry projecting battery degradation trajectories, active milliwatt draw, and charging temperature curves.',
-        command: 'pyre power --coulomb --project-decay',
-        flags: [
-          { flag: '--project-decay', desc: 'Statistical projection of capacity loss over 500 charge cycles' },
-          { flag: '--milliwatts', desc: 'Display per-subsystem power draw breakdown in mW' },
-          { flag: '--charge-curve', desc: 'Graph current voltage against cell thermal coefficient' },
-          { flag: '--csv <path>', desc: 'Continuously append battery state logs to CSV' }
-        ],
-        output: `[PYRE] COULOMB POWER CONTROLLER TELEMETRY
-├─ State: DISCHARGING · Voltage: 11.42 V · Total Draw: 4.21 W
-├─ Health: 96.4% · Design Capacity: 70.0 Wh · Current: 67.5 Wh
-├─ Charge Cycles: 142 · Estimated Time to Empty: 11h 42m
-└─ Subsystems: Core (1.8W) · Retina Display (1.2W) · Baseboard (1.2W)`
-      },
-      tui: {
-        index: 'Interactive TUI',
-        tag: 'TUI',
-        title: 'Interactive Terminal Dashboard',
-        desc: 'Full-screen keyboard & mouse-driven TUI. Live sparklines, bar graphs, process trees, interactive kill signals, and 6 built-in colorways.',
-        command: 'pyre live --rate 250ms --theme obsidian',
-        flags: [
-          { flag: '--rate <ms>', desc: 'Sampling and terminal redraw frequency (100ms - 1000ms)' },
-          { flag: '--theme <name>', desc: 'Colorways: obsidian, chalk, solar, emerald, crimson, neon' },
-          { flag: '--mouse', desc: 'Enable full terminal cursor selection, scroll, and click signals' },
-          { flag: '--tree', desc: 'Render hierarchical parent-child process tree view' }
-        ],
-        output: `┌─ Pyre Live Dashboard ─────────────────────── [q] quit  [?] help ┐
-│ CPU: [████████░░░░░░░░░░] 42%   RAM: [████████████░░░] 61% (19.4GB)│
-│ TASKS: 342 total · 4 running · 338 sleeping                     │
-│ PID   NAME          CPU%   MEM%   USER        DISK I/O   STATUS    │
-│ 1942  node-worker   18.2   4.1    somalip     12 MB/s    RUNNING   │
-│ 8841  cargo-build   14.8   8.4    somalip     44 MB/s    RUNNING   │
-└─────────────────────────────────────────────────────────────────┘`
-      },
-      fleet: {
-        index: 'Fleet Aggregator',
-        tag: 'Fleet',
-        title: 'Multi-Host Fleet & Remote SSH',
-        desc: 'Monitor remote servers over SSH or aggregate multiple Darwin, Linux, and Windows nodes into a tiled unified multi-host dashboard.',
-        command: 'pyre fleet --hosts hosts.yaml --tile',
-        flags: [
-          { flag: '--hosts <file.yaml>', desc: 'Configuration containing target SSH endpoints and credentials' },
-          { flag: '--tile', desc: 'Split terminal into adaptive multi-grid monitor layout' },
-          { flag: '--alert-on-disconnect', desc: 'Fire system chime and webhook notification if node drops' },
-          { flag: '--bandwidth-cap <kb>', desc: 'Throttle outbound probe bandwidth on metered links' }
-        ],
-        output: `[PYRE] FLEET MESH AGGREGATOR [4 / 4 Nodes Connected]
-├─ node-01.us-east.pyre.internal [Linux 6.8]  :: CPU 34% · RAM 42% · OK
-├─ node-02.eu-west.pyre.internal [Darwin 23]  :: CPU 12% · RAM 28% · OK
-├─ node-03.ap-east.pyre.internal [Linux 6.8]  :: CPU 88% · RAM 74% · HIGH
-└─ node-04.us-west.pyre.internal [Win32 10]   :: CPU  8% · RAM 19% · OK`
-      },
-      anomalies: {
-        index: 'Anomaly Radar',
-        tag: 'Analytics',
-        title: 'Statistical Anomaly Digest',
-        desc: 'Per-tick continuous CSV logging with rolling window z-score spike detection. Surfaces runaway CPU/memory anomalies automatically.',
-        command: 'pyre anomalies --threshold 2.8 --window 60s',
-        flags: [
-          { flag: '--threshold <z>', desc: 'Statistical Z-score deviation required to trigger an alert' },
-          { flag: '--window <duration>', desc: 'Rolling historical window duration for moving average' },
-          { flag: '--webhook <url>', desc: 'Dispatch structured incident payload to Slack/Discord/PagerDuty' },
-          { flag: '--autokill', desc: 'Optionally terminate runaway processes exceeding safety budget' }
-        ],
-        output: `[PYRE] STATISTICAL SPIKE MODEL [Rolling Window: 60s]
-[ALERT] PID 9201 [ffmpeg] CPU spike z-score: +3.82 > threshold 2.80
-├─ Baseline Mean: 12.4% (±3.1%) · Measured Current: 89.2%
-├─ Memory Delta:  +412 MB in last 10 seconds
-└─ Recommendation: Send SIGTERM or throttle core affinity`
-      },
-      p2p: {
-        index: 'Encrypted P2P',
-        tag: 'Network',
-        title: 'Encrypted P2P Live Streaming',
-        desc: 'Zero-broker TCP streaming over LAN. Hardened with TLS encryption, SHA-256 challenge-response auth, HMAC signing, and audit trails.',
-        command: 'pyre p2p --listen 9042 --tls --auth-hmac',
-        flags: [
-          { flag: '--listen <port>', desc: 'Local TCP port to bind streaming peer listener' },
-          { flag: '--key <secret>', desc: 'Pre-shared HMAC authorization token for client handshakes' },
-          { flag: '--max-peers <n>', desc: 'Maximum concurrent consumer nodes (default: 8)' },
-          { flag: '--compress <zstd|none>', desc: 'On-the-fly streaming payload compression algorithm' }
-        ],
-        output: `[PYRE] P2P BROKERLESS STREAM [Bound on 0.0.0.0:9042]
-├─ Protocol: TLS 1.3 · Cipher: CHACHA20-POLY1305 · SHA-256 Auth
-├─ Connected Peers: 2 active nodes streaming @ 250ms cadence
-└─ Throughput: 14.8 KB/s out · Wire compression ratio: 4.8:1 (zstd)`
-      },
-      web: {
-        index: 'Web Portal',
-        tag: 'Portal',
-        title: 'Web Portal & Native App',
-        desc: 'Instant real-time browser dashboard powered by Server-Sent Events (SSE) on localhost, paired with a lightweight native macOS app window.',
-        command: 'pyre web --port 3000 --open',
-        flags: [
-          { flag: '--port <port>', desc: 'HTTP port for local browser dashboard (default: 3000)' },
-          { flag: '--open', desc: 'Automatically launch default web browser on daemon start' },
-          { flag: '--app', desc: 'Launch ultra-lightweight macOS WebKit companion window' },
-          { flag: '--auth-token <str>', desc: 'Enforce local bearer token authentication header' }
-        ],
-        output: `[PYRE] EMBEDDED HTTP & SSE ENGINE
-├─ Local Dashboard: http://localhost:3000/?token=pyre_dev_8819
-├─ Stream Transport: text/event-stream [250ms tick dispatch]
-└─ Client Session: macOS Safari 17.4 · Latency: 0.4ms`
-      },
-      bench: {
-        index: 'Energy Profiler',
-        tag: 'Energy',
-        title: 'Micro-Benchmarking & Energy Profile',
-        desc: 'Profile arbitrary shell commands with granular milliwatt precision. Measures wall time, multi-core impact, and kWh power draw costs.',
-        command: 'pyre bench --energy --runs 5 -- "cargo build --release"',
-        flags: [
-          { flag: '--energy', desc: 'Measure granular milliwatt-hours and Joules expended' },
-          { flag: '--runs <n>', desc: 'Execute command N times and compute statistical median' },
-          { flag: '--warmup <n>', desc: 'Pre-warm file caches before beginning benchmark ticks' },
-          { flag: '--csv <file>', desc: 'Export high-frequency timeseries power log to CSV' }
-        ],
-        output: `[PYRE] ENERGY & HARDWARE BENCHMARK [5 Runs Completed]
-├─ Command: cargo build --release
-├─ Wall Clock Time:  14.82s (±0.18s) · User: 48.2s · Sys: 3.4s
-├─ Energy Expended:  1,420.8 Joules (0.394 Wh)
-└─ Peak Power Draw:  38.4 W · Peak CPU Junction Temp: 68.4°C`
-      }
+      return `[${s}] ${pct.toString().padStart(2, ' ')}%`;
     };
 
-    const modalBackdrop = document.getElementById('cardDetailModal');
-    const modalCloseBtn = document.getElementById('modalCloseBtn');
-    const modalDoneBtn = document.getElementById('modalDoneBtn');
-    const modalCopyBtn = document.getElementById('modalCopyBtn');
-    const modalCopyText = document.getElementById('modalCopyText');
+    return [
+      '┌' + '─'.repeat(W) + '┐',
+      '│' + pad('SYSTEM SILICON ARCHITECTURE (APPLE M3 MAX)', W, 'center') + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('', W) + '│',
+      '│' + pad('  ┌─ PERFORMANCE CORES ──────────────────────┐', W) + '│',
+      '│' + pad(`  │ CPU-P01 : ${getBar(p1)}       │`, W) + '│',
+      '│' + pad(`  │ CPU-P02 : ${getBar(p2)}       │`, W) + '│',
+      '│' + pad('  └──────────────────────────────────────────┘', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  ┌─ EFFICIENT CORES ────────────────────────┐', W) + '│',
+      '│' + pad(`  │ CPU-E01 : ${getBar(e1)}       │`, W) + '│',
+      '│' + pad(`  │ CPU-E02 : ${getBar(e2)}       │`, W) + '│',
+      '│' + pad('  └──────────────────────────────────────────┘', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  ┌─ NEURAL ENGINE ──────────────────────────┐', W) + '│',
+      '│' + pad('  │ ANE-01  : [▓▓▓▓▓▓▓▓░░░░░░░░]  50% ACTIVE │', W) + '│',
+      '│' + pad('  └──────────────────────────────────────────┘', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  REGISTER PROBE STATUS: OK (0x99482F)', W) + '│',
+      '└' + '─'.repeat(W) + '┘'
+    ].join('\n');
+  }
 
-    let currentModalCommand = '';
+  function renderThermalsASCII(frame) {
+    const temp = (42 + Math.sin(frame * 0.05) * 4).toFixed(1);
+    const rpm = Math.floor(1800 + Math.cos(frame * 0.08) * 200);
+    const waveShift = Math.floor(frame * 0.5) % 20;
 
-    function openCardModal(cardKey) {
-      const data = CARD_METADATA[cardKey];
-      if (!data || !modalBackdrop) return;
-
-      document.getElementById('modalIndex').textContent = data.index;
-      document.getElementById('modalTag').textContent = data.tag;
-      document.getElementById('modalTitle').textContent = data.title;
-      document.getElementById('modalDesc').textContent = data.desc;
-      document.getElementById('modalCommand').textContent = data.command;
-      currentModalCommand = data.command;
-
-      // Render flags list
-      const flagsContainer = document.getElementById('modalFlagsList');
-      flagsContainer.innerHTML = '';
-      data.flags.forEach(item => {
-        const row = document.createElement('div');
-        row.className = 'modal-flag-row';
-        row.innerHTML = `
-          <span class="modal-flag-name">${item.flag}</span>
-          <span class="modal-flag-desc">${item.desc}</span>
-        `;
-        flagsContainer.appendChild(row);
-      });
-
-      // Render output preview
-      document.getElementById('modalOutputPreview').textContent = data.output;
-
-      // Show modal
-      modalBackdrop.classList.add('active');
-      modalBackdrop.setAttribute('aria-hidden', 'false');
-      document.body.style.overflow = 'hidden';
+    let waveStr = '';
+    for (let i = 0; i < 36; i++) {
+      const val = Math.sin((i + waveShift) * 0.3);
+      waveStr += val > 0.5 ? '▲' : val > 0 ? '▵' : val > -0.5 ? '▿' : '▼';
     }
 
-    function closeCardModal() {
-      if (!modalBackdrop) return;
-      modalBackdrop.classList.remove('active');
-      modalBackdrop.setAttribute('aria-hidden', 'true');
-      document.body.style.overflow = '';
+    return [
+      '┌' + '─'.repeat(W) + '┐',
+      '│' + pad('THERMAL SENSOR INTEGRATION', W, 'center') + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('', W) + '│',
+      '│' + pad('/-----------------\\', W, 'center') + '│',
+      '│' + pad('/   PACKAGE TEMP    \\', W, 'center') + '│',
+      '│' + pad(`|      ${temp.padStart(5, ' ')}°C       |`, W, 'center') + '│',
+      '│' + pad('\\   Optimal Range   /', W, 'center') + '│',
+      '│' + pad('\\-----------------/', W, 'center') + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  DISSIPATION WAVE:', W) + '│',
+      '│' + pad(`  ${waveStr}`, W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad(`  FAN 1 (LEFT)  : [████████░░] ${rpm} RPM`, W) + '│',
+      '│' + pad(`  FAN 2 (RIGHT) : [████████░░] ${rpm + 40} RPM`, W) + '│',
+      '│' + pad('  THROTTLE STATE: NONE (MARGIN: +38.5°C)', W) + '│',
+      '└' + '─'.repeat(W) + '┘'
+    ].join('\n');
+  }
+
+  function renderNetworkASCII(frame) {
+    const down = (4.2 + Math.sin(frame * 0.1) * 1.5).toFixed(1);
+    const up = Math.floor(180 + Math.cos(frame * 0.15) * 50);
+
+    const chars = [' ', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let sparkline = '';
+    for (let i = 0; i < 30; i++) {
+      const idx = Math.abs(Math.floor(Math.sin((frame + i) * 0.2) * 7));
+      sparkline += chars[idx];
     }
 
-    // Attach click handlers to all specimen cards with data-modal-card
-    document.querySelectorAll('.specimen-card[data-modal-card]').forEach(card => {
-      card.addEventListener('click', (e) => {
-        // Prevent trigger if clicking on live telemetry copy buttons or links inside
-        if (e.target.closest('a, button')) return;
-        const cardKey = card.getAttribute('data-modal-card');
-        if (cardKey) openCardModal(cardKey);
-      });
-    });
+    return [
+      '┌' + '─'.repeat(W) + '┐',
+      '│' + pad('ACTIVE NETWORK SOCKET MATRIX', W, 'center') + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('  PROTO LOCAL ADDR        REMOTE ADDR  STAT', W) + '│',
+      '│' + pad('  tcp4  192.168.1.4:52109 1.1.1.1:443  ESTAB', W) + '│',
+      '│' + pad('  tcp4  192.168.1.4:52110 8.8.8.8:53   ESTAB', W) + '│',
+      '│' + pad('  udp4  *:68              *:*          LISTEN', W) + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('  LIVE TRAFFIC FLOW:', W) + '│',
+      '│' + pad(`  RX: ${sparkline}`, W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad(`  INGRESS : ↓ ${down.padStart(5, ' ')} MB/s`, W) + '│',
+      '│' + pad(`  EGRESS  : ↑ ${up.toString().padStart(5, ' ')} KB/s`, W) + '│',
+      '└' + '─'.repeat(W) + '┘'
+    ].join('\n');
+  }
 
-    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeCardModal);
-    if (modalDoneBtn) modalDoneBtn.addEventListener('click', closeCardModal);
+  function renderPowerASCII(frame) {
+    const batt = (96.4 - (frame * 0.001) % 5).toFixed(1);
+    const watts = (4.2 + Math.sin(frame * 0.07) * 0.8).toFixed(2);
+    const fillBars = Math.floor((parseFloat(batt) / 100) * 20);
+    const battBar = '█'.repeat(fillBars) + '░'.repeat(20 - fillBars);
 
-    // Click outside dialog to close
-    if (modalBackdrop) {
-      modalBackdrop.addEventListener('click', (e) => {
-        if (e.target === modalBackdrop) closeCardModal();
-      });
+    return [
+      '┌' + '─'.repeat(W) + '┐',
+      '│' + pad('COULOMB COUNTER TELEMETRY', W, 'center') + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('', W) + '│',
+      '│' + pad('  ┌────────────────────────┐┌─┐', W) + '│',
+      '│' + pad(`  │${battBar}││█│  ${batt}%`, W) + '│',
+      '│' + pad('  └────────────────────────┘└─┘', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad(`  POWER DRAW  : ${watts.padStart(5, ' ')} Watts`, W) + '│',
+      '│' + pad('  HEALTH      : 99% (NORMAL)', W) + '│',
+      '│' + pad('  CYCLE COUNT : 42', W) + '│',
+      '│' + pad('  VOLTAGE     : 11.45V', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  [SYS: 1.2W]   [GPU: 0.8W]   [DRAM: 1.1W]', W) + '│',
+      '└' + '─'.repeat(W) + '┘'
+    ].join('\n');
+  }
+
+  function renderInstallASCII(frame) {
+    const loop = frame % 80;
+    const fullCmd = 'npm install -g pyre-cli';
+    const typeLen = Math.min(fullCmd.length, Math.floor(loop * 0.95));
+    const typed = fullCmd.slice(0, typeLen);
+    const blink = (Math.floor(loop / 2) % 2 === 0) ? '█' : ' ';
+    const cmdDisplay = '$ ' + typed + (typeLen < fullCmd.length ? blink : (loop < 28 ? blink : ' '));
+
+    const pct = loop < 24 ? 0 : loop < 55 ? Math.floor(((loop - 24) / 30) * 100) : 100;
+    const len = 18;
+    const filled = Math.floor((pct / 100) * len);
+    const bar = '[' + '█'.repeat(filled) + '░'.repeat(len - filled) + '] ' + String(pct).padStart(3, ' ') + '%';
+
+    const spinChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    const spinner = spinChars[loop % spinChars.length];
+
+    let status, infoLine, actionLine;
+    if (loop < 24) {
+      status = '  STANDBY   awaiting execution...';
+      infoLine = '  REGISTRY  https://registry.npmjs.org';
+      actionLine = '  HINT      installing globally across PATH';
+    } else if (loop < 35) {
+      status = '  ' + spinner + ' FETCH    downloading manifest & tarball';
+      infoLine = '  PACKAGE   pyre-cli@latest';
+      actionLine = '  NETWORK   transferring 1.8 MB (zstd)';
+    } else if (loop < 46) {
+      status = '  ' + spinner + ' EXTRACT  unpacking package binaries';
+      infoLine = '  TARGET    pyre-cli@10.1.0';
+      actionLine = '  CHECKSUM  SHA-512 integrity verified';
+    } else if (loop < 55) {
+      status = '  ' + spinner + ' LINK     creating global binary symlink';
+      infoLine = '  LOCATION  /usr/local/bin/pyre';
+      actionLine = '  SYMLINK   bin/pyre -> dist/index.js';
+    } else {
+      status = '  ✓ STATUS  added 1 package in 0.38s';
+      infoLine = '  BINARY    /usr/local/bin/pyre [READY]';
+      const pulse = (Math.floor(loop / 3) % 2 === 0) ? '►' : '>';
+      actionLine = '  ' + pulse + ' EXECUTE  $ pyre live  (launch TUI)';
     }
 
-    // ESC key closes modal
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && modalBackdrop && modalBackdrop.classList.contains('active')) {
-        closeCardModal();
+    const boxTop = '  ┌─ TERMINAL ' + '─'.repeat(29) + '┐  ';
+    const boxBottom = '  └' + '─'.repeat(40) + '┘  ';
+    const boxMid = '  │ ' + pad(cmdDisplay, 39) + '│  ';
+
+    return [
+      '┌' + '─'.repeat(W) + '┐',
+      '│' + pad('GET PYRE IN SECONDS', W, 'center') + '│',
+      '├' + '─'.repeat(W) + '┤',
+      '│' + pad('', W) + '│',
+      '│' + pad('   _  _ ___  __  __ ', W) + '│',
+      '│' + pad('  | \\| | _ \\|  \\/  |   PACKAGE MANAGER', W) + '│',
+      '│' + pad('  | .` |  _/| |\\/| |   GLOBAL CLI INSTALL', W) + '│',
+      '│' + pad('  |_|\\_|_|  |_|  |_|   v10.1.0 · READY', W) + '│',
+      '│' + pad('', W) + '│',
+      '│' + boxTop + '│',
+      '│' + boxMid + '│',
+      '│' + boxBottom + '│',
+      '│' + pad('', W) + '│',
+      '│' + pad('  PROGRESS  ' + bar, W) + '│',
+      '│' + pad(status, W) + '│',
+      '│' + pad(infoLine, W) + '│',
+      '│' + pad(actionLine, W) + '│',
+      '│' + pad('', W) + '│',
+      '└' + '─'.repeat(W) + '┘'
+    ].join('\n');
+  }
+
+  function updateASCIIArt() {
+    frameCount++;
+    const siliconEl = document.getElementById('ascii-silicon');
+    const thermalsEl = document.getElementById('ascii-thermals');
+    const networkEl = document.getElementById('ascii-network');
+    const powerEl = document.getElementById('ascii-power');
+    const installEl = document.getElementById('ascii-install');
+
+    if (siliconEl) siliconEl.textContent = renderSiliconASCII(frameCount);
+    if (thermalsEl) thermalsEl.textContent = renderThermalsASCII(frameCount);
+    if (networkEl) networkEl.textContent = renderNetworkASCII(frameCount);
+    if (powerEl) powerEl.textContent = renderPowerASCII(frameCount);
+    if (installEl) installEl.textContent = renderInstallASCII(frameCount);
+  }
+
+  setInterval(updateASCIIArt, 100);
+  updateASCIIArt();
+
+  // Landing Page ASCII Fire Simulation (with scroll dissipation)
+  (function initHeroFire() {
+    const fireEl = document.getElementById('ascii-hero-fire');
+    const fireContainer = document.getElementById('hero-fire-container');
+    if (!fireEl || !fireContainer) return;
+
+    const fireChars = '  ..::--==++**##%%@@';
+    const numChars = fireChars.length;
+
+    let fireW = 80;
+    let fireH = 26;
+    let fireBuffer = [];
+
+    function resizeFire() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      // Calculate columns and rows so ASCII fire encompasses the entire viewport screenspace
+      const charWidth = width < 600 ? 7 : width < 1200 ? 8 : 9;
+      const charHeight = 12; // approximate char height in pixels
+      fireW = Math.max(50, Math.floor(width / charWidth));
+      fireH = Math.max(28, Math.floor(height / charHeight));
+      fireBuffer = Array.from({ length: fireH }, () => new Array(fireW).fill(0));
+    }
+
+    resizeFire();
+    window.addEventListener('resize', resizeFire);
+
+    let currentScrollY = 0;
+    let dissipateFactor = 0; // 0 = full, 1 = gone
+
+    function onScroll() {
+      currentScrollY = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+      const heroHeight = window.innerHeight || 800;
+
+      // Dissipates completely across the hero height
+      dissipateFactor = Math.min(1, Math.max(0, currentScrollY / (heroHeight * 0.65)));
+
+      const opacity = Math.max(0, 1 - dissipateFactor * 1.3);
+      fireContainer.style.opacity = opacity.toFixed(3);
+      fireContainer.style.transform = `translateY(${currentScrollY * 0.3}px)`;
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('touchmove', onScroll, { passive: true });
+    onScroll();
+
+    function stepFire() {
+      // If user has scrolled past hero, skip heavy loop
+      if (dissipateFactor >= 0.98) {
+        if (fireEl.textContent !== '') fireEl.textContent = '';
+        requestAnimationFrame(stepFire);
+        return;
+      }
+
+      // Heat bottom row across the entire width of the screen
+      const bottomRow = fireH - 1;
+      const heatMultiplier = Math.max(0, 1 - dissipateFactor * 1.2);
+      const activeWidth = Math.floor(fireW * (1 - dissipateFactor * 0.5));
+      const startX = Math.floor((fireW - activeWidth) / 2);
+      const endX = startX + activeWidth;
+
+      for (let x = 0; x < fireW; x++) {
+        if (x >= startX && x <= endX && heatMultiplier > 0.05) {
+          // Keep heat naturally surging across full width
+          if (Math.random() < 0.85 * heatMultiplier) {
+            const minHeat = Math.floor(numChars * 0.45 * heatMultiplier);
+            const maxHeat = Math.floor((numChars - 1) * heatMultiplier);
+            fireBuffer[bottomRow][x] = Math.floor(minHeat + Math.random() * (maxHeat - minHeat + 1));
+          } else {
+            fireBuffer[bottomRow][x] = 0;
+          }
+        } else {
+          fireBuffer[bottomRow][x] = 0;
+        }
+      }
+
+      // Propagate flame upward and randomly drift/decay
+      for (let y = 0; y < fireH - 1; y++) {
+        for (let x = 0; x < fireW; x++) {
+          const extraDecay = dissipateFactor > 0.2 ? Math.floor(dissipateFactor * 3) : 0;
+          // Gentler decay allows fire to climb and fill the full screen height
+          const decay = (Math.random() < 0.65 ? 1 : 0) + extraDecay;
+          const drift = Math.floor(Math.random() * 3) - 1; // -1, 0, 1
+          const srcX = (x + drift + fireW) % fireW;
+          const srcY = Math.min(fireH - 1, y + 1);
+          const val = fireBuffer[srcY][srcX];
+          fireBuffer[y][x] = val > decay ? val - decay : 0;
+        }
+      }
+
+      // Render ASCII frame
+      let out = '';
+      for (let y = 0; y < fireH; y++) {
+        let line = '';
+        for (let x = 0; x < fireW; x++) {
+          const heat = fireBuffer[y][x];
+          line += fireChars[Math.min(heat, numChars - 1)];
+        }
+        out += line + '\n';
+      }
+
+      fireEl.textContent = out;
+      setTimeout(() => requestAnimationFrame(stepFire), 45);
+    }
+
+    stepFire();
+  })();
+
+  // Navigation & Modal Interactions
+  const docsModal = document.getElementById('docs-modal');
+
+  const heroInstallBtn = document.getElementById('hero-get-started');
+  const heroLearnBtn = document.getElementById('hero-learn-more');
+  const ctaDocsBtn = document.getElementById('cta-docs-btn');
+
+  if (heroInstallBtn) {
+    heroInstallBtn.addEventListener('click', () => {
+      const installSec = document.getElementById('install');
+      if (installSec) {
+        installSec.scrollIntoView({ behavior: 'smooth' });
       }
     });
+  }
 
-    // Modal command copy button
-    if (modalCopyBtn) {
-      modalCopyBtn.addEventListener('click', async () => {
-        if (!currentModalCommand) return;
-        try {
-          await navigator.clipboard.writeText(currentModalCommand);
-        } catch {
-          const ta = document.createElement('textarea');
-          ta.value = currentModalCommand;
-          document.body.appendChild(ta); ta.select();
-          document.execCommand('copy'); document.body.removeChild(ta);
-        }
-        if (modalCopyText) {
-          modalCopyText.textContent = 'Copied!';
-          setTimeout(() => { modalCopyText.textContent = 'Copy'; }, 2000);
-        }
+  if (heroLearnBtn) {
+    heroLearnBtn.addEventListener('click', () => {
+      const siliconSec = document.getElementById('silicon');
+      if (siliconSec) {
+        siliconSec.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  }
+
+  if (ctaDocsBtn && docsModal) {
+    ctaDocsBtn.addEventListener('click', () => {
+      docsModal.showModal();
+    });
+  }
+
+  // Modal close buttons
+  document.querySelectorAll('.modal-close').forEach(closeBtn => {
+    closeBtn.addEventListener('click', () => {
+      const modalId = closeBtn.dataset.closeModal;
+      const modal = document.getElementById(modalId);
+      if (modal && typeof modal.close === 'function') {
+        modal.close();
+      }
+    });
+  });
+
+  // Close modals on clicking backdrop
+  if (docsModal) {
+    docsModal.addEventListener('click', (e) => {
+      const rect = docsModal.getBoundingClientRect();
+      const isInDialog = (
+        rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+        rect.left <= e.clientX && e.clientX <= rect.left + rect.width
+      );
+      if (!isInDialog) {
+        docsModal.close();
+      }
+    });
+  }
+
+  // Tab switching logic for both page and modals
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.dataset.tabGroup;
+      const targetId = btn.dataset.target;
+      if (!group || !targetId) return;
+
+      document.querySelectorAll(`.tab-btn[data-tab-group="${group}"]`).forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
       });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+
+      document.querySelectorAll(`.tab-panel[data-tab-group="${group}"]`).forEach(p => {
+        p.style.display = 'none';
+        p.classList.remove('active');
+      });
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) {
+        targetPanel.style.display = 'block';
+        targetPanel.classList.add('active');
+      }
+    });
+  });
+
+  // Universal copy-to-clipboard functionality
+  function copyTextToClipboard(text, btnElement) {
+    function onSuccess() {
+      if (!btnElement) return;
+      const origContent = btnElement.innerHTML;
+      btnElement.classList.add('copied');
+      btnElement.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span>Copied!</span>
+      `;
+      setTimeout(() => {
+        btnElement.classList.remove('copied');
+        btnElement.innerHTML = origContent;
+      }, 2000);
     }
-  </script>
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopy(text, onSuccess));
+    } else {
+      fallbackCopy(text, onSuccess);
+    }
+  }
+
+  function fallbackCopy(text, onSuccess) {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      onSuccess();
+    } catch (err) {
+      console.error('Copy failed: ', err);
+    }
+  }
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const text = btn.dataset.copy;
+      if (text) {
+        copyTextToClipboard(text, btn);
+      }
+    });
+  });
+</script>
+
+<!-- Documentation Dialog Modal -->
+<dialog class="modal modal-wide" id="docs-modal" aria-labelledby="docs-modal-title">
+  <div class="modal-header">
+    <h3 id="docs-modal-title">
+      <span style="color: #ff6600;">📖</span> Pyre Documentation
+    </h3>
+    <button class="modal-close" data-close-modal="docs-modal" aria-label="Close dialog">✕</button>
+  </div>
+  <div class="modal-body">
+    <p style="color: #a1a1a6; font-size: 14px; margin-bottom: 20px;">
+      Quick reference for CLI commands, live TUI controls, and telemetry features.
+    </p>
+
+    <div class="tab-list" role="tablist">
+      <button class="tab-btn active" data-tab-group="modal-docs" data-target="docs-panel-commands" role="tab" aria-selected="true">CLI Commands</button>
+      <button class="tab-btn" data-tab-group="modal-docs" data-target="docs-panel-keys" role="tab" aria-selected="false">TUI Keybindings</button>
+      <button class="tab-btn" data-tab-group="modal-docs" data-target="docs-panel-p2p" role="tab" aria-selected="false">P2P Streaming</button>
+    </div>
+
+    <!-- Commands Panel -->
+    <div class="tab-panel active" id="docs-panel-commands" data-tab-group="modal-docs">
+      <table class="docs-table">
+        <thead>
+          <tr>
+            <th style="width: 200px;">Command</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>pyre</code></td>
+            <td>Instant formatted terminal snapshot of CPU, Memory, Disk, Net & Thermals</td>
+          </tr>
+          <tr>
+            <td><code>pyre live</code></td>
+            <td>Interactive full-screen TUI dashboard with real-time sparklines & bar graphs</td>
+          </tr>
+          <tr>
+            <td><code>pyre live --interval 1 --log</code></td>
+            <td>1s refresh interval with continuous CSV telemetry logging to disk</td>
+          </tr>
+          <tr>
+            <td><code>pyre web [--port 3000]</code></td>
+            <td>Browser dashboard portal powered by Server-Sent Events (SSE)</td>
+          </tr>
+          <tr>
+            <td><code>pyre fleet &lt;host1&gt; &lt;host2&gt;</code></td>
+            <td>Multi-host aggregated live dashboard over SSH / mesh network</td>
+          </tr>
+          <tr>
+            <td><code>pyre ssh &lt;user@host&gt;</code></td>
+            <td>Stream live stats from a remote machine securely over SSH</td>
+          </tr>
+          <tr>
+            <td><code>pyre anomalies --since 7d</code></td>
+            <td>Statistical z-score spike digest detecting runaway processes</td>
+          </tr>
+          <tr>
+            <td><code>pyre doctor</code></td>
+            <td>Audit permissions, SIP, Gatekeeper, and Apple Silicon SMC sensors</td>
+          </tr>
+          <tr>
+            <td><code>pyre bench "&lt;command&gt;"</code></td>
+            <td>Benchmark command CPU/RAM and compute energy consumption in kWh & Joules</td>
+          </tr>
+          <tr>
+            <td><code>pyre info</code></td>
+            <td>Deep hardware summary: CPU clusters (P/E), RAM, GPU VRAM, battery health</td>
+          </tr>
+          <tr>
+            <td><code>pyre brew</code></td>
+            <td>Package manager health check, cleanup suggestions, and disk cache report</td>
+          </tr>
+          <tr>
+            <td><code>pyre --json</code></td>
+            <td>Export telemetry as structured JSON (also <code>--csv</code>, <code>--html</code>, <code>--md</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Keys Panel -->
+    <div class="tab-panel" id="docs-panel-keys" data-tab-group="modal-docs" style="display: none;">
+      <table class="docs-table">
+        <thead>
+          <tr>
+            <th style="width: 80px;">Key</th>
+            <th>Action</th>
+            <th style="width: 80px;">Key</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="docs-key">q</span></td>
+            <td>Quit live dashboard</td>
+            <td><span class="docs-key">/</span></td>
+            <td>Filter processes (search-as-you-type)</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">p</span></td>
+            <td>Pause / resume refresh</td>
+            <td><span class="docs-key">k</span></td>
+            <td>Process kill mode (enter PID)</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">d</span></td>
+            <td>Toggle sensor detail</td>
+            <td><span class="docs-key">S</span></td>
+            <td>Select kill signal (SIGTERM, SIGKILL...)</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">g</span> / <span class="docs-key">b</span></td>
+            <td>Toggle graphs / cycle sparkline ↔ bar</td>
+            <td><span class="docs-key">t</span></td>
+            <td>Toggle process tree view</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">s</span></td>
+            <td>Cycle sort (CPU, Mem, PID, Runtime)</td>
+            <td><span class="docs-key">1</span>–<span class="docs-key">0</span></td>
+            <td>Jump directly to panel</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">c</span></td>
+            <td>Open visual theme customizer (6 themes)</td>
+            <td><span class="docs-key">←</span> / <span class="docs-key">→</span></td>
+            <td>Next / previous panel tab</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">e</span></td>
+            <td>Export snapshot (JSON, CSV, HTML, MD)</td>
+            <td><span class="docs-key">+</span> / <span class="docs-key">-</span></td>
+            <td>Increase / decrease refresh interval</td>
+          </tr>
+          <tr>
+            <td><span class="docs-key">l</span></td>
+            <td>Toggle continuous CSV logging</td>
+            <td><span class="docs-key">r</span></td>
+            <td>Start / stop P2P live stream server</td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size: 12px; color: #86868b; margin-top: 12px;">Mouse support is enabled by default: click tabs or scroll inside process lists.</p>
+    </div>
+
+    <!-- P2P Panel -->
+    <div class="tab-panel" id="docs-panel-p2p" data-tab-group="modal-docs" style="display: none;">
+      <p style="font-size: 13.5px; color: #a1a1a6; margin-bottom: 14px;">Stream real-time hardware telemetry directly over your LAN without third-party brokers:</p>
+      
+      <div style="font-size: 12px; color: #a1a1a6; font-weight: 600; text-transform: uppercase;">1. Server Host Machine:</div>
+      <div class="code-block">
+        <code>pyre p2p server --p2p-password "secret" --p2p-port 9876</code>
+        <button class="copy-btn" data-copy="pyre p2p server --p2p-password &quot;secret&quot; --p2p-port 9876" aria-label="Copy command">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span>Copy</span>
+        </button>
+      </div>
+
+      <div style="font-size: 12px; color: #a1a1a6; font-weight: 600; text-transform: uppercase; margin-top: 16px;">2. Client Receiver Machine:</div>
+      <div class="code-block">
+        <code>pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-password "secret" --p2p-port 9876</code>
+        <button class="copy-btn" data-copy="pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-password &quot;secret&quot; --p2p-port 9876" aria-label="Copy command">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          <span>Copy</span>
+        </button>
+      </div>
+      <p class="install-platform-note">Includes TLS encryption (<code>--p2p-tls</code>) and HMAC-SHA256 challenge authentication.</p>
+    </div>
+
+    <div class="modal-footer-actions">
+      <a href="https://github.com/somalip/pyre#readme" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+        <span>Open Full Documentation on GitHub</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+      </a>
+    </div>
+  </div>
+</dialog>
+
 </body>
 </html>
