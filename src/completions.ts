@@ -8,6 +8,8 @@ _pyre() {
         'info:Display static system overview'
         'doctor:Run system permissions and diagnostic checks'
         'web:Launch web dashboard server'
+        'ui:Launch Activity Monitor UI window'
+        'launch:Launch Activity Monitor UI window'
         'config:Show or reset configuration options'
         'p2p:P2P streaming server or client'
         'ssh:Stream metrics over SSH'
@@ -56,38 +58,38 @@ _pyre_completions() {
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
-    commands="live info doctor web config p2p ssh bench completions"
+    commands="live info doctor web ui launch config p2p ssh bench completions"
     opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit"
 
-    case "\${prev}" in
+    case "${prev}" in
         --theme)
-            COMPREPLY=( $(compgen -W "default dracula cyberpunk monochrome nord gruvbox" -- \${cur}) )
+            COMPREPLY=( $(compgen -W "default dracula cyberpunk monochrome nord gruvbox" -- ${cur}) )
             return 0
             ;;
         --sort)
-            COMPREPLY=( $(compgen -W "cpu mem pid user command state threads runtime" -- \${cur}) )
+            COMPREPLY=( $(compgen -W "cpu mem pid user command state threads runtime" -- ${cur}) )
             return 0
             ;;
         --temp-unit)
-            COMPREPLY=( $(compgen -W "c f" -- \${cur}) )
+            COMPREPLY=( $(compgen -W "c f" -- ${cur}) )
             return 0
             ;;
         config)
-            COMPREPLY=( $(compgen -W "show reset" -- \${cur}) )
+            COMPREPLY=( $(compgen -W "show reset" -- ${cur}) )
             return 0
             ;;
         p2p)
-            COMPREPLY=( $(compgen -W "server connect" -- \${cur}) )
+            COMPREPLY=( $(compgen -W "server connect" -- ${cur}) )
             return 0
             ;;
     esac
 
-    if [[ \${cur} == -* ]] ; then
-        COMPREPLY=( $(compgen -W "\${opts}" -- \${cur}) )
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
         return 0
     fi
 
-    COMPREPLY=( $(compgen -W "\${commands}" -- \${cur}) )
+    COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
 }
 
 complete -F _pyre_completions pyre
@@ -101,6 +103,8 @@ complete -c pyre -n "__fish_use_subcommand" -a live -d "Start interactive live m
 complete -c pyre -n "__fish_use_subcommand" -a info -d "Display static system overview"
 complete -c pyre -n "__fish_use_subcommand" -a doctor -d "Run system diagnostics"
 complete -c pyre -n "__fish_use_subcommand" -a web -d "Launch web dashboard server"
+complete -c pyre -n "__fish_use_subcommand" -a ui -d "Launch Activity Monitor UI window"
+complete -c pyre -n "__fish_use_subcommand" -a launch -d "Launch Activity Monitor UI window"
 complete -c pyre -n "__fish_use_subcommand" -a config -d "Show or reset configuration options"
 complete -c pyre -n "__fish_use_subcommand" -a p2p -d "P2P streaming mode"
 complete -c pyre -n "__fish_use_subcommand" -a completions -d "Generate shell completions"
@@ -121,7 +125,7 @@ export function generatePowerShellCompletions(): string {
   return `# PowerShell completion for pyre
 Register-ArgumentCompleter -Native -CommandName pyre -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $commands = @('live', 'check', 'pipe', 'stress', 'ui', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain')
+    $commands = @('live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain')
     $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
 
     $elements = $commandAst.CommandElements

@@ -103,7 +103,7 @@ program.addHelpText('after', `
    check                          One-line plain-English health summary
    pipe                           Continuous newline-delimited JSON stream for scripting
    stress                         Synthetic CPU/GPU load generator
-   ui                             Launch the live UI dashboard window
+   ui, launch ui                  Launch the native Activity Monitor UI dashboard window
    web                            Serve an auto-refreshing live web portal
    ssh <host>                     Stream live stats from a remote host over SSH
    fleet <host1> [host2]...       Multi-host live dashboard monitoring multiple hosts
@@ -527,8 +527,13 @@ async function main() {
     return;
   }
 
-  if (cmd === 'ui') {
+  if (cmd === 'ui' || (cmd === 'launch' && (!program.args[1] || program.args[1] === 'ui'))) {
     await runUiCommand();
+    return;
+  }
+
+  if (cmd === 'launch' && program.args[1] === 'web') {
+    await runWebCommand();
     return;
   }
 
@@ -1023,6 +1028,26 @@ async function runWebCommand(): Promise<number> {
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
       });
       res.end(JSON.stringify(data, null, 2));
+    } else if (url.startsWith('/api/kill')) {
+      const parsedUrl = new URL(url, 'http://localhost');
+      const pidStr = parsedUrl.searchParams.get('pid');
+      const signal = (parsedUrl.searchParams.get('signal') || 'SIGTERM').toUpperCase();
+      const pid = parseInt(pidStr || '', 10);
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      });
+      if (!pid || isNaN(pid)) {
+        res.end(JSON.stringify({ success: false, error: 'Invalid PID' }));
+        return;
+      }
+      try {
+        process.kill(pid, signal as NodeJS.Signals);
+        res.end(JSON.stringify({ success: true, pid, signal }));
+      } catch (err: any) {
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
     } else {
       res.writeHead(404);
       res.end('Not found');
@@ -1116,8 +1141,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: rect,
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = isCompact ? "Pyre Widget" : "Pyre"
-        window.minSize = isCompact ? NSSize(width: 320, height: 200) : NSSize(width: 800, height: 600)
+        window.title = isCompact ? "Pyre Widget" : "Activity Monitor"
+        window.minSize = isCompact ? NSSize(width: 320, height: 200) : NSSize(width: 860, height: 560)
         if isAlwaysOnTop {
             window.level = .floating
         }

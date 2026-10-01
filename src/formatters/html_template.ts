@@ -4,651 +4,1673 @@ export function getDashboardHtml(): string {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Pyre</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<title>Activity Monitor</title>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg: #000000;
-  --bg1: #0a0a0a;
-  --bg2: #141414;
-  --bg3: rgba(255,255,255,0.05);
-  --border: #333333;
-  --border2: #444444;
-  --text: #ffffff;
-  --text2: #aaaaaa;
-  --text3: #666666;
-  --accent: #ffffff;
-  --accent2: #dddddd;
-  --cyan: #ffffff;
-  --green: #ffffff;
-  --yellow: #bbbbbb;
-  --red: #dddddd;
-  --orange: #cccccc;
-  --purple: #eeeeee;
-  --glow: rgba(255,255,255,0.15);
-  --font: 'Inter', -apple-system, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-window: #1e1e1e;
+  --bg-toolbar: #2c2c2e;
+  --bg-surface: #252528;
+  --bg-surface-hover: rgba(255, 255, 255, 0.05);
+  --bg-table-header: #28282a;
+  --bg-table-alt: rgba(255, 255, 255, 0.02);
+  --bg-selection: #007aff;
+  --text-selection: #ffffff;
+  --border-color: #38383a;
+  --border-light: rgba(255, 255, 255, 0.1);
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #636366;
+  --mac-blue: #007aff;
+  --mac-green: #34c759;
+  --mac-yellow: #ff9f0a;
+  --mac-red: #ff453a;
+  --mac-purple: #af52de;
+  --mac-teal: #64d2ff;
+  --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
 }
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--font);font-size:12px;}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-window);
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
 body {
-  background-image: radial-gradient(var(--bg3) 1px, transparent 1px);
-  background-size: 20px 20px;
-  display:flex;flex-direction:column;height:100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-#titlebar{
-  height:42px;min-height:42px;-webkit-app-region:drag;
-  display:flex;align-items:center;padding:0 16px;
-  border-bottom:1px solid var(--border);
-  background:rgba(5,5,8,0.8);backdrop-filter:blur(10px);
-  z-index:100;
+/* Unified macOS Toolbar */
+#toolbar {
+  height: 52px;
+  min-height: 52px;
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  gap: 12px;
+  z-index: 50;
+  -webkit-app-region: drag;
 }
-#titlebar-logo{
-  font-family:var(--mono);font-size:14px;font-weight:700;
-  color:var(--cyan);margin-right:24px;text-transform:uppercase;
-  letter-spacing:0.1em;
+
+.toolbar-left, .toolbar-center, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
 }
-#titlebar-host{font-family:var(--mono);font-size:11px;color:var(--text2);flex:1;}
-#conn-badge{display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--text2);-webkit-app-region:no-drag;}
-.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
-.conn-dot.offline{background:var(--red);box-shadow:0 0 8px var(--red);animation:none;}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 
-#tabbar{
-  display:flex;align-items:center;gap:4px;padding:6px 14px 0;
-  border-bottom:1px solid var(--border);
-  background:rgba(10,12,22,0.8);overflow-x:auto;-webkit-app-region:no-drag;
+.toolbar-center {
+  flex: 1;
+  justify-content: center;
 }
-#tabbar::-webkit-scrollbar{display:none}
-.tab{
-  padding:8px 16px;font-size:11px;font-family:var(--mono);color:var(--text3);
-  cursor:pointer;white-space:nowrap;user-select:none;
-  border-bottom:2px solid transparent;transition:all 0.2s;
-  text-transform:uppercase;font-weight:600;
+
+/* Traffic Lights (Visual Mac Touch) */
+.mac-traffic-lights {
+  display: flex;
+  gap: 8px;
+  margin-right: 8px;
 }
-.tab:hover{color:var(--text2);background:var(--bg3);}
-.tab.active{color:var(--accent);border-bottom:2px solid var(--accent);background:linear-gradient(0deg, rgba(255,255,255,0.1), transparent);}
-.tab-key{opacity:0.5;margin-right:6px;}
-
-#main{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px;display:flex;flex-direction:column;}
-#main::-webkit-scrollbar{width:8px}
-#main::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-
-#statusbar{
-  height:28px;min-height:28px;display:flex;align-items:center;padding:0 16px;gap:20px;
-  font-size:10px;color:var(--text3);border-top:1px solid var(--border);
-  background:var(--bg);font-family:var(--mono);
+.traffic-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  position: relative;
 }
-.sb-item{display:flex;align-items:center;gap:6px;}
-.sb-sep{color:var(--border);}
-.up-val{color:var(--text);}
+.traffic-close { background: #ff5f56; border: 1px solid #e0443e; }
+.traffic-min { background: #ffbd2e; border: 1px solid #dea123; }
+.traffic-zoom { background: #27c93f; border: 1px solid #1aab29; }
 
-/* btop cards */
-.card{
-  background:var(--bg1);
-  border:1px solid var(--border);
-  border-radius:6px;
-  padding:16px;
-  position:relative;
-  margin-top:12px;
-  transition:border-color 0.2s, box-shadow 0.2s;
-  display:flex;flex-direction:column;
+/* macOS Toolbar Push Buttons */
+.mac-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  background: #3a3a3c;
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
 }
-.card:hover{border-color:var(--cyan);box-shadow:0 0 10px rgba(255,255,255,0.05);}
-.card-title{
-  position:absolute;top:-9px;left:12px;
-  background:var(--bg);
-  padding:0 8px;font-size:11px;font-family:var(--mono);font-weight:700;
-  color:var(--accent);text-transform:uppercase;
-  display:flex;align-items:center;gap:6px;
+.mac-btn:hover:not(:disabled) {
+  background: #48484a;
+  border-color: #545458;
 }
-.card-title::before{content:"";display:block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent);}
+.mac-btn:active:not(:disabled) {
+  background: #323234;
+}
+.mac-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.mac-btn-icon {
+  width: 28px;
+  padding: 0;
+}
+.mac-btn-danger {
+  background: rgba(255, 69, 58, 0.2);
+  border-color: rgba(255, 69, 58, 0.4);
+  color: #ff6961;
+}
+.mac-btn-danger:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.35);
+  border-color: var(--mac-red);
+  color: #fff;
+}
+.mac-btn-primary {
+  background: var(--mac-blue);
+  border-color: #0062cc;
+  color: #fff;
+}
+.mac-btn-primary:hover:not(:disabled) {
+  background: #006ee6;
+}
 
-/* Grid System */
-.grid-2x2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; }
-.panel-row { display:flex; gap:12px; margin-bottom:12px; }
-.panel-col { display:flex; flex-direction:column; gap:12px; flex:1; }
-.detail-split { display:flex; gap:16px; height:100%; }
-.detail-left { flex:6; display:flex; flex-direction:column; gap:12px; }
-.detail-right { flex:4; display:flex; flex-direction:column; gap:12px; }
-.detail-full { display:flex; flex-direction:column; gap:12px; height:100%; }
+/* macOS Segmented Control Tabs */
+.mac-segmented {
+  display: inline-flex;
+  background: #1c1c1e;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.mac-seg-item {
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.mac-seg-item:hover:not(.active) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+.mac-seg-item.active {
+  background: #636366;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
 
-/* Stats */
-.stat{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);}
-.stat:last-child{border-bottom:none;}
-.stat-label{font-size:11px;color:var(--text2);}
-.stat-val{font-family:var(--mono);font-size:12px;color:var(--text);font-weight:500;}
-.big-metric{text-align:center;padding:20px 0;}
-.big-val{font-family:var(--mono);font-size:48px;font-weight:700;color:var(--cyan);text-shadow:0 0 15px rgba(255,255,255,0.3);}
-.big-unit{font-family:var(--mono);font-size:14px;color:var(--text2);margin-top:8px;}
+/* Filter Dropdown */
+.mac-select {
+  height: 28px;
+  border-radius: 6px;
+  background: #3a3a3c;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: 11px;
+  padding: 0 8px;
+  outline: none;
+  cursor: pointer;
+}
+.mac-select:hover {
+  background: #48484a;
+}
 
-/* Gauges */
-.gauge-wrap{margin:8px 0;}
-.gauge-header{display:flex;justify-content:space-between;margin-bottom:6px;font-size:11px;font-family:var(--mono);}
-.gauge-pct{font-weight:600;}
-.gauge-track{height:20px;background:var(--bg2);border-radius:4px;overflow:hidden;position:relative;border:1px solid var(--border);}
-.gauge-fill{height:100%;transition:width 0.4s ease;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;font-family:var(--mono);font-size:10px;font-weight:700;color:#000;}
-.gauge-fill.ok{background:linear-gradient(90deg,var(--text),#999);}
-.gauge-fill.warn{background:linear-gradient(90deg,var(--text2),#666);}
-.gauge-fill.crit{background:linear-gradient(90deg,var(--text3),#333);}
+/* Search Field */
+.mac-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.mac-search-icon {
+  position: absolute;
+  left: 8px;
+  width: 13px;
+  height: 13px;
+  fill: var(--text-secondary);
+  pointer-events: none;
+}
+.mac-search-input {
+  height: 28px;
+  width: 170px;
+  background: #1c1c1e;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0 24px 0 26px;
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: 12px;
+  outline: none;
+  transition: width 0.2s, border-color 0.2s;
+}
+.mac-search-input:focus {
+  width: 210px;
+  border-color: var(--mac-blue);
+  box-shadow: 0 0 0 1px var(--mac-blue);
+}
+.mac-search-clear {
+  position: absolute;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  color: #000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  line-height: 1;
+}
 
-/* SVG Rings */
-.ring-container { display:flex; justify-content:space-around; padding:20px 0; background:var(--bg1); border:1px solid var(--border); border-radius:6px; margin-bottom:12px; }
-.ring-box { display:flex; flex-direction:column; align-items:center; gap:10px; }
-.ring-title { font-family:var(--mono); font-size:11px; color:var(--text2); font-weight:700; text-transform:uppercase; }
-.svg-ring { position:relative; width:100px; height:100px; }
-.svg-ring.large { width:200px; height:200px; }
-.svg-ring svg { transform:rotate(-90deg); width:100%; height:100%; }
-.ring-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-.ring-val { font-family:var(--mono); font-size:22px; font-weight:700; }
-.svg-ring.large .ring-val { font-size:42px; }
+/* Main Split View */
+#split-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
 
-/* Sparklines */
-.spark-wrap { flex:1; min-height:80px; display:flex; flex-direction:column; margin-top:8px; }
-.spark-label { font-family:var(--mono); font-size:10px; color:var(--text3); margin-bottom:4px; }
-canvas.spark { width:100%; height:80px; display:block; border-radius:4px; background:var(--bg2); border:1px solid var(--border); }
-canvas.spark.large { height:200px; }
+/* Top Process Table Area */
+#table-container {
+  flex: 62;
+  min-height: 160px;
+  overflow-y: auto;
+  overflow-x: auto;
+  background: var(--bg-window);
+  position: relative;
+}
+#table-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+#table-container::-webkit-scrollbar-track {
+  background: var(--bg-window);
+}
+#table-container::-webkit-scrollbar-thumb {
+  background: #424245;
+  border-radius: 5px;
+  border: 2px solid var(--bg-window);
+}
 
-/* Core Grid */
-.core-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(30px, 1fr)); gap:6px; margin-top:12px; }
-.core-col { display:flex; flex-direction:column; gap:4px; align-items:center; }
-.core-bar { width:100%; height:100px; background:var(--bg2); border-radius:4px; display:flex; align-items:flex-end; overflow:hidden; border:1px solid var(--border); }
-.core-fill { width:100%; transition:height 0.3s; }
-.core-fill.ok { background:linear-gradient(0deg,var(--text),#999); }
-.core-fill.warn { background:linear-gradient(0deg,var(--text2),#666); }
-.core-fill.crit { background:linear-gradient(0deg,var(--text3),#333); }
-.core-lbl { font-family:var(--mono); font-size:9px; color:var(--text2); }
+table.mac-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+table.mac-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-table-header);
+}
+table.mac-table th {
+  padding: 6px 10px;
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+table.mac-table th:first-child {
+  text-align: left;
+}
+table.mac-table th:hover {
+  background: #323235;
+  color: var(--text-primary);
+}
+table.mac-table th .sort-caret {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 8px;
+  color: var(--mac-blue);
+}
 
-/* Table */
-.table-wrap { flex:1; overflow-y:auto; border:1px solid var(--border); border-radius:6px; background:var(--bg1); }
-table.proc { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:11px; text-align:left; }
-table.proc thead th { position:sticky; top:0; background:var(--bg2); padding:8px 12px; color:var(--accent); font-weight:700; text-transform:uppercase; border-bottom:1px solid var(--border); cursor:pointer; user-select:none; z-index:10; }
-table.proc thead th:hover { color:var(--cyan); background:var(--border); }
-table.proc tbody tr { border-bottom:1px solid var(--border); cursor:default; }
-table.proc tbody tr:nth-child(even) { background:rgba(255,255,255,0.01); }
-table.proc tbody tr:hover { background:var(--bg2); }
-table.proc td { padding:6px 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:250px; }
-.proc-cmd { color:var(--text); }
-.table-wrap::-webkit-scrollbar { width:8px; }
-.table-wrap::-webkit-scrollbar-thumb { background:var(--border); }
+table.mac-table tbody tr {
+  height: 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  cursor: default;
+}
+table.mac-table tbody tr:nth-child(even) {
+  background: var(--bg-table-alt);
+}
+table.mac-table tbody tr:hover {
+  background: var(--bg-surface-hover);
+}
+table.mac-table tbody tr.selected {
+  background: var(--bg-selection) !important;
+  color: var(--text-selection) !important;
+}
+table.mac-table tbody tr.selected td {
+  color: var(--text-selection) !important;
+}
 
-/* Helpers */
-.flex-row { display:flex; gap:12px; }
-.flex-1 { flex:1; }
-.mb-12 { margin-bottom:12px; }
-.txt-green { color:var(--green); }
-.txt-yellow { color:var(--yellow); }
-.txt-red { color:var(--red); }
-.txt-cyan { color:var(--cyan); }
-.txt-purple { color:var(--purple); }
+table.mac-table td {
+  padding: 3px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+table.mac-table td.col-name {
+  text-align: left;
+  font-family: var(--font-system);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.proc-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: #3a3a3c;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+}
+.proc-icon.system { background: #5856d6; }
+.proc-icon.user { background: #007aff; }
 
-/* Chips */
-.chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
-.chip { padding:6px 12px; border-radius:4px; font-family:var(--mono); font-size:11px; border:1px solid var(--border); background:var(--bg2); }
-.chip.ok { border-color:var(--green); color:var(--green); }
-.chip.warn { border-color:var(--yellow); color:var(--yellow); }
-.chip.crit { border-color:var(--red); color:var(--red); }
+/* Horizontal Split Divider */
+#split-divider {
+  height: 4px;
+  min-height: 4px;
+  background: #2a2a2d;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  cursor: row-resize;
+  position: relative;
+  z-index: 20;
+}
+#split-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 1px;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 2px;
+  background: #4a4a4d;
+  border-radius: 1px;
+}
 
-.anomaly { display:flex; gap:12px; padding:12px; border:1px solid var(--red); background:rgba(255,255,255,0.1); border-radius:6px; margin-bottom:12px; }
-.anomaly-icon { font-size:20px; }
-.anomaly-title { font-family:var(--mono); font-weight:700; color:var(--red); font-size:12px; }
-.anomaly-desc { font-family:var(--mono); font-size:11px; color:var(--text); margin-top:4px; }
+/* Bottom Hardware Dashboard Panels */
+#bottom-panel {
+  flex: 38;
+  min-height: 160px;
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px 16px;
+  position: relative;
+}
 
-.view { display:none; height:100%; flex-direction:column; }
-.view.active { display:flex; }
-#view-content { flex:1; display:flex; flex-direction:column; animation:fadeIn 0.2s ease; height:100%; }
-@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.panel-content {
+  display: none;
+  height: 100%;
+  width: 100%;
+  gap: 20px;
+}
+.panel-content.active {
+  display: flex;
+}
 
+/* Left / Right Pane Layout */
+.pane-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.pane-stats {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: center;
+}
+.pane-graph {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #19191b;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* Stat Rows */
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+.stat-k {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.stat-v {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Canvas Graph Styling */
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.graph-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.graph-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.legend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+canvas.mac-canvas {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: block;
+}
+
+/* Memory Pressure Badge */
+.pressure-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #1c1c1e;
+  border: 1px solid var(--border-color);
+}
+.pressure-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mac-green);
+  box-shadow: 0 0 8px var(--mac-green);
+}
+.pressure-dot.warn { background: var(--mac-yellow); box-shadow: 0 0 8px var(--mac-yellow); }
+.pressure-dot.crit { background: var(--mac-red); box-shadow: 0 0 8px var(--mac-red); }
+.pressure-text {
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* Status Bar */
+#statusbar {
+  height: 24px;
+  min-height: 24px;
+  background: #1a1a1c;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  z-index: 40;
+}
+.sb-left, .sb-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.sb-live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sb-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mac-green);
+}
+.sb-live-dot.offline {
+  background: var(--mac-red);
+}
+
+/* Modal Sheets */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-backdrop.open {
+  display: flex;
+  animation: fadeIn 0.15s ease-out;
+}
+.mac-sheet {
+  background: #252528;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  border-radius: 10px;
+  overflow: hidden;
+  max-width: 90vw;
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-quit-box { width: 380px; padding: 20px; text-align: center; }
+.modal-inspect-box { width: 520px; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideDown { from { transform: translateY(-16px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+.sheet-header {
+  height: 40px;
+  background: #2c2c2e;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+.sheet-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.sheet-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+.sheet-close-btn:hover { color: #fff; }
+.sheet-body {
+  padding: 16px;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+.sheet-footer {
+  padding: 12px 16px;
+  background: #202022;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Quit Sheet Specific */
+.quit-icon-wrap {
+  margin: 0 auto 12px;
+  width: 54px;
+  height: 54px;
+}
+.quit-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.quit-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 20px;
+}
+
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(40, 40, 44, 0.95);
+  border: 1px solid var(--border-color);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: all 0.25s ease;
+  pointer-events: none;
+  z-index: 2000;
+}
+#toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Disk Mount Meter */
+.disk-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #1c1c1e;
+  overflow: hidden;
+  margin-top: 3px;
+  border: 1px solid var(--border-color);
+}
+.disk-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--mac-blue), #5ac8fa);
+}
 </style>
 </head>
 <body>
-<div id="titlebar">
-  <span id="titlebar-logo">Pyre</span>
-  <span id="titlebar-host">Loading...</span>
-  <div id="conn-badge"><div class="conn-dot" id="conn-dot"></div><span id="conn-text">Connecting</span></div>
-</div>
-<div id="tabbar">
-  <div class="tab active" data-view="overview" onclick="switchView('overview')"><span class="tab-key">1</span>Overview</div>
-  <div class="tab" data-view="cpu" onclick="switchView('cpu')"><span class="tab-key">2</span>CPU</div>
-  <div class="tab" data-view="memory" onclick="switchView('memory')"><span class="tab-key">3</span>Memory</div>
-  <div class="tab" data-view="gpu" onclick="switchView('gpu')"><span class="tab-key">4</span>GPU</div>
-  <div class="tab" data-view="power" onclick="switchView('power')"><span class="tab-key">5</span>Power</div>
-  <div class="tab" data-view="battery" onclick="switchView('battery')"><span class="tab-key">6</span>Battery</div>
-  <div class="tab" data-view="thermal" onclick="switchView('thermal')"><span class="tab-key">7</span>Thermal</div>
-  <div class="tab" data-view="network" onclick="switchView('network')"><span class="tab-key">8</span>Network</div>
-  <div class="tab" data-view="disk" onclick="switchView('disk')"><span class="tab-key">9</span>Disk</div>
-  <div class="tab" data-view="processes" onclick="switchView('processes')"><span class="tab-key">P</span>Processes</div>
-  <div class="tab" data-view="anomalies" onclick="switchView('anomalies')"><span class="tab-key">A</span>Anomalies</div>
-</div>
-<div id="main">
-  <div id="view-content"></div>
-</div>
-<div id="statusbar">
-  <div class="sb-item">⟳ <span id="sb-refresh" class="up-val">–</span></div><div class="sb-sep">│</div>
-  <div class="sb-item">↑ <span id="sb-uptime" class="up-val">–</span></div><div class="sb-sep">│</div>
-  <div class="sb-item">CPU <span id="sb-cpu" class="up-val">–</span></div><div class="sb-sep">│</div>
-  <div class="sb-item">MEM <span id="sb-mem" class="up-val">–</span></div><div class="sb-sep">│</div>
-  <div class="sb-item">BATT <span id="sb-batt" class="up-val">–</span></div><div class="sb-sep">│</div>
-  <div class="sb-item">PROCS <span id="sb-procs" class="up-val">–</span></div>
-</div>
-<script>
-let currentView = 'overview';
-let latestData = null;
-const history = { cpu:[], mem:[], temp:[], rxRate:[], txRate:[], power:[] };
-const MAX_HIST = 100;
-let procSort = { col:'cpu', dir:'desc' };
 
-function pushHist(arr, val) { arr.push(val||0); if(arr.length>MAX_HIST)arr.shift(); }
-function fmtBytes(b, dec=2) {
-  if(!b) return '0 B';
-  const k=1024, s=['B','KB','MB','GB','TB'];
-  const i=Math.floor(Math.log(Math.abs(b))/Math.log(k));
-  return parseFloat((b/Math.pow(k,i)).toFixed(dec))+' '+s[i];
-}
-function statusCls(v) { return v>85?'crit':v>65?'warn':'ok'; }
-function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+<!-- Unified macOS Toolbar -->
+<header id="toolbar">
+  <div class="toolbar-left">
+    <!-- Traffic lights simulation -->
+    <div class="mac-traffic-lights">
+      <div class="traffic-dot traffic-close" title="Close"></div>
+      <div class="traffic-dot traffic-min" title="Minimize"></div>
+      <div class="traffic-dot traffic-zoom" title="Zoom"></div>
+    </div>
 
-function svgRing(val, max, label, unit='', size=100) {
-  const r = size*0.4, circ = 2*Math.PI*r;
-  const pct = Math.min(100, Math.max(0, (val/max)*100));
-  const off = circ*(1 - pct/100);
-  const cls = statusCls(pct);
-  const col = cls==='crit'?'var(--text3)':cls==='warn'?'var(--text2)':'var(--text)';
-  return \`<div class="ring-box">
-    <div class="ring-title">\${label}</div>
-    <div class="svg-ring \${size>150?'large':''}">
-      <svg viewBox="0 0 \${size} \${size}">
-        <circle cx="\${size/2}" cy="\${size/2}" r="\${r}" fill="none" stroke="var(--border)" stroke-width="\${size*0.08}"/>
-        <circle cx="\${size/2}" cy="\${size/2}" r="\${r}" fill="none" stroke="\${col}" stroke-width="\${size*0.08}"
-          stroke-dasharray="\${circ}" stroke-dashoffset="\${off}" stroke-linecap="round"
-          style="transition:stroke-dashoffset 0.5s ease" />
+    <!-- Stop process button (octagon with ✕) -->
+    <button id="btn-stop" class="mac-btn mac-btn-icon mac-btn-danger" title="Force a process to quit" disabled onclick="confirmQuitSelected()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2zm1.41 2L4 8.27v7.46L8.27 20h7.46L20 15.73V8.27L15.73 4H9.27zM12 10.59l3.3-3.3 1.41 1.42L13.41 12l3.3 3.29-1.41 1.42L12 13.41l-3.29 3.3-1.42-1.42L10.59 12l-3.3-3.29 1.42-1.42L12 10.59z"/>
       </svg>
-      <div class="ring-center">
-        <div class="ring-val" style="color:\${col}">\${val.toFixed(1)}\${unit}</div>
+    </button>
+
+    <!-- Inspect process button (ⓘ) -->
+    <button id="btn-inspect" class="mac-btn mac-btn-icon" title="Inspect a process" disabled onclick="openInspectorSelected()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Segmented Control Tabs (Center) -->
+  <div class="toolbar-center">
+    <nav class="mac-segmented" role="tablist">
+      <div class="mac-seg-item active" data-tab="cpu" onclick="switchTab('cpu')">CPU</div>
+      <div class="mac-seg-item" data-tab="memory" onclick="switchTab('memory')">Memory</div>
+      <div class="mac-seg-item" data-tab="energy" onclick="switchTab('energy')">Energy</div>
+      <div class="mac-seg-item" data-tab="disk" onclick="switchTab('disk')">Disk</div>
+      <div class="mac-seg-item" data-tab="network" onclick="switchTab('network')">Network</div>
+      <div class="mac-seg-item" data-tab="gpu" onclick="switchTab('gpu')">GPU</div>
+    </nav>
+  </div>
+
+  <div class="toolbar-right">
+    <!-- View Filter Menu -->
+    <select id="proc-filter" class="mac-select" onchange="onFilterChange(this.value)" title="Filter processes">
+      <option value="all">All Processes</option>
+      <option value="my">My Processes</option>
+      <option value="active">Active Processes</option>
+      <option value="system">System Processes</option>
+    </select>
+
+    <!-- Search Input Field -->
+    <div class="mac-search-wrap">
+      <svg class="mac-search-icon" viewBox="0 0 24 24">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      <input id="search-input" class="mac-search-input" type="text" placeholder="Search" oninput="onSearchInput(this.value)" autocomplete="off" spellcheck="false"/>
+      <div id="search-clear" class="mac-search-clear" onclick="clearSearch()">✕</div>
+    </div>
+  </div>
+</header>
+
+<!-- Main Split View -->
+<div id="split-view">
+  <!-- Top: Dynamic Process Table -->
+  <main id="table-container" tabindex="0">
+    <table class="mac-table" id="proc-table">
+      <thead id="proc-thead">
+        <!-- Columns will be injected based on active tab -->
+      </thead>
+      <tbody id="proc-tbody">
+        <!-- Process rows injected here -->
+      </tbody>
+    </table>
+  </main>
+
+  <!-- Horizontal Splitter Divider -->
+  <div id="split-divider"></div>
+
+  <!-- Bottom: Activity Monitor Hardware Panels -->
+  <footer id="bottom-panel">
+    <!-- 1. CPU Panel -->
+    <div class="panel-content active" id="panel-cpu">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">% System:</span><span class="stat-v" id="cpu-stat-system">0.0%</span></div>
+        <div class="stat-item"><span class="stat-k">% User:</span><span class="stat-v" id="cpu-stat-user">0.0%</span></div>
+        <div class="stat-item"><span class="stat-k">% Idle:</span><span class="stat-v" id="cpu-stat-idle">100.0%</span></div>
+        <div style="height:4px;border-bottom:1px solid var(--border-color);"></div>
+        <div class="stat-item"><span class="stat-k">Threads:</span><span class="stat-v" id="cpu-stat-threads">0</span></div>
+        <div class="stat-item"><span class="stat-k">Processes:</span><span class="stat-v" id="cpu-stat-procs">0</span></div>
+        <div class="stat-item"><span class="stat-k">Processor:</span><span class="stat-v" id="cpu-stat-brand" style="font-size:10px;">–</span></div>
+      </div>
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">CPU Load</span>
+          <div class="graph-legend">
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-blue)"></span> User</span>
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-red)"></span> System</span>
+          </div>
+        </div>
+        <canvas class="mac-canvas" id="canvas-cpu"></canvas>
       </div>
     </div>
-  </div>\`;
-}
 
-function drawSpark(id, arr, col1, col2, mx) {
-  const c = document.getElementById(id);
-  if(!c || !arr.length) return;
-  const dpr = window.devicePixelRatio || 1;
-  const rect = c.getBoundingClientRect();
-  c.width = rect.width * dpr;
-  c.height = rect.height * dpr;
-  const W = c.width, H = c.height;
-  const ctx = c.getContext('2d');
-  ctx.clearRect(0,0,W,H);
-  
-  // Grid lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-  ctx.lineWidth = 1 * dpr;
-  [0.25, 0.5, 0.75].forEach(y => {
-    ctx.beginPath(); ctx.moveTo(0, H*y); ctx.lineTo(W, H*y); ctx.stroke();
-  });
-
-  const m = mx || Math.max(...arr, 1);
-  const pts = arr.map((v,i) => [i/(arr.length-1||1)*W, H - (v/m)*H]);
-  
-  const grad = ctx.createLinearGradient(0,0,W,0);
-  grad.addColorStop(0, col1); grad.addColorStop(1, col2);
-  const aGrad = ctx.createLinearGradient(0,0,0,H);
-  aGrad.addColorStop(0, col2+'66'); aGrad.addColorStop(1, 'transparent');
-
-  ctx.beginPath(); ctx.moveTo(pts[0][0], H);
-  pts.forEach(p=>ctx.lineTo(p[0],p[1])); ctx.lineTo(pts[pts.length-1][0], H);
-  ctx.fillStyle = aGrad; ctx.fill();
-
-  ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
-  ctx.strokeStyle = grad; ctx.lineWidth = 2 * dpr; ctx.stroke();
-}
-
-function gaugeHtml(lbl, pct, valStr='') {
-  const cls = statusCls(pct);
-  return \`<div class="gauge-wrap">
-    <div class="gauge-header"><span>\${lbl}</span><span class="txt-\${cls==='crit'?'red':cls==='warn'?'yellow':'green'}">\${pct.toFixed(1)}%</span></div>
-    <div class="gauge-track"><div class="gauge-fill \${cls}" style="width:\${pct}%">\${valStr}</div></div>
-  </div>\`;
-}
-
-function statRow(k,v) { return \`<div class="stat"><div class="stat-label">\${k}</div><div class="stat-val">\${escapeHtml(v)}</div></div>\`; }
-function card(title, content, cls='') { return \`<div class="card \${cls}"><div class="card-title">\${title}</div>\${content}</div>\`; }
-
-function renderOverview(d) {
-  const cpu = d.cpu.usage;
-  const mem = d.memory.usagePercent;
-  const temp = d.cpu.temperature ?? d.thermal.temperatures?.cpu_die ?? 0;
-  const batt = d.battery?.level ?? 0;
-
-  const rings = \`<div class="ring-container">
-    \${svgRing(cpu, 100, 'CPU', '%')}
-    \${svgRing(mem, 100, 'MEM', '%')}
-    \${svgRing(temp, 100, 'TEMP', '°')}
-    \${d.battery ? svgRing(batt, 100, 'BATT', '%') : ''}
-  </div>\`;
-
-  const topProcs = (d.processes||[]).slice(0,8).map(p=>\`<tr>
-    <td>\${p.pid}</td>
-    <td class="proc-cmd" title="\${escapeHtml(p.command)}">\${escapeHtml(p.command)}</td>
-    <td>\${escapeHtml(p.user)}</td>
-    <td class="txt-\${statusCls(p.cpu)}">\${p.cpu.toFixed(1)}</td>
-    <td>\${p.mem.toFixed(1)}</td>
-  </tr>\`).join('');
-
-  return \`<div class="detail-full">
-    \${rings}
-    <div class="grid-2x2">
-      \${card('CPU', \`
-        \${gaugeHtml('Usage', cpu, d.cpu.frequency+' MHz')}
-        <div class="spark-wrap"><div class="spark-label">CPU History</div><canvas class="spark" id="sp-ov-cpu"></canvas></div>
-      \`)}
-      \${card('Memory', \`
-        \${gaugeHtml('Usage', mem, fmtBytes(d.memory.used))}
-        \${statRow('Total', fmtBytes(d.memory.total))}
-        \${statRow('Free', fmtBytes(d.memory.free))}
-        \${statRow('Swap', fmtBytes(d.memory.swapUsed)+' / '+fmtBytes(d.memory.swapTotal))}
-      \`)}
-      \${card('Network', \`
-        <div class="flex-row mb-12">
-          <div class="flex-1 txt-cyan" style="font-family:var(--mono);font-size:14px;font-weight:700">⬇ \${fmtBytes(d.network.rxBytes)}</div>
-          <div class="flex-1 txt-purple" style="font-family:var(--mono);font-size:14px;font-weight:700;text-align:right">⬆ \${fmtBytes(d.network.txBytes)}</div>
+    <!-- 2. Memory Panel -->
+    <div class="panel-content" id="panel-memory">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">Physical Memory:</span><span class="stat-v" id="mem-stat-phys">–</span></div>
+        <div class="stat-item"><span class="stat-k">Memory Used:</span><span class="stat-v" id="mem-stat-used">–</span></div>
+        <div class="stat-item"><span class="stat-k">App Memory:</span><span class="stat-v" id="mem-stat-app">–</span></div>
+        <div class="stat-item"><span class="stat-k">Wired Memory:</span><span class="stat-v" id="mem-stat-wired">–</span></div>
+        <div class="stat-item"><span class="stat-k">Compressed:</span><span class="stat-v" id="mem-stat-comp">–</span></div>
+        <div class="stat-item"><span class="stat-k">Cached Files:</span><span class="stat-v" id="mem-stat-cached">–</span></div>
+        <div class="stat-item"><span class="stat-k">Swap Used:</span><span class="stat-v" id="mem-stat-swap">–</span></div>
+      </div>
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">Memory Pressure</span>
+          <div class="pressure-meter">
+            <div class="pressure-dot" id="pressure-dot"></div>
+            <span class="pressure-text" id="pressure-text">Normal</span>
+          </div>
         </div>
-        <div class="flex-row" style="flex:1">
-          <div class="spark-wrap" style="margin:0"><canvas class="spark" id="sp-ov-rx"></canvas></div>
-          <div class="spark-wrap" style="margin:0"><canvas class="spark" id="sp-ov-tx"></canvas></div>
-        </div>
-      \`)}
-      \${card('Top Processes', \`
-        <div class="table-wrap" style="border:none;background:transparent;overflow:hidden;">
-          <table class="proc">
-            <thead><tr><th>PID</th><th>Command</th><th>User</th><th>CPU%</th><th>MEM%</th></tr></thead>
-            <tbody>\${topProcs}</tbody>
-          </table>
-        </div>
-      \`, 'mb-0')}
+        <canvas class="mac-canvas" id="canvas-mem"></canvas>
+      </div>
     </div>
-  </div>\`;
-}
 
-function renderCpu(d) {
-  let cores = '';
-  if(d.cpu.coreUsage) {
-    cores = '<div class="core-grid">' + d.cpu.coreUsage.map((u,i) => {
-      const p = Math.min(100,u);
-      return \`<div class="core-col">
-        <div class="core-bar"><div class="core-fill \${statusCls(p)}" style="height:\${p}%"></div></div>
-        <div class="core-lbl">C\${i}</div>
-      </div>\`;
-    }).join('') + '</div>';
-  }
-  return \`<div class="detail-split">
-    <div class="detail-left">
-      \${card('CPU Usage', \`
-        <div class="spark-wrap" style="flex:none"><canvas class="spark large" id="sp-cpu-l"></canvas></div>
-        \${cores}
-      \`, 'flex-1')}
-    </div>
-    <div class="detail-right">
-      \${card('Processor Info', \`
-        <div class="big-metric"><div class="big-val">\${d.cpu.usage.toFixed(1)}%</div><div class="big-unit">Overall Utilisation</div></div>
-        \${statRow('Model', d.cpu.brand)}
-        \${statRow('Cores', d.cpu.physicalCores + ' Physical / ' + d.cpu.cores + ' Logical')}
-        \${statRow('Clock', d.cpu.frequency + ' MHz')}
-        \${statRow('Load 1m', d.cpu.loadAvg[0].toFixed(2))}
-        \${statRow('Load 5m', d.cpu.loadAvg[1].toFixed(2))}
-        \${statRow('Load 15m', d.cpu.loadAvg[2].toFixed(2))}
-      \`, 'flex-1')}
-    </div>
-  </div>\`;
-}
-
-function renderMemory(d) {
-  return \`<div class="detail-full">
-    \${card('Memory', \`
-      <div class="big-metric"><div class="big-val">\${d.memory.usagePercent.toFixed(1)}%</div><div class="big-unit">Memory Used</div></div>
-      \${gaugeHtml('RAM', d.memory.usagePercent, fmtBytes(d.memory.used))}
-      \${gaugeHtml('Swap', d.memory.swapTotal? (d.memory.swapUsed/d.memory.swapTotal)*100 : 0, fmtBytes(d.memory.swapUsed))}
-      <div class="grid-2x2" style="margin-top:20px;flex:none">
-        <div>\${statRow('Total', fmtBytes(d.memory.total))}\${statRow('Used', fmtBytes(d.memory.used))}</div>
-        <div>\${statRow('Free', fmtBytes(d.memory.free))}\${statRow('Cached', fmtBytes(d.memory.total - d.memory.free - d.memory.used))}</div>
+    <!-- 3. Energy Panel -->
+    <div class="panel-content" id="panel-energy">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">Total Power Draw:</span><span class="stat-v" id="energy-stat-total">–</span></div>
+        <div class="stat-item"><span class="stat-k">CPU Package:</span><span class="stat-v" id="energy-stat-cpu">–</span></div>
+        <div class="stat-item"><span class="stat-k">GPU Package:</span><span class="stat-v" id="energy-stat-gpu">–</span></div>
+        <div style="height:4px;border-bottom:1px solid var(--border-color);"></div>
+        <div class="stat-item"><span class="stat-k">Battery Level:</span><span class="stat-v" id="energy-stat-batt">–</span></div>
+        <div class="stat-item"><span class="stat-k">Power Source:</span><span class="stat-v" id="energy-stat-source">–</span></div>
+        <div class="stat-item"><span class="stat-k">Time Remaining:</span><span class="stat-v" id="energy-stat-timerem">–</span></div>
+        <div class="stat-item"><span class="stat-k">Battery Health:</span><span class="stat-v" id="energy-stat-health">–</span></div>
       </div>
-      <div class="spark-wrap" style="margin-top:20px"><div class="spark-label">Memory History</div><canvas class="spark large" id="sp-mem-l"></canvas></div>
-    \`, 'flex-1')}
-  </div>\`;
-}
-
-function renderGpu(d) {
-  if(!d.gpu) return '<div class="big-metric">No GPU Data</div>';
-  return \`<div class="detail-full">
-    \${card('Graphics Processor', \`
-      <div class="big-metric"><div class="big-val">\${d.gpu.utilization.toFixed(1)}%</div><div class="big-unit">\${d.gpu.model}</div></div>
-      \${gaugeHtml('Utilisation', d.gpu.utilization)}
-      \${statRow('VRAM Used', fmtBytes(d.gpu.memory))}
-      \${statRow('Active Processes', d.gpu.processes)}
-      \${d.gpu.temperature? statRow('Temperature', d.gpu.temperature+'°C') : ''}
-    \`, 'flex-1')}
-  </div>\`;
-}
-
-function renderPower(d) {
-  const tw = d.power?.combinedWatts ?? (d.battery?.powerWatts || 0);
-  return \`<div class="detail-full">
-    \${card('Power Consumption', \`
-      <div class="big-metric"><div class="big-val">\${tw.toFixed(2)} W</div><div class="big-unit">Total Draw</div></div>
-      <div class="flex-row">
-        \${d.power?.cpuWatts!=null ? \`<div class="flex-1">\${gaugeHtml('CPU Package', Math.min(100,d.power.cpuWatts/100*100), d.power.cpuWatts.toFixed(2)+'W')}</div>\` : ''}
-        \${d.power?.gpuWatts!=null ? \`<div class="flex-1">\${gaugeHtml('GPU Package', Math.min(100,d.power.gpuWatts/200*100), d.power.gpuWatts.toFixed(2)+'W')}</div>\` : ''}
-      </div>
-    \`, 'flex-1')}
-  </div>\`;
-}
-
-function renderBattery(d) {
-  if(!d.battery) return '<div class="big-metric">No Battery</div>';
-  return \`<div class="detail-full">
-    \${card('Battery', \`
-      <div class="ring-container" style="border:none;background:transparent;">
-        \${svgRing(d.battery.level, 100, 'LEVEL', '%', 200)}
-      </div>
-      <div class="grid-2x2">
-        <div>
-          \${statRow('State', d.battery.state)}
-          \${statRow('Power Source', d.battery.powerSource)}
-          \${statRow('Condition', d.battery.condition)}
-          \${d.battery.cycles ? statRow('Cycles', d.battery.cycles) : ''}
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">Energy Consumption</span>
+          <div class="graph-legend">
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-yellow)"></span> Watts</span>
+          </div>
         </div>
-        <div>
-          \${d.battery.timeRemaining ? statRow('Time Remaining', d.battery.timeRemaining) : ''}
-          \${d.battery.powerWatts ? statRow('Power Draw', d.battery.powerWatts.toFixed(2)+' W') : ''}
-          \${d.battery.maxCapacityPercent ? statRow('Max Capacity', d.battery.maxCapacityPercent+'%') : ''}
-        </div>
+        <canvas class="mac-canvas" id="canvas-energy"></canvas>
       </div>
-    \`, 'flex-1')}
-  </div>\`;
-}
-
-function renderThermal(d) {
-  const chips = d.thermal.temperatures ? Object.entries(d.thermal.temperatures).map(([k,v]) => \`<div class="chip \${statusCls(v)}">\${k}: \${v.toFixed(1)}°C</div>\`).join('') : '';
-  return \`<div class="detail-full">
-    \${card('Thermal Status', \`
-      \${statRow('State', d.thermal.state)}
-      \${statRow('Pressure', d.thermal.pressureLevel ?? 'Normal')}
-      <div class="chips mb-12">\${chips}</div>
-      <div class="spark-wrap"><div class="spark-label">CPU Temp History</div><canvas class="spark large" id="sp-therm-l"></canvas></div>
-    \`, 'flex-1')}
-  </div>\`;
-}
-
-function renderNetwork(d) {
-  return \`<div class="detail-split">
-    <div class="detail-left">
-      \${card('Traffic', \`
-        <div class="flex-row">
-          <div class="flex-1 spark-wrap"><div class="spark-label txt-cyan">⬇ RX Rate</div><canvas class="spark large" id="sp-net-rx-l"></canvas></div>
-          <div class="flex-1 spark-wrap"><div class="spark-label txt-purple">⬆ TX Rate</div><canvas class="spark large" id="sp-net-tx-l"></canvas></div>
-        </div>
-      \`, 'flex-1')}
     </div>
-    <div class="detail-right">
-      \${card('Interface Info', \`
-        <div class="big-metric" style="padding:10px 0"><div class="big-val txt-cyan" style="font-size:24px">\${d.network.interface}</div><div class="big-unit">\${d.network.ip}</div></div>
-        \${statRow('RX Total', fmtBytes(d.network.rxBytes))}
-        \${statRow('TX Total', fmtBytes(d.network.txBytes))}
-        \${statRow('RX Packets', (d.network.rxPackets||0).toLocaleString())}
-        \${statRow('TX Packets', (d.network.txPackets||0).toLocaleString())}
-        \${d.network.connections ? statRow('TCP Conns', d.network.connections) : ''}
-      \`, 'flex-1')}
+
+    <!-- 4. Disk Panel -->
+    <div class="panel-content" id="panel-disk">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">Reads in / sec:</span><span class="stat-v" id="disk-stat-reads">–</span></div>
+        <div class="stat-item"><span class="stat-k">Writes out / sec:</span><span class="stat-v" id="disk-stat-writes">–</span></div>
+        <div class="stat-item"><span class="stat-k">Data read:</span><span class="stat-v" id="disk-stat-total-read">–</span></div>
+        <div class="stat-item"><span class="stat-k">Data written:</span><span class="stat-v" id="disk-stat-total-write">–</span></div>
+        <div style="height:4px;border-bottom:1px solid var(--border-color);"></div>
+        <div id="disk-mounts-box" style="display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">Disk Activity</span>
+          <div class="graph-legend">
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-teal)"></span> Read/sec</span>
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-red)"></span> Write/sec</span>
+          </div>
+        </div>
+        <canvas class="mac-canvas" id="canvas-disk"></canvas>
+      </div>
     </div>
-  </div>\`;
-}
 
-function renderDisk(d) {
-  const rows = (d.disk||[]).map(ds => \`
-    <div class="mb-12">
-      <div class="flex-row" style="justify-content:space-between;font-family:var(--mono);font-size:12px;margin-bottom:6px;">
-        <span class="txt-cyan" style="font-weight:700">\${ds.mountpoint}</span>
-        <span>\${ds.used} / \${ds.size}</span>
+    <!-- 5. Network Panel -->
+    <div class="panel-content" id="panel-network">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">Packets in / sec:</span><span class="stat-v" id="net-stat-pkts-in">–</span></div>
+        <div class="stat-item"><span class="stat-k">Packets out / sec:</span><span class="stat-v" id="net-stat-pkts-out">–</span></div>
+        <div class="stat-item"><span class="stat-k">Data received / sec:</span><span class="stat-v" id="net-stat-rate-in">–</span></div>
+        <div class="stat-item"><span class="stat-k">Data sent / sec:</span><span class="stat-v" id="net-stat-rate-out">–</span></div>
+        <div style="height:4px;border-bottom:1px solid var(--border-color);"></div>
+        <div class="stat-item"><span class="stat-k">Data received:</span><span class="stat-v" id="net-stat-total-in">–</span></div>
+        <div class="stat-item"><span class="stat-k">Data sent:</span><span class="stat-v" id="net-stat-total-out">–</span></div>
+        <div class="stat-item"><span class="stat-k">Interface / IP:</span><span class="stat-v" id="net-stat-iface" style="font-size:10px;">–</span></div>
       </div>
-      \${gaugeHtml('', parseFloat(ds.capacity)||0, ds.capacity)}
-    </div>\`).join('');
-  return \`<div class="detail-full">\${card('Storage Volumes', rows, 'flex-1')}</div>\`;
-}
-
-function sortProcs(procs) {
-  const col = procSort.col;
-  const dir = procSort.dir;
-  return [...procs].sort((a,b)=>{
-    let va=a[col], vb=b[col];
-    if(typeof va==='string'){va=va.toLowerCase();vb=vb.toLowerCase();}
-    return (va<vb ? -1 : va>vb ? 1 : 0) * (dir==='asc'?1:-1);
-  });
-}
-function sortBy(col) {
-  if(procSort.col===col) procSort.dir = procSort.dir==='asc'?'desc':'asc';
-  else {procSort.col=col; procSort.dir='desc';}
-  if(latestData) updateView();
-}
-function sortHdr(col) { return procSort.col===col ? (procSort.dir==='asc'?' ↑':' ↓') : ''; }
-function fmtTime(s) { if(!s)return'–'; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sc=Math.floor(s%60); return h?h+'h'+m+'m':m?m+'m'+sc+'s':sc+'s'; }
-
-function renderProcesses(d) {
-  const procs = sortProcs(d.processes||[]);
-  const rows = procs.map(p=>\`<tr>
-    <td>\${p.pid}</td>
-    <td class="proc-cmd" title="\${escapeHtml(p.command)}">\${escapeHtml(p.command)}</td>
-    <td>\${escapeHtml(p.user)}</td>
-    <td class="txt-\${statusCls(p.cpu)}">\${p.cpu.toFixed(1)}</td>
-    <td>\${p.mem.toFixed(1)}</td>
-    <td>\${p.threads||0}</td>
-    <td>\${p.state}</td>
-    <td>\${fmtTime(p.runtime)}</td>
-  </tr>\`).join('');
-  return \`<div class="detail-full">
-    \${card('Process List ('+procs.length+')', \`
-      <div class="table-wrap">
-        <table class="proc">
-          <thead><tr>
-            <th onclick="sortBy('pid')">PID\${sortHdr('pid')}</th>
-            <th onclick="sortBy('command')">Command\${sortHdr('command')}</th>
-            <th onclick="sortBy('user')">User\${sortHdr('user')}</th>
-            <th onclick="sortBy('cpu')">CPU%\${sortHdr('cpu')}</th>
-            <th onclick="sortBy('mem')">MEM%\${sortHdr('mem')}</th>
-            <th onclick="sortBy('threads')">Thr\${sortHdr('threads')}</th>
-            <th onclick="sortBy('state')">State\${sortHdr('state')}</th>
-            <th onclick="sortBy('runtime')">Time\${sortHdr('runtime')}</th>
-          </tr></thead>
-          <tbody>\${rows}</tbody>
-        </table>
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">Network Throughput</span>
+          <div class="graph-legend">
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-blue)"></span> In / sec</span>
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-red)"></span> Out / sec</span>
+          </div>
+        </div>
+        <canvas class="mac-canvas" id="canvas-net"></canvas>
       </div>
-    \`, 'flex-1')}
-  </div>\`;
-}
+    </div>
 
-function renderAnomalies(d) {
-  const arr = d.anomalies||[];
-  if(!arr.length) return '<div class="big-metric"><div class="big-val txt-green" style="font-size:32px">System Healthy</div></div>';
-  const rows = arr.map(a=>\`<div class="anomaly"><div class="anomaly-icon">⚠️</div><div><div class="anomaly-title">\${escapeHtml(a.type||'Alert')}</div><div class="anomaly-desc">\${escapeHtml(a.message||a.detail||JSON.stringify(a))}</div></div></div>\`).join('');
-  return \`<div class="detail-full">\${card('Anomalies', rows, 'flex-1')}</div>\`;
-}
+    <!-- 6. GPU Panel -->
+    <div class="panel-content" id="panel-gpu">
+      <div class="pane-stats">
+        <div class="stat-item"><span class="stat-k">GPU Processor:</span><span class="stat-v" id="gpu-stat-model" style="font-size:10px;">–</span></div>
+        <div class="stat-item"><span class="stat-k">Utilization:</span><span class="stat-v" id="gpu-stat-util">–</span></div>
+        <div class="stat-item"><span class="stat-k">VRAM Used:</span><span class="stat-v" id="gpu-stat-vram">–</span></div>
+        <div class="stat-item"><span class="stat-k">Active Processes:</span><span class="stat-v" id="gpu-stat-procs">–</span></div>
+        <div class="stat-item"><span class="stat-k">Temperature:</span><span class="stat-v" id="gpu-stat-temp">–</span></div>
+      </div>
+      <div class="pane-graph">
+        <div class="graph-header">
+          <span class="graph-title">GPU Utilization</span>
+          <div class="graph-legend">
+            <span class="legend-pill"><span class="legend-dot" style="background:var(--mac-purple)"></span> GPU %</span>
+          </div>
+        </div>
+        <canvas class="mac-canvas" id="canvas-gpu"></canvas>
+      </div>
+    </div>
+  </footer>
+</div>
 
-function drawSparks() {
-  drawSpark('sp-ov-cpu', history.cpu, '#ffffff', '#999999');
-  drawSpark('sp-ov-rx', history.rxRate, '#ffffff', '#999999');
-  drawSpark('sp-ov-tx', history.txRate, '#bbbbbb', '#666666');
-  drawSpark('sp-cpu-l', history.cpu, '#ffffff', '#999999');
-  drawSpark('sp-mem-l', history.mem, '#bbbbbb', '#666666');
-  drawSpark('sp-therm-l', history.temp, '#dddddd', '#888888');
-  drawSpark('sp-net-rx-l', history.rxRate, '#ffffff', '#999999');
-  drawSpark('sp-net-tx-l', history.txRate, '#bbbbbb', '#666666');
-}
+<!-- macOS Window Status Bar -->
+<div id="statusbar">
+  <div class="sb-left">
+    <div class="sb-live-indicator">
+      <span class="sb-live-dot" id="sb-dot"></span>
+      <span id="sb-status">Connecting</span>
+    </div>
+    <span id="sb-host">–</span>
+  </div>
+  <div class="sb-right">
+    <span id="sb-count">0 processes</span>
+    <span>Updated <span id="sb-time">–</span></span>
+  </div>
+</div>
 
-function switchView(v) {
-  currentView = v;
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===v));
-  if(latestData) updateView();
-}
+<!-- Modal 1: Force Quit Confirmation Sheet -->
+<div class="modal-backdrop" id="modal-quit" onclick="if(event.target===this)closeModal('modal-quit')">
+  <div class="mac-sheet modal-quit-box">
+    <div class="quit-icon-wrap">
+      <svg width="54" height="54" viewBox="0 0 24 24" fill="var(--mac-red)">
+        <path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86L7.86 2zm1.41 2L4 8.27v7.46L8.27 20h7.46L20 15.73V8.27L15.73 4H9.27zM12 10.59l3.3-3.3 1.41 1.42L13.41 12l3.3 3.29-1.41 1.42L12 13.41l-3.29 3.3-1.42-1.42L10.59 12l-3.3-3.29 1.42-1.42L12 10.59z"/>
+      </svg>
+    </div>
+    <div class="quit-title">Do you want to quit this process?</div>
+    <div class="quit-desc" id="quit-modal-desc">
+      Quitting process may cause unsaved changes to be lost.
+    </div>
+    <div style="display:flex;justify-content:center;gap:10px;">
+      <button class="mac-btn" onclick="closeModal('modal-quit')">Cancel</button>
+      <button class="mac-btn mac-btn-danger" id="btn-do-force-quit" onclick="executeQuit(true)">Force Quit</button>
+      <button class="mac-btn mac-btn-primary" id="btn-do-quit" onclick="executeQuit(false)">Quit</button>
+    </div>
+  </div>
+</div>
 
-function updateView() {
-  const el = document.getElementById('view-content');
-  if(!el || !latestData) return;
-  const d = latestData;
-  const map = {overview:renderOverview, cpu:renderCpu, memory:renderMemory, gpu:renderGpu, power:renderPower, battery:renderBattery, thermal:renderThermal, network:renderNetwork, disk:renderDisk, processes:renderProcesses, anomalies:renderAnomalies};
-  if(map[currentView]) {
-    el.innerHTML = map[currentView](d);
-    requestAnimationFrame(drawSparks);
-  }
-}
+<!-- Modal 2: Process Inspector Sheet -->
+<div class="modal-backdrop" id="modal-inspector" onclick="if(event.target===this)closeModal('modal-inspector')">
+  <div class="mac-sheet modal-inspect-box">
+    <div class="sheet-header">
+      <span class="sheet-title" id="inspect-title">Process Inspector</span>
+      <button class="sheet-close-btn" onclick="closeModal('modal-inspector')">✕</button>
+    </div>
+    <div class="sheet-body" id="inspect-body">
+      <!-- Process details injected here -->
+    </div>
+    <div class="sheet-footer">
+      <button class="mac-btn" onclick="closeModal('modal-inspector')">Close</button>
+      <button class="mac-btn mac-btn-danger" onclick="confirmQuitFromInspector()">Quit Process…</button>
+    </div>
+  </div>
+</div>
 
-let prx=null, ptx=null;
-function ingestData(d) {
-  latestData = d;
-  pushHist(history.cpu, d.cpu.usage);
-  pushHist(history.mem, d.memory.usagePercent);
-  pushHist(history.temp, d.cpu.temperature ?? d.thermal.temperatures?.cpu_die ?? 0);
-  if(prx!==null) {
-    pushHist(history.rxRate, Math.max(0, d.network.rxBytes-prx));
-    pushHist(history.txRate, Math.max(0, d.network.txBytes-ptx));
-  }
-  prx=d.network.rxBytes; ptx=d.network.txBytes;
-  if(d.power?.combinedWatts) pushHist(history.power, d.power.combinedWatts);
+<!-- Toast notification -->
+<div id="toast">Action completed</div>
 
-  document.getElementById('titlebar-host').textContent = d.header.hostname+' · '+d.header.os;
-  document.getElementById('sb-uptime').textContent = d.header.uptime;
-  document.getElementById('sb-cpu').textContent = d.cpu.usage.toFixed(1)+'%';
-  document.getElementById('sb-mem').textContent = d.memory.usagePercent.toFixed(1)+'%';
-  document.getElementById('sb-batt').textContent = d.battery ? d.battery.level+'%' : '–';
-  document.getElementById('sb-procs').textContent = (d.processes||[]).length;
-  document.getElementById('sb-refresh').textContent = new Date().toLocaleTimeString();
-  
-  updateView();
-}
+<script>
+// State Management
+let currentTab = 'cpu';
+let latestData = null;
+let selectedPid = null;
+let currentFilter = 'all';
+let searchQuery = '';
 
-window.__pyreUpdate = function(jsStr) {
-  try {
-    const d = JSON.parse(jsStr);
-    document.getElementById('conn-dot').className='conn-dot';
-    document.getElementById('conn-text').textContent='Live';
-    ingestData(d);
-  } catch(e) { document.getElementById('conn-text').textContent='Err: '+e.message; }
+// Sort State per tab
+const sortState = {
+  cpu: { col: 'cpu', dir: 'desc' },
+  memory: { col: 'mem', dir: 'desc' },
+  energy: { col: 'cpu', dir: 'desc' },
+  disk: { col: 'cpu', dir: 'desc' },
+  network: { col: 'cpu', dir: 'desc' },
+  gpu: { col: 'cpu', dir: 'desc' }
 };
 
-let pTimer=null;
-async function pollOnce() {
-  try {
-    const r=await fetch('/api/stats',{cache:'no-store'});
-    if(!r.ok){ document.getElementById('conn-dot').className='conn-dot offline'; return; }
-    document.getElementById('conn-dot').className='conn-dot';
-    ingestData(await r.json());
-  } catch(e) { document.getElementById('conn-dot').className='conn-dot offline'; }
-}
-setTimeout(()=>{ if(!latestData && !pTimer) { pollOnce(); pTimer=setInterval(pollOnce, 2000); } }, 4000);
+// Rolling Metrics History
+const MAX_POINTS = 60;
+const historyData = {
+  cpuUser: [],
+  cpuSystem: [],
+  memPressure: [],
+  energyWatts: [],
+  diskRead: [],
+  diskWrite: [],
+  netIn: [],
+  netOut: [],
+  gpuUtil: []
+};
 
-const keyMap = {'1':'overview','2':'cpu','3':'memory','4':'gpu','5':'power','6':'battery','7':'thermal','8':'network','9':'disk','p':'processes','a':'anomalies'};
-document.addEventListener('keydown', e => { if(keyMap[e.key.toLowerCase()]) switchView(keyMap[e.key.toLowerCase()]); });
+// Utilities
+function pushHistory(arr, val) {
+  arr.push(typeof val === 'number' && !isNaN(val) ? val : 0);
+  if (arr.length > MAX_POINTS) arr.shift();
+}
+
+function fmtBytes(b, dec = 1) {
+  if (b === undefined || b === null || isNaN(b) || b === 0) return '0 B';
+  const k = 1024;
+  const s = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(Math.abs(b)) / Math.log(k));
+  if (i < 0) return '0 B';
+  const v = b / Math.pow(k, i);
+  return (parseFloat(v.toFixed(dec))) + ' ' + (s[i] || 'TB');
+}
+
+function fmtTime(sec) {
+  if (!sec) return '0:00.00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  const ms = Math.floor((sec % 1) * 100);
+  return m + ':' + (s < 10 ? '0' : '') + s + '.' + (ms < 10 ? '0' : '') + ms;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// Tab Column Schemas
+const tabColumns = {
+  cpu: [
+    { id: 'command', name: 'Process Name', width: '38%', align: 'left' },
+    { id: 'cpu', name: '% CPU', width: '12%', align: 'right' },
+    { id: 'runtime', name: 'CPU Time', width: '14%', align: 'right' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'state', name: 'State', width: '8%', align: 'center' },
+    { id: 'pid', name: 'PID', width: '8%', align: 'right' },
+    { id: 'user', name: 'User', width: '10%', align: 'left' }
+  ],
+  memory: [
+    { id: 'command', name: 'Process Name', width: '38%', align: 'left' },
+    { id: 'memBytes', name: 'Memory', width: '15%', align: 'right' },
+    { id: 'mem', name: '% Memory', width: '11%', align: 'right' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'state', name: 'State', width: '8%', align: 'center' },
+    { id: 'pid', name: 'PID', width: '8%', align: 'right' },
+    { id: 'user', name: 'User', width: '10%', align: 'left' }
+  ],
+  energy: [
+    { id: 'command', name: 'Process Name', width: '42%', align: 'left' },
+    { id: 'energyImpact', name: 'Energy Impact', width: '16%', align: 'right' },
+    { id: 'cpu', name: '% CPU', width: '12%', align: 'right' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'pid', name: 'PID', width: '10%', align: 'right' },
+    { id: 'user', name: 'User', width: '10%', align: 'left' }
+  ],
+  disk: [
+    { id: 'command', name: 'Process Name', width: '44%', align: 'left' },
+    { id: 'cpu', name: '% CPU', width: '12%', align: 'right' },
+    { id: 'state', name: 'State', width: '12%', align: 'center' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'pid', name: 'PID', width: '10%', align: 'right' },
+    { id: 'user', name: 'User', width: '12%', align: 'left' }
+  ],
+  network: [
+    { id: 'command', name: 'Process Name', width: '38%', align: 'left' },
+    { id: 'netRx', name: 'Sent Bytes', width: '13%', align: 'right' },
+    { id: 'netTx', name: 'Rcvd Bytes', width: '13%', align: 'right' },
+    { id: 'cpu', name: '% CPU', width: '10%', align: 'right' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'pid', name: 'PID', width: '8%', align: 'right' },
+    { id: 'user', name: 'User', width: '8%', align: 'left' }
+  ],
+  gpu: [
+    { id: 'command', name: 'Process Name', width: '42%', align: 'left' },
+    { id: 'cpu', name: '% GPU/CPU', width: '16%', align: 'right' },
+    { id: 'mem', name: '% Memory', width: '14%', align: 'right' },
+    { id: 'threads', name: 'Threads', width: '10%', align: 'right' },
+    { id: 'pid', name: 'PID', width: '8%', align: 'right' },
+    { id: 'user', name: 'User', width: '10%', align: 'left' }
+  ]
+};
+
+// Render Table Header
+function renderTableHeader() {
+  const thead = document.getElementById('proc-thead');
+  const cols = tabColumns[currentTab] || tabColumns.cpu;
+  const curSort = sortState[currentTab];
+
+  let html = '<tr>';
+  cols.forEach(c => {
+    const isSorted = curSort.col === c.id;
+    const caret = isSorted ? (curSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    html += \`<th style="width:\${c.width};text-align:\${c.align}" onclick="handleSort('\${c.id}')">\${escapeHtml(c.name)}<span class="sort-caret">\${caret}</span></th>\`;
+  });
+  html += '</tr>';
+  thead.innerHTML = html;
+}
+
+// Sort Handler
+function handleSort(colId) {
+  const cur = sortState[currentTab];
+  if (cur.col === colId) {
+    cur.dir = cur.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    cur.col = colId;
+    cur.dir = (colId === 'command' || colId === 'user') ? 'asc' : 'desc';
+  }
+  renderTableHeader();
+  renderTableRows();
+}
+
+// Tab Switching
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.mac-seg-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+  document.querySelectorAll('.panel-content').forEach(el => {
+    el.classList.toggle('active', el.id === 'panel-' + tab);
+  });
+
+  renderTableHeader();
+  renderTableRows();
+  updateBottomPanel();
+  requestAnimationFrame(drawAllCanvases);
+}
+
+// Process Filtering and Searching
+function onFilterChange(val) {
+  currentFilter = val;
+  renderTableRows();
+}
+
+function onSearchInput(val) {
+  searchQuery = (val || '').trim().toLowerCase();
+  document.getElementById('search-clear').style.display = searchQuery ? 'flex' : 'none';
+  renderTableRows();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  onSearchInput('');
+}
+
+// Process Selection
+function selectRow(pid) {
+  selectedPid = pid;
+  document.querySelectorAll('#proc-tbody tr').forEach(tr => {
+    tr.classList.toggle('selected', Number(tr.dataset.pid) === pid);
+  });
+  const hasSel = selectedPid !== null;
+  document.getElementById('btn-stop').disabled = !hasSel;
+  document.getElementById('btn-inspect').disabled = !hasSel;
+}
+
+// Render Table Rows
+function renderTableRows() {
+  if (!latestData || !latestData.processes) return;
+  const tbody = document.getElementById('proc-tbody');
+  const cols = tabColumns[currentTab] || tabColumns.cpu;
+  const sort = sortState[currentTab];
+  const totalMem = latestData.memory?.total || 1;
+
+  // Filter processes
+  let procs = latestData.processes.map(p => {
+    return {
+      ...p,
+      memBytes: (p.mem / 100) * totalMem,
+      energyImpact: parseFloat(p.cpu.toFixed(1)),
+      netRx: 0,
+      netTx: 0
+    };
+  });
+
+  if (currentFilter === 'my') {
+    const myUser = latestData.header?.user || 'somalip';
+    procs = procs.filter(p => p.user && p.user.toLowerCase().includes(myUser.toLowerCase()));
+  } else if (currentFilter === 'active') {
+    procs = procs.filter(p => p.cpu > 0.05 || p.mem > 0.2);
+  } else if (currentFilter === 'system') {
+    procs = procs.filter(p => p.user === 'root' || p.pid < 100);
+  }
+
+  if (searchQuery) {
+    procs = procs.filter(p => {
+      return p.command.toLowerCase().includes(searchQuery) ||
+             String(p.pid).includes(searchQuery) ||
+             (p.user && p.user.toLowerCase().includes(searchQuery));
+    });
+  }
+
+  // Sort
+  procs.sort((a, b) => {
+    let va = a[sort.col];
+    let vb = b[sort.col];
+    if (typeof va === 'string') {
+      va = va.toLowerCase();
+      vb = (vb || '').toLowerCase();
+    }
+    if (va < vb) return sort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return sort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Generate HTML
+  let rowsHtml = '';
+  procs.forEach(p => {
+    const isSelected = p.pid === selectedPid;
+    const isSys = p.user === 'root' || p.pid < 100;
+    const initial = (p.command.replace(/^.*[\\\/]/, '')[0] || 'P').toUpperCase();
+
+    rowsHtml += \`<tr class="\${isSelected ? 'selected' : ''}" data-pid="\${p.pid}" onclick="selectRow(\${p.pid})" ondblclick="openInspector(\${p.pid})">\`;
+
+    cols.forEach(c => {
+      if (c.id === 'command') {
+        const shortName = p.command.replace(/^.*[\\\/]/, '');
+        rowsHtml += \`<td class="col-name" title="\${escapeHtml(p.command)}">
+          <span class="proc-icon \${isSys ? 'system' : 'user'}">\${initial}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;">\${escapeHtml(shortName)}</span>
+        </td>\`;
+      } else if (c.id === 'cpu') {
+        rowsHtml += \`<td>\${p.cpu.toFixed(1)}</td>\`;
+      } else if (c.id === 'runtime') {
+        rowsHtml += \`<td>\${fmtTime(p.runtime)}</td>\`;
+      } else if (c.id === 'mem') {
+        rowsHtml += \`<td>\${p.mem.toFixed(1)}</td>\`;
+      } else if (c.id === 'memBytes') {
+        rowsHtml += \`<td>\${fmtBytes(p.memBytes)}</td>\`;
+      } else if (c.id === 'energyImpact') {
+        rowsHtml += \`<td>\${p.energyImpact.toFixed(1)}</td>\`;
+      } else if (c.id === 'netRx') {
+        rowsHtml += \`<td>\${fmtBytes(p.netRx)}</td>\`;
+      } else if (c.id === 'netTx') {
+        rowsHtml += \`<td>\${fmtBytes(p.netTx)}</td>\`;
+      } else if (c.id === 'pid') {
+        rowsHtml += \`<td>\${p.pid}</td>\`;
+      } else if (c.id === 'threads') {
+        rowsHtml += \`<td>\${p.threads || 1}</td>\`;
+      } else if (c.id === 'state') {
+        rowsHtml += \`<td style="text-align:center;">\${escapeHtml(p.state || 'R')}</td>\`;
+      } else if (c.id === 'user') {
+        rowsHtml += \`<td style="text-align:left;">\${escapeHtml(p.user || 'root')}</td>\`;
+      } else {
+        rowsHtml += \`<td>\${escapeHtml(p[c.id] || '–')}</td>\`;
+      }
+    });
+
+    rowsHtml += '</tr>';
+  });
+
+  tbody.innerHTML = rowsHtml;
+  document.getElementById('sb-count').textContent = procs.length + ' processes';
+}
+
+// Draw Area Charts on Canvas
+function drawChart(canvasId, pointsA, colorA, pointsB = null, colorB = null, maxVal = 100) {
+  const c = document.getElementById(canvasId);
+  if (!c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
+  if (c.width !== Math.floor(rect.width * dpr) || c.height !== Math.floor(rect.height * dpr)) {
+    c.width = Math.floor(rect.width * dpr);
+    c.height = Math.floor(rect.height * dpr);
+  }
+
+  const W = c.width;
+  const H = c.height;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+  ctx.lineWidth = 1 * dpr;
+  [0.25, 0.5, 0.75].forEach(ratio => {
+    ctx.beginPath();
+    ctx.moveTo(0, H * ratio);
+    ctx.lineTo(W, H * ratio);
+    ctx.stroke();
+  });
+
+  if (!pointsA || !pointsA.length) return;
+
+  const actualMax = maxVal || Math.max(...pointsA, ...(pointsB || []), 1);
+
+  // Helper to render area + stroke
+  function renderPath(pts, strokeCol, fillCol) {
+    if (!pts || !pts.length) return;
+    const step = W / (MAX_POINTS - 1);
+    const startX = W - (pts.length - 1) * step;
+
+    ctx.beginPath();
+    ctx.moveTo(startX, H);
+    pts.forEach((v, i) => {
+      const x = startX + i * step;
+      const y = Math.max(0, H - (v / actualMax) * H);
+      ctx.lineTo(x, y);
+    });
+    ctx.lineTo(W, H);
+    ctx.fillStyle = fillCol;
+    ctx.fill();
+
+    ctx.beginPath();
+    pts.forEach((v, i) => {
+      const x = startX + i * step;
+      const y = Math.max(0, H - (v / actualMax) * H);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = strokeCol;
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.stroke();
+  }
+
+  if (pointsB && pointsB.length && colorB) {
+    renderPath(pointsB, colorB, colorB + '33');
+  }
+  renderPath(pointsA, colorA, colorA + '44');
+}
+
+function drawAllCanvases() {
+  if (currentTab === 'cpu') {
+    drawChart('canvas-cpu', historyData.cpuUser, '#007aff', historyData.cpuSystem, '#ff453a', 100);
+  } else if (currentTab === 'memory') {
+    const pressurePct = latestData?.memory?.usagePercent || 50;
+    const col = pressurePct > 80 ? '#ff453a' : (pressurePct > 60 ? '#ff9f0a' : '#34c759');
+    drawChart('canvas-mem', historyData.memPressure, col, null, null, 100);
+  } else if (currentTab === 'energy') {
+    const maxW = Math.max(10, ...historyData.energyWatts);
+    drawChart('canvas-energy', historyData.energyWatts, '#ff9f0a', null, null, maxW);
+  } else if (currentTab === 'disk') {
+    const maxIO = Math.max(1, ...historyData.diskRead, ...historyData.diskWrite);
+    drawChart('canvas-disk', historyData.diskRead, '#64d2ff', historyData.diskWrite, '#ff453a', maxIO);
+  } else if (currentTab === 'network') {
+    const maxNet = Math.max(1, ...historyData.netIn, ...historyData.netOut);
+    drawChart('canvas-net', historyData.netIn, '#007aff', historyData.netOut, '#ff453a', maxNet);
+  } else if (currentTab === 'gpu') {
+    drawChart('canvas-gpu', historyData.gpuUtil, '#af52de', null, null, 100);
+  }
+}
+
+// Update Bottom Panel Elements
+function updateBottomPanel() {
+  if (!latestData) return;
+  const d = latestData;
+
+  // CPU
+  const totalCpu = d.cpu.usage || 0;
+  const userCpu = totalCpu * 0.75;
+  const sysCpu = totalCpu * 0.25;
+  const idleCpu = Math.max(0, 100 - totalCpu);
+
+  document.getElementById('cpu-stat-system').textContent = sysCpu.toFixed(1) + '%';
+  document.getElementById('cpu-stat-user').textContent = userCpu.toFixed(1) + '%';
+  document.getElementById('cpu-stat-idle').textContent = idleCpu.toFixed(1) + '%';
+  
+  const totalThreads = (d.processes || []).reduce((acc, p) => acc + (p.threads || 1), 0);
+  document.getElementById('cpu-stat-threads').textContent = totalThreads.toLocaleString();
+  document.getElementById('cpu-stat-procs').textContent = (d.processes || []).length;
+  document.getElementById('cpu-stat-brand').textContent = (d.cpu.brand || 'Apple Silicon') + ' (' + (d.cpu.cores || 8) + ' cores)';
+
+  // Memory
+  const m = d.memory;
+  document.getElementById('mem-stat-phys').textContent = fmtBytes(m.total);
+  document.getElementById('mem-stat-used').textContent = fmtBytes(m.used);
+  document.getElementById('mem-stat-wired').textContent = fmtBytes(m.wiredBytes || m.used * 0.22);
+  document.getElementById('mem-stat-comp').textContent = fmtBytes(m.compressedBytes || 0);
+  document.getElementById('mem-stat-cached').textContent = fmtBytes(Math.max(0, m.total - m.used - m.free));
+  document.getElementById('mem-stat-swap').textContent = fmtBytes(m.swapUsed);
+  document.getElementById('mem-stat-app').textContent = fmtBytes(Math.max(0, m.used - (m.wiredBytes || m.used * 0.22) - (m.compressedBytes || 0)));
+
+  const pDot = document.getElementById('pressure-dot');
+  const pTxt = document.getElementById('pressure-text');
+  const pct = m.usagePercent || 0;
+  if (pct > 80) {
+    pDot.className = 'pressure-dot crit';
+    pTxt.textContent = 'Critical (' + pct.toFixed(0) + '%)';
+    pTxt.style.color = 'var(--mac-red)';
+  } else if (pct > 65) {
+    pDot.className = 'pressure-dot warn';
+    pTxt.textContent = 'Warning (' + pct.toFixed(0) + '%)';
+    pTxt.style.color = 'var(--mac-yellow)';
+  } else {
+    pDot.className = 'pressure-dot';
+    pTxt.textContent = 'Normal';
+    pTxt.style.color = 'var(--mac-green)';
+  }
+
+  // Energy
+  const tw = d.power?.combinedWatts ?? (d.battery?.powerWatts || 0);
+  document.getElementById('energy-stat-total').textContent = tw ? tw.toFixed(2) + ' W' : '–';
+  document.getElementById('energy-stat-cpu').textContent = d.power?.cpuWatts != null ? d.power.cpuWatts.toFixed(2) + ' W' : '–';
+  document.getElementById('energy-stat-gpu').textContent = d.power?.gpuWatts != null ? d.power.gpuWatts.toFixed(2) + ' W' : '–';
+
+  if (d.battery) {
+    document.getElementById('energy-stat-batt').textContent = d.battery.level + '% (' + d.battery.state + ')';
+    document.getElementById('energy-stat-source').textContent = d.battery.powerSource || 'Battery';
+    document.getElementById('energy-stat-timerem').textContent = d.battery.timeRemaining || 'Calculating…';
+    document.getElementById('energy-stat-health').textContent = (d.battery.condition || 'Normal') + (d.battery.cycles ? ' · ' + d.battery.cycles + ' cycles' : '');
+  } else {
+    document.getElementById('energy-stat-batt').textContent = 'AC Power Only';
+    document.getElementById('energy-stat-source').textContent = 'Power Adapter';
+    document.getElementById('energy-stat-timerem').textContent = 'N/A';
+    document.getElementById('energy-stat-health').textContent = 'Good';
+  }
+
+  // Disk
+  const firstDisk = (d.disk && d.disk[0]) ? d.disk[0] : null;
+  const dRead = firstDisk?.readBytesSec || 0;
+  const dWrite = firstDisk?.writeBytesSec || 0;
+  document.getElementById('disk-stat-reads').textContent = fmtBytes(dRead) + '/s';
+  document.getElementById('disk-stat-writes').textContent = fmtBytes(dWrite) + '/s';
+  document.getElementById('disk-stat-total-read').textContent = firstDisk?.used || '–';
+  document.getElementById('disk-stat-total-write').textContent = firstDisk?.available || '–';
+
+  // Disk Mounts bars
+  const mountsBox = document.getElementById('disk-mounts-box');
+  if (d.disk && d.disk.length) {
+    mountsBox.innerHTML = d.disk.map(v => \`
+      <div style="font-size:10px;">
+        <div style="display:flex;justify-content:space-between;color:var(--text-secondary);">
+          <span>\${escapeHtml(v.mountpoint || '/')}</span>
+          <span>\${escapeHtml(v.used)} / \${escapeHtml(v.size)}</span>
+        </div>
+        <div class="disk-bar"><div class="disk-bar-fill" style="width:\${parseFloat(v.capacity)||50}%"></div></div>
+      </div>
+    \`).join('');
+  }
+
+  // Network
+  document.getElementById('net-stat-pkts-in').textContent = (d.network.rxPacketsPerSec || Math.round(d.network.rxPackets / 1000) || 0).toLocaleString();
+  document.getElementById('net-stat-pkts-out').textContent = (d.network.txPacketsPerSec || Math.round(d.network.txPackets / 1000) || 0).toLocaleString();
+  document.getElementById('net-stat-rate-in').textContent = fmtBytes(d.network.rxRate || 0) + '/s';
+  document.getElementById('net-stat-rate-out').textContent = fmtBytes(d.network.txRate || 0) + '/s';
+  document.getElementById('net-stat-total-in').textContent = fmtBytes(d.network.rxBytes);
+  document.getElementById('net-stat-total-out').textContent = fmtBytes(d.network.txBytes);
+  document.getElementById('net-stat-iface').textContent = (d.network.interface || 'en0') + ' · ' + (d.network.ip || '127.0.0.1');
+
+  // GPU
+  if (d.gpu) {
+    document.getElementById('gpu-stat-model').textContent = d.gpu.model || 'Integrated GPU';
+    document.getElementById('gpu-stat-util').textContent = (d.gpu.utilization || 0).toFixed(1) + '%';
+    document.getElementById('gpu-stat-vram').textContent = fmtBytes(d.gpu.memory || 0);
+    document.getElementById('gpu-stat-procs').textContent = d.gpu.processes || 0;
+    document.getElementById('gpu-stat-temp').textContent = d.gpu.temperature ? d.gpu.temperature + '°C' : '–';
+  }
+}
+
+// Ingest Incoming Data Stream
+let prevRx = null, prevTx = null;
+function ingestStats(d) {
+  latestData = d;
+
+  const totalCpu = d.cpu.usage || 0;
+  pushHistory(historyData.cpuUser, totalCpu * 0.75);
+  pushHistory(historyData.cpuSystem, totalCpu * 0.25);
+  pushHistory(historyData.memPressure, d.memory.usagePercent || 0);
+
+  const tw = d.power?.combinedWatts ?? (d.battery?.powerWatts || 0);
+  pushHistory(historyData.energyWatts, tw);
+
+  const firstDisk = (d.disk && d.disk[0]) ? d.disk[0] : null;
+  pushHistory(historyData.diskRead, firstDisk?.readBytesSec || 0);
+  pushHistory(historyData.diskWrite, firstDisk?.writeBytesSec || 0);
+
+  let rxRate = d.network.rxRate || 0;
+  let txRate = d.network.txRate || 0;
+  if (!rxRate && prevRx !== null) rxRate = Math.max(0, d.network.rxBytes - prevRx) / 2;
+  if (!txRate && prevTx !== null) txRate = Math.max(0, d.network.txBytes - prevTx) / 2;
+  prevRx = d.network.rxBytes; prevTx = d.network.txBytes;
+
+  pushHistory(historyData.netIn, rxRate);
+  pushHistory(historyData.netOut, txRate);
+  pushHistory(historyData.gpuUtil, d.gpu?.utilization || 0);
+
+  // Status Bar
+  document.getElementById('sb-dot').className = 'sb-live-dot';
+  document.getElementById('sb-status').textContent = 'Live';
+  document.getElementById('sb-host').textContent = (d.header.hostname || 'Mac') + ' (' + (d.header.os || 'macOS') + ')';
+  document.getElementById('sb-time').textContent = new Date().toLocaleTimeString();
+
+  renderTableRows();
+  updateBottomPanel();
+  drawAllCanvases();
+}
+
+// Window Resize Hook
+window.addEventListener('resize', () => {
+  requestAnimationFrame(drawAllCanvases);
+});
+
+// Modal Management
+function openModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.add('open');
+}
+function closeModal(id) {
+  const m = document.getElementById(id);
+  if (m) m.classList.remove('open');
+}
+
+// Quit Confirmation
+function confirmQuitSelected() {
+  if (selectedPid === null) return;
+  const p = (latestData?.processes || []).find(x => x.pid === selectedPid);
+  const name = p ? p.command.replace(/^.*[\\\/]/, '') : 'selected process';
+  document.getElementById('quit-modal-desc').innerHTML = \`Are you sure you want to quit <b>\${escapeHtml(name)}</b> (PID \${selectedPid})?<br/><span style="font-size:11px;color:var(--text-tertiary);">Quitting may result in unsaved changes being lost.</span>\`;
+  openModal('modal-quit');
+}
+
+function confirmQuitFromInspector() {
+  closeModal('modal-inspector');
+  confirmQuitSelected();
+}
+
+async function executeQuit(isForce) {
+  if (selectedPid === null) return;
+  const pidToKill = selectedPid;
+  const sig = isForce ? 'SIGKILL' : 'SIGTERM';
+  closeModal('modal-quit');
+
+  try {
+    const res = await fetch(\`/api/kill?pid=\${pidToKill}&signal=\${sig}\`);
+    const data = await res.json();
+    if (data.success) {
+      showToast(\`Sent \${sig} to PID \${pidToKill}\`);
+      selectedPid = null;
+      document.getElementById('btn-stop').disabled = true;
+      document.getElementById('btn-inspect').disabled = true;
+    } else {
+      showToast('Error: ' + (data.error || 'Failed to kill process'));
+    }
+  } catch (e) {
+    showToast('Network error: ' + e.message);
+  }
+}
+
+// Process Inspector
+function openInspector(pid) {
+  selectRow(pid);
+  const p = (latestData?.processes || []).find(x => x.pid === pid);
+  if (!p) return;
+
+  const shortName = p.command.replace(/^.*[\\\/]/, '');
+  document.getElementById('inspect-title').textContent = \`\${shortName} (PID \${p.pid})\`;
+
+  const totalMem = latestData.memory?.total || 1;
+  const memBytes = (p.mem / 100) * totalMem;
+
+  document.getElementById('inspect-body').innerHTML = \`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div class="proc-icon user" style="width:36px;height:36px;font-size:16px;border-radius:6px;">\${shortName[0]?.toUpperCase() || 'P'}</div>
+      <div>
+        <div style="font-size:14px;font-weight:700;">\${escapeHtml(shortName)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);word-break:break-all;">\${escapeHtml(p.command)}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-size:12px;">
+      <div class="stat-item"><span class="stat-k">Process ID:</span><span class="stat-v">\${p.pid}</span></div>
+      <div class="stat-item"><span class="stat-k">Parent Process ID:</span><span class="stat-v">\${p.ppid || '1'}</span></div>
+      <div class="stat-item"><span class="stat-k">User:</span><span class="stat-v">\${escapeHtml(p.user || 'root')}</span></div>
+      <div class="stat-item"><span class="stat-k">State:</span><span class="stat-v">\${escapeHtml(p.state || 'R')}</span></div>
+      <div class="stat-item"><span class="stat-k">% CPU Usage:</span><span class="stat-v">\${p.cpu.toFixed(1)}%</span></div>
+      <div class="stat-item"><span class="stat-k">CPU Runtime:</span><span class="stat-v">\${fmtTime(p.runtime)}</span></div>
+      <div class="stat-item"><span class="stat-k">Memory:</span><span class="stat-v">\${fmtBytes(memBytes)} (\${p.mem.toFixed(1)}%)</span></div>
+      <div class="stat-item"><span class="stat-k">Threads:</span><span class="stat-v">\${p.threads || 1}</span></div>
+    </div>
+  \`;
+
+  openModal('modal-inspector');
+}
+
+function openInspectorSelected() {
+  if (selectedPid !== null) openInspector(selectedPid);
+}
+
+// Keyboard Navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal('modal-quit');
+    closeModal('modal-inspector');
+    return;
+  }
+
+  // If focused in search, don't hijack keys
+  if (document.activeElement === document.getElementById('search-input')) {
+    return;
+  }
+
+  // Segmented shortcuts 1-6
+  const keyTabs = { '1': 'cpu', '2': 'memory', '3': 'energy', '4': 'disk', '5': 'network', '6': 'gpu' };
+  if (keyTabs[e.key]) {
+    switchTab(keyTabs[e.key]);
+    return;
+  }
+
+  // Table arrow navigation
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && latestData?.processes?.length) {
+    e.preventDefault();
+    const rows = Array.from(document.querySelectorAll('#proc-tbody tr'));
+    if (!rows.length) return;
+    const curIdx = rows.findIndex(tr => Number(tr.dataset.pid) === selectedPid);
+    let nextIdx = curIdx;
+    if (e.key === 'ArrowDown') nextIdx = curIdx < rows.length - 1 ? curIdx + 1 : 0;
+    if (e.key === 'ArrowUp') nextIdx = curIdx > 0 ? curIdx - 1 : rows.length - 1;
+    const nextPid = Number(rows[nextIdx].dataset.pid);
+    selectRow(nextPid);
+    rows[nextIdx].scrollIntoView({ block: 'nearest' });
+    return;
+  }
+
+  // Enter or Space opens inspector
+  if ((e.key === 'Enter' || e.key === ' ') && selectedPid !== null) {
+    e.preventDefault();
+    openInspectorSelected();
+    return;
+  }
+
+  // Delete or Backspace prompts quit
+  if ((e.key === 'Backspace' || e.key === 'Delete') && selectedPid !== null) {
+    e.preventDefault();
+    confirmQuitSelected();
+    return;
+  }
+
+  // Cmd+F or / focuses search
+  if ((e.key === 'f' && (e.metaKey || e.ctrlKey)) || e.key === '/') {
+    e.preventDefault();
+    const s = document.getElementById('search-input');
+    s.focus();
+    s.select();
+  }
+});
+
+// SSE Connection
+let eventSource = null;
+function initSSE() {
+  try {
+    eventSource = new EventSource('/api/stream');
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        ingestStats(data);
+      } catch (err) {
+        console.error('SSE parse error:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      document.getElementById('sb-dot').className = 'sb-live-dot offline';
+      document.getElementById('sb-status').textContent = 'Reconnecting';
+    };
+  } catch (err) {
+    console.error('SSE error:', err);
+  }
+}
+
+// Fallback Polling (also handles window.__pyreUpdate from Cocoa WebView)
+window.__pyreUpdate = function(jsonStr) {
+  try {
+    const d = JSON.parse(jsonStr);
+    ingestStats(d);
+  } catch (e) {
+    console.error('pyreUpdate parse error:', e);
+  }
+};
+
+async function pollFallback() {
+  try {
+    const res = await fetch('/api/stats', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      ingestStats(data);
+    }
+  } catch (err) {
+    document.getElementById('sb-dot').className = 'sb-live-dot offline';
+    document.getElementById('sb-status').textContent = 'Offline';
+  }
+}
+
+// Initialize
+renderTableHeader();
+initSSE();
+pollFallback();
+setInterval(() => {
+  if (!latestData || document.getElementById('sb-status').textContent === 'Offline') {
+    pollFallback();
+  }
+}, 3000);
 </script>
 </body>
 </html>`;
