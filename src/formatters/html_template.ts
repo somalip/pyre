@@ -76,22 +76,6 @@ body {
   justify-content: center;
 }
 
-/* Traffic Lights (Visual Mac Touch) */
-.mac-traffic-lights {
-  display: flex;
-  gap: 8px;
-  margin-right: 8px;
-}
-.traffic-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  position: relative;
-}
-.traffic-close { background: #ff5f56; border: 1px solid #e0443e; }
-.traffic-min { background: #ffbd2e; border: 1px solid #dea123; }
-.traffic-zoom { background: #27c93f; border: 1px solid #1aab29; }
-
 /* macOS Toolbar Push Buttons */
 .mac-btn {
   display: inline-flex;
@@ -241,6 +225,191 @@ body {
   line-height: 1;
 }
 
+/* Session Recorder Button & Pulsing Dot */
+.mac-btn-record {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  gap: 7px;
+  padding: 0 10px;
+  border-color: var(--border-color);
+  background: #323235;
+}
+.mac-btn-record:hover:not(:disabled) {
+  background: #3e3e42;
+}
+.mac-btn-record.recording {
+  background: rgba(255, 69, 58, 0.22);
+  border-color: var(--mac-red);
+  color: #ff6961;
+}
+.rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #777;
+  display: inline-block;
+  transition: background 0.2s;
+}
+.mac-btn-record.recording .rec-dot {
+  background: #ff453a;
+  box-shadow: 0 0 8px #ff453a;
+  animation: rec-pulse 1.2s infinite alternate ease-in-out;
+}
+@keyframes rec-pulse {
+  from { opacity: 0.45; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+/* Export Snapshot Dropdown Menu */
+.mac-dropdown-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.mac-dropdown-menu {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  min-width: 165px;
+  background: #2c2c2e;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.65);
+  padding: 5px;
+  display: none;
+  flex-direction: column;
+  z-index: 200;
+}
+.mac-dropdown-menu.show {
+  display: flex;
+}
+.mac-menu-item {
+  padding: 6px 12px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mac-menu-item:hover {
+  background: var(--mac-blue);
+  color: #fff;
+}
+
+/* Logs View & Stream Table */
+#logs-view {
+  flex: 1;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+.logs-sub-toolbar {
+  height: 38px;
+  min-height: 38px;
+  background: var(--bg-table-header);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  gap: 10px;
+}
+.logs-sub-left, .logs-sub-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logs-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--bg-window);
+}
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.log-table th {
+  position: sticky;
+  top: 0;
+  background: #252528;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  z-index: 5;
+}
+.log-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  font-family: var(--font-mono);
+}
+.log-table tr:hover {
+  background: var(--bg-surface-hover);
+}
+.log-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.log-badge.info { background: rgba(0, 122, 255, 0.18); color: #64b5f6; border: 1px solid rgba(0, 122, 255, 0.3); }
+.log-badge.warn { background: rgba(255, 159, 10, 0.18); color: #ffb74d; border: 1px solid rgba(255, 159, 10, 0.35); }
+.log-badge.crit { background: rgba(255, 69, 58, 0.22); color: #ff6e6e; border: 1px solid rgba(255, 69, 58, 0.45); }
+.log-badge.action { background: rgba(175, 82, 222, 0.2); color: #d084f7; border: 1px solid rgba(175, 82, 222, 0.4); }
+.log-badge.watchdog { background: rgba(52, 199, 89, 0.2); color: #81c784; border: 1px solid rgba(52, 199, 89, 0.4); }
+
+.log-subsys {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.log-msg {
+  color: var(--text-primary);
+  font-family: var(--font-system);
+  font-size: 11.5px;
+}
+.log-ctx {
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+}
+
+/* History Explorer Table */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.history-table th {
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+.history-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.history-link {
+  color: var(--mac-blue);
+  cursor: pointer;
+  text-decoration: none;
+}
+.history-link:hover {
+  text-decoration: underline;
+}
+
 /* Main Split View */
 #split-view {
   flex: 1;
@@ -338,6 +507,14 @@ table.mac-table td {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
+}
+table.mac-table.density-compact td {
+  padding: 1px 7px;
+  font-size: 10px;
+}
+table.mac-table.density-comfortable td {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 table.mac-table td.col-name {
   text-align: left;
@@ -575,6 +752,170 @@ canvas.mac-canvas {
 }
 .modal-quit-box { width: 380px; padding: 20px; text-align: center; }
 .modal-inspect-box { width: 520px; }
+.modal-settings-box {
+  width: 680px;
+  height: 540px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+.settings-tabs {
+  display: flex;
+  background: #1c1c1e;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 10px;
+  gap: 4px;
+}
+.settings-tab-btn {
+  padding: 9px 13px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.settings-tab-btn:hover {
+  color: var(--text-primary);
+}
+.settings-tab-btn.active {
+  color: #fff;
+  border-bottom-color: var(--mac-blue);
+  font-weight: 600;
+}
+.settings-content-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: var(--bg-window);
+}
+.settings-pane {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+.settings-pane.active {
+  display: flex;
+}
+.settings-card {
+  background: #252528;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.settings-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.settings-sublabel {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.settings-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* macOS style toggle switch */
+.mac-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+}
+.mac-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.mac-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #3e3e42;
+  transition: 0.2s;
+  border-radius: 22px;
+  border: 1px solid var(--border-color);
+}
+.mac-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #fff;
+  transition: 0.2s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+input:checked + .mac-slider {
+  background-color: var(--mac-blue);
+  border-color: var(--mac-blue);
+}
+input:checked + .mac-slider:before {
+  transform: translateX(16px);
+}
+.settings-input {
+  background: #1e1e20;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  color: var(--text-primary);
+  padding: 4px 8px;
+  font-size: 11.5px;
+  outline: none;
+}
+.settings-input:focus {
+  border-color: var(--mac-blue);
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.status-pill.active {
+  background: rgba(52, 199, 89, 0.2);
+  color: #34c759;
+  border: 1px solid rgba(52, 199, 89, 0.35);
+}
+.status-pill.inactive {
+  background: rgba(255, 159, 10, 0.2);
+  color: #ff9f0a;
+  border: 1px solid rgba(255, 159, 10, 0.35);
+}
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideDown { from { transform: translateY(-16px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
@@ -677,13 +1018,6 @@ canvas.mac-canvas {
 <!-- Unified macOS Toolbar -->
 <header id="toolbar">
   <div class="toolbar-left">
-    <!-- Traffic lights simulation -->
-    <div class="mac-traffic-lights">
-      <div class="traffic-dot traffic-close" title="Close"></div>
-      <div class="traffic-dot traffic-min" title="Minimize"></div>
-      <div class="traffic-dot traffic-zoom" title="Zoom"></div>
-    </div>
-
     <!-- Stop process button (octagon with ✕) -->
     <button id="btn-stop" class="mac-btn mac-btn-icon mac-btn-danger" title="Force a process to quit" disabled onclick="confirmQuitSelected()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -697,6 +1031,28 @@ canvas.mac-canvas {
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
       </svg>
     </button>
+
+    <!-- Continuous CSV Session Recorder button -->
+    <button id="btn-record" class="mac-btn mac-btn-record" title="Start continuous CSV logging session to ./pyre-exports (Shortcut: R)" onclick="toggleWebRecording()">
+      <span class="rec-dot" id="rec-dot"></span>
+      <span id="rec-label">Record</span>
+    </button>
+
+    <!-- Quick Snapshot Exporter -->
+    <div class="mac-dropdown-wrap">
+      <button id="btn-export" class="mac-btn" title="Export current telemetry snapshot" onclick="toggleExportMenu(event)">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+        </svg>
+        <span>Export ▾</span>
+      </button>
+      <div class="mac-dropdown-menu" id="export-menu">
+        <div class="mac-menu-item" onclick="downloadSnapshot('json')">📄 Snapshot JSON</div>
+        <div class="mac-menu-item" onclick="downloadSnapshot('csv')">📊 Snapshot CSV</div>
+        <div class="mac-menu-item" onclick="downloadSnapshot('tsv')">📋 Snapshot TSV</div>
+        <div class="mac-menu-item" onclick="downloadSnapshot('md')">📝 Snapshot Markdown</div>
+      </div>
+    </div>
   </div>
 
   <!-- Segmented Control Tabs (Center) -->
@@ -708,6 +1064,7 @@ canvas.mac-canvas {
       <div class="mac-seg-item" data-tab="disk" onclick="switchTab('disk')">Disk</div>
       <div class="mac-seg-item" data-tab="network" onclick="switchTab('network')">Network</div>
       <div class="mac-seg-item" data-tab="gpu" onclick="switchTab('gpu')">GPU</div>
+      <div class="mac-seg-item" data-tab="logs" onclick="switchTab('logs')">Logs</div>
     </nav>
   </div>
 
@@ -728,12 +1085,19 @@ canvas.mac-canvas {
       <input id="search-input" class="mac-search-input" type="text" placeholder="Search" oninput="onSearchInput(this.value)" autocomplete="off" spellcheck="false"/>
       <div id="search-clear" class="mac-search-clear" onclick="clearSearch()">✕</div>
     </div>
+
+    <!-- Settings / Preferences Button -->
+    <button id="btn-settings" class="mac-btn mac-btn-icon" title="Preferences (Cmd+,)" onclick="openSettingsModal()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+    </button>
   </div>
 </header>
 
 <!-- Main Split View -->
 <div id="split-view">
-  <!-- Top: Dynamic Process Table -->
+  <!-- Top: Dynamic Process Table & Logs View -->
   <main id="table-container" tabindex="0">
     <table class="mac-table" id="proc-table">
       <thead id="proc-thead">
@@ -743,6 +1107,60 @@ canvas.mac-canvas {
         <!-- Process rows injected here -->
       </tbody>
     </table>
+
+    <!-- Dedicated Logs & Audit Stream Container -->
+    <div id="logs-view">
+      <div class="logs-sub-toolbar">
+        <div class="logs-sub-left">
+          <select id="log-filter-level" class="mac-select" onchange="onLogLevelFilterChange(this.value)" title="Filter log severity">
+            <option value="all">All Severities</option>
+            <option value="INFO">Info</option>
+            <option value="WARN">Warnings</option>
+            <option value="CRIT">Critical</option>
+            <option value="ACTION">User Actions</option>
+            <option value="WATCHDOG">Watchdog</option>
+          </select>
+          <select id="log-filter-subsys" class="mac-select" onchange="onLogSubsysFilterChange(this.value)" title="Filter subsystem">
+            <option value="all">All Subsystems</option>
+            <option value="SYSTEM">System</option>
+            <option value="CPU">CPU</option>
+            <option value="MEM">Memory</option>
+            <option value="DISK">Disk</option>
+            <option value="NET">Network</option>
+            <option value="THERMAL">Thermal</option>
+            <option value="PROCESS">Process</option>
+            <option value="LOGGER">Recorder</option>
+          </select>
+          <div class="mac-search-wrap">
+            <svg class="mac-search-icon" viewBox="0 0 24 24">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+            </svg>
+            <input id="log-search-input" class="mac-search-input" style="width:180px;" type="text" placeholder="Search event logs (L)" oninput="onLogSearchInput(this.value)" autocomplete="off" spellcheck="false"/>
+          </div>
+        </div>
+        <div class="logs-sub-right">
+          <button id="btn-autoscroll" class="mac-btn" onclick="toggleAutoScroll()" style="font-size:11px;color:var(--mac-green);">Auto-scroll: ON</button>
+          <button class="mac-btn" onclick="clearLogs()" style="font-size:11px;">Clear</button>
+          <button class="mac-btn mac-btn-primary" onclick="downloadLogsExport()" style="font-size:11px;">Export Logs JSON</button>
+        </div>
+      </div>
+      <div class="logs-scroll-area" id="logs-scroll-area">
+        <table class="log-table" id="logs-table">
+          <thead>
+            <tr>
+              <th style="width:130px;">Time</th>
+              <th style="width:85px;">Severity</th>
+              <th style="width:90px;">Subsystem</th>
+              <th>Event Message</th>
+              <th style="width:220px;text-align:right;">Context / Telemetry</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <!-- Dynamic logs inserted here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
   </main>
 
   <!-- Horizontal Splitter Divider -->
@@ -884,6 +1302,41 @@ canvas.mac-canvas {
         <canvas class="mac-canvas" id="canvas-gpu"></canvas>
       </div>
     </div>
+
+    <!-- 7. Logs Panel (Recording Session & History Explorer) -->
+    <div class="panel-content" id="panel-logs">
+      <div class="pane-stats" style="flex:1.2;">
+        <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);display:flex;align-items:center;gap:6px;">
+          <span>Session CSV Recorder</span>
+          <span id="logs-rec-badge" class="log-badge info">IDLE</span>
+        </div>
+        <div class="stat-item"><span class="stat-k">Status:</span><span class="stat-v" id="rec-stat-status">Idle</span></div>
+        <div class="stat-item"><span class="stat-k">Active File:</span><span class="stat-v" id="rec-stat-file" style="font-size:10px;word-break:break-all;">–</span></div>
+        <div class="stat-item"><span class="stat-k">Samples:</span><span class="stat-v" id="rec-stat-samples">0</span></div>
+        <div class="stat-item"><span class="stat-k">Duration:</span><span class="stat-v" id="rec-stat-duration">0s</span></div>
+        <div class="stat-item"><span class="stat-k">Export Dir:</span><span class="stat-v" id="rec-stat-dir" style="font-size:10px;">./pyre-exports</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="mac-btn mac-btn-primary" id="btn-panel-rec" onclick="toggleWebRecording()" style="height:24px;font-size:11px;">Start Recording</button>
+          <button class="mac-btn" onclick="fetchLogHistory()" style="height:24px;font-size:11px;">Refresh History</button>
+        </div>
+      </div>
+      <div class="pane-graph" style="flex:2;display:flex;flex-direction:column;padding:8px 12px;overflow-y:auto;">
+        <div class="graph-header" style="margin-bottom:6px;">
+          <span class="graph-title">Saved CSV Logs on Disk</span>
+          <span style="font-size:10px;color:var(--text-tertiary);">Replay in CLI: <code>pyre replay &lt;file&gt;</code></span>
+        </div>
+        <div id="history-list-box" style="flex:1;overflow-y:auto;">
+          <table class="history-table">
+            <thead>
+              <tr><th>Filename</th><th>Size</th><th>Recorded At</th><th>Action</th></tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr><td colspan="4" style="color:var(--text-tertiary);text-align:center;padding:12px;">Scanning ./pyre-exports...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </footer>
 </div>
 
@@ -939,6 +1392,336 @@ canvas.mac-canvas {
   </div>
 </div>
 
+<!-- Modal 3: Settings / Preferences Sheet -->
+<div class="modal-backdrop" id="modal-settings" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="mac-sheet modal-settings-box">
+    <div class="sheet-header">
+      <span class="sheet-title">Pyre Preferences</span>
+      <button class="sheet-close-btn" onclick="closeSettingsModal()">✕</button>
+    </div>
+
+    <!-- Tab navigation -->
+    <div class="settings-tabs">
+      <button class="settings-tab-btn active" data-stab="general" onclick="switchSettingsTab('general')">General</button>
+      <button class="settings-tab-btn" data-stab="autostart" onclick="switchSettingsTab('autostart')">Start on Boot</button>
+      <button class="settings-tab-btn" data-stab="alerts" onclick="switchSettingsTab('alerts')">Alerts & Watchdog</button>
+      <button class="settings-tab-btn" data-stab="appearance" onclick="switchSettingsTab('appearance')">Appearance</button>
+      <button class="settings-tab-btn" data-stab="diagnostics" onclick="switchSettingsTab('diagnostics')">Diagnostics</button>
+    </div>
+
+    <div class="settings-content-wrap">
+      <!-- 1. General Pane -->
+      <div class="settings-pane active" id="spane-general">
+        <div class="settings-card">
+          <div class="settings-card-title">Telemetry Update Frequency</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Update Interval</span>
+              <span class="settings-sublabel">How frequently Pyre collects and refreshes hardware & process statistics</span>
+            </div>
+            <div class="settings-control">
+              <select id="set-interval" class="mac-select" onchange="onSettingChange()">
+                <option value="0.5">0.5s (Turbo High Performance)</option>
+                <option value="1">1.0s (Fast Gaming/Dev)</option>
+                <option value="2">2.0s (Default Balanced)</option>
+                <option value="5">5.0s (Low Energy)</option>
+                <option value="10">10.0s (Battery Saver)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Process Table Defaults</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Default Process Filter</span>
+              <span class="settings-sublabel">Initial process filter when dashboard opens</span>
+            </div>
+            <div class="settings-control">
+              <select id="set-filter" class="mac-select" onchange="onSettingChange()">
+                <option value="all">All Processes</option>
+                <option value="my">My Processes</option>
+                <option value="active">Active Processes Only</option>
+                <option value="system">System Daemons Only</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Default Sort Column</span>
+              <span class="settings-sublabel">Default metric used to sort processes on launch</span>
+            </div>
+            <div class="settings-control">
+              <select id="set-sort" class="mac-select" onchange="onSettingChange()">
+                <option value="cpu">% CPU</option>
+                <option value="mem">Memory Usage</option>
+                <option value="runtime">CPU Runtime</option>
+                <option value="threads">Thread Count</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Window & Launch Behavior</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Launch in Compact Widget Mode</span>
+              <span class="settings-sublabel">Opens a compact floating HUD instead of the full activity window</span>
+            </div>
+            <div class="settings-control">
+              <label class="mac-switch">
+                <input type="checkbox" id="set-compact" onchange="onSettingChange()">
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Keep Window Always on Top</span>
+              <span class="settings-sublabel">Floats the dashboard window above all other full-screen apps</span>
+            </div>
+            <div class="settings-control">
+              <label class="mac-switch">
+                <input type="checkbox" id="set-ontop" onchange="onSettingChange()">
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Start on Boot Pane -->
+      <div class="settings-pane" id="spane-autostart">
+        <div class="settings-card">
+          <div class="settings-card-title">Background Telemetry Service (Start on Boot)</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Start Pyre Telemetry on System Startup</span>
+              <span class="settings-sublabel">Installs a native user-level LaunchAgent (macOS) or systemd user service (Linux)</span>
+            </div>
+            <div class="settings-control">
+              <label class="mac-switch">
+                <input type="checkbox" id="set-autostart" onchange="toggleAutostartFromUI(this.checked)">
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div style="font-size:11px;background:#1a1a1d;border:1px solid var(--border-color);border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="color:var(--text-secondary);">Service Status:</span>
+              <span id="svc-status-pill" class="status-pill inactive">Checking…</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <span style="color:var(--text-secondary);">Service Identifier:</span>
+              <span id="svc-label" style="font-family:var(--font-mono);font-size:10px;">com.pyre.web</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;word-break:break-all;">
+              <span style="color:var(--text-secondary);">Agent Path:</span>
+              <span id="svc-path" style="font-family:var(--font-mono);font-size:10px;">~/Library/LaunchAgents/com.pyre.web.plist</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;word-break:break-all;">
+              <span style="color:var(--text-secondary);">Log File:</span>
+              <span id="svc-log" style="font-family:var(--font-mono);font-size:10px;">~/.config/pyre/web.log</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Network & Remote Access</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Expose to Local Network (Wi-Fi / LAN)</span>
+              <span class="settings-sublabel">When enabled, Pyre dashboard is reachable from other devices on your LAN</span>
+            </div>
+            <div class="settings-control">
+              <label class="mac-switch">
+                <input type="checkbox" id="set-lan" onchange="onSettingChange()">
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Default Web Server Port</span>
+              <span class="settings-sublabel">Port used when running pyre web or background service</span>
+            </div>
+            <div class="settings-control">
+              <input id="set-port" type="number" class="settings-input" style="width:75px;" value="3000" min="1024" max="65535" onchange="onSettingChange()">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Alerts & Watchdog Pane -->
+      <div class="settings-pane" id="spane-alerts">
+        <div class="settings-card">
+          <div class="settings-card-title">Resource Threshold Triggers</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">CPU Alert Threshold (%)</span>
+              <span class="settings-sublabel">Trigger alert when system or process CPU exceeds this percentage</span>
+            </div>
+            <div class="settings-control">
+              <input id="set-cpu-alert" type="number" class="settings-input" style="width:70px;" min="50" max="100" value="90" onchange="onSettingChange()">
+              <span style="color:var(--text-secondary);font-size:11px;">%</span>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Temperature Alert Threshold (°C)</span>
+              <span class="settings-sublabel">Trigger warning when SoC/CPU temperature exceeds this limit</span>
+            </div>
+            <div class="settings-control">
+              <input id="set-temp-alert" type="number" class="settings-input" style="width:70px;" min="60" max="110" value="95" onchange="onSettingChange()">
+              <span style="color:var(--text-secondary);font-size:11px;">°C</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Autonomous Process Watchdog</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Target Process Name Filter</span>
+              <span class="settings-sublabel">Leave blank to monitor all processes, or specify e.g. "node", "chrome", "python"</span>
+            </div>
+            <div class="settings-control">
+              <input id="set-watchdog-proc" type="text" class="settings-input" style="width:140px;" placeholder="All processes" onchange="onSettingChange()">
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Runaway Memory Limit (%)</span>
+              <span class="settings-sublabel">Threshold to flag or throttle memory-leaking tasks</span>
+            </div>
+            <div class="settings-control">
+              <input id="set-watchdog-mem" type="number" class="settings-input" style="width:70px;" min="10" max="95" value="80" onchange="onSettingChange()">
+              <span style="color:var(--text-secondary);font-size:11px;">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Notification Channels & Webhooks</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Slack Webhook URL</span>
+              <span class="settings-sublabel">https://hooks.slack.com/services/...</span>
+            </div>
+            <input id="set-slack-url" type="text" class="settings-input" style="width:230px;" placeholder="Optional Slack webhook" onchange="onSettingChange()">
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Discord Webhook URL</span>
+              <span class="settings-sublabel">https://discord.com/api/webhooks/...</span>
+            </div>
+            <input id="set-discord-url" type="text" class="settings-input" style="width:230px;" placeholder="Optional Discord webhook" onchange="onSettingChange()">
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">ntfy.sh Topic URL</span>
+              <span class="settings-sublabel">https://ntfy.sh/my-topic</span>
+            </div>
+            <input id="set-ntfy-url" type="text" class="settings-input" style="width:230px;" placeholder="Optional ntfy URL" onchange="onSettingChange()">
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+            <button class="mac-btn mac-btn-primary" onclick="sendTestAlertFromUI()">Dispatch Test Notification</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Appearance Pane -->
+      <div class="settings-pane" id="spane-appearance">
+        <div class="settings-card">
+          <div class="settings-card-title">Hardware Telemetry Graphs</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Rolling History Window</span>
+              <span class="settings-sublabel">Amount of history preserved in CPU, GPU, Network, and Disk graphs</span>
+            </div>
+            <div class="settings-control">
+              <select id="set-history-len" class="mac-select" onchange="onSettingChange()">
+                <option value="30">30 seconds (Compact)</option>
+                <option value="60">60 seconds (Standard)</option>
+                <option value="120">120 seconds (2 Minutes)</option>
+                <option value="300">300 seconds (5 Minutes Long Run)</option>
+              </select>
+            </div>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Animate Live Waveform Gradients</span>
+              <span class="settings-sublabel">Renders smooth neon area fills under live telemetry curves</span>
+            </div>
+            <div class="settings-control">
+              <label class="mac-switch">
+                <input type="checkbox" id="set-show-graphs" checked onchange="onSettingChange()">
+                <span class="mac-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">Process Table Row Density</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Table Row Density</span>
+              <span class="settings-sublabel">Adjust row density for higher information density</span>
+            </div>
+            <div class="settings-control">
+              <select id="set-density" class="mac-select" onchange="onDensityChange(this.value)">
+                <option value="compact">Compact (Activity Monitor classic)</option>
+                <option value="standard" selected>Standard (Balanced)</option>
+                <option value="comfortable">Comfortable (Larger text & touch)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Diagnostics Pane -->
+      <div class="settings-pane" id="spane-diagnostics">
+        <div class="settings-card">
+          <div class="settings-card-title">System Information</div>
+          <div id="diag-sys-info" style="font-size:11px;color:var(--text-secondary);display:flex;flex-direction:column;gap:5px;">
+            <div>Loading system specifications…</div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card-title">System Diagnostics (pyre doctor)</div>
+          <p style="font-size:11px;color:var(--text-secondary);margin:0;">Run an automated health check covering kernel access, SMC thermal sensors, battery diagnostics, permissions, and daemon connectivity.</p>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="mac-btn mac-btn-primary" id="btn-run-doctor" onclick="runDoctorFromUI()">Run Diagnostics</button>
+          </div>
+          <div id="doctor-results" style="display:none;background:#151518;border:1px solid var(--border-color);border-radius:6px;padding:10px;font-family:var(--font-mono);font-size:11px;max-height:160px;overflow-y:auto;white-space:pre-wrap;"></div>
+        </div>
+
+        <div class="settings-card" style="border-color:rgba(255,69,58,0.3);">
+          <div class="settings-card-title" style="color:var(--mac-red);">Reset Configuration</div>
+          <div class="settings-item">
+            <div class="settings-label-wrap">
+              <span class="settings-label">Reset Preferences to Factory Defaults</span>
+              <span class="settings-sublabel">Clears ~/.config/pyre/config.json back to original out-of-the-box defaults</span>
+            </div>
+            <button class="mac-btn mac-btn-danger" onclick="resetConfigFromUI()">Reset All Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet-footer" style="display:flex;justify-content:space-between;align-items:center;background:#252528;border-top:1px solid var(--border-color);padding:10px 16px;">
+      <span id="settings-status-hint" style="font-size:11px;color:var(--text-tertiary);">Preferences saved to ~/.config/pyre/config.json</span>
+      <div style="display:flex;gap:8px;">
+        <button class="mac-btn" onclick="closeSettingsModal()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Toast notification -->
 <div id="toast">Action completed</div>
 
@@ -949,6 +1732,19 @@ let latestData = null;
 let selectedPid = null;
 let currentFilter = 'all';
 let searchQuery = '';
+
+// Logs & Audit State
+let logsBuffer = [];
+let logFilterLevel = 'all';
+let logFilterSubsys = 'all';
+let logSearchQuery = '';
+let autoScrollLogs = true;
+let isRecording = false;
+let hasLoggedInit = false;
+let prevThermalState = null;
+let lastCpuSpikeTimes = {};
+let lastHighMemAlert = 0;
+let lastNetBurstAlert = 0;
 
 // Sort State per tab
 const sortState = {
@@ -1103,10 +1899,35 @@ function switchTab(tab) {
     el.classList.toggle('active', el.id === 'panel-' + tab);
   });
 
-  renderTableHeader();
-  renderTableRows();
-  updateBottomPanel();
-  requestAnimationFrame(drawAllCanvases);
+  // Logs tab: show logs-view, hide proc-table; otherwise reverse
+  const procTable = document.getElementById('proc-table');
+  const logsView = document.getElementById('logs-view');
+  const procFilter = document.getElementById('proc-filter');
+  const searchWrap = document.querySelector('.mac-search-wrap');
+  const btnStop = document.getElementById('btn-stop');
+  const btnInspect = document.getElementById('btn-inspect');
+  if (tab === 'logs') {
+    if (procTable) procTable.style.display = 'none';
+    if (logsView) logsView.style.display = 'flex';
+    if (procFilter) procFilter.style.display = 'none';
+    if (searchWrap) searchWrap.style.display = 'none';
+    if (btnStop) btnStop.style.display = 'none';
+    if (btnInspect) btnInspect.style.display = 'none';
+    renderLogs();
+    fetchLogHistory();
+    syncRecordingStatus();
+  } else {
+    if (procTable) procTable.style.display = '';
+    if (logsView) logsView.style.display = 'none';
+    if (procFilter) procFilter.style.display = '';
+    if (searchWrap) searchWrap.style.display = '';
+    if (btnStop) btnStop.style.display = '';
+    if (btnInspect) btnInspect.style.display = '';
+    renderTableHeader();
+    renderTableRows();
+    updateBottomPanel();
+    requestAnimationFrame(drawAllCanvases);
+  }
 }
 
 // Process Filtering and Searching
@@ -1464,6 +2285,9 @@ function ingestStats(d) {
   document.getElementById('sb-host').textContent = (d.header.hostname || 'Mac') + ' (' + (d.header.os || 'macOS') + ')';
   document.getElementById('sb-time').textContent = new Date().toLocaleTimeString();
 
+  // Analyze telemetry for automatic log events
+  analyzeAndLog(d);
+
   renderTableRows();
   updateBottomPanel();
   drawAllCanvases();
@@ -1509,10 +2333,18 @@ async function executeQuit(isForce) {
     const data = await res.json();
     if (data.success) {
       showToast(\`Sent \${sig} to PID \${pidToKill}\`);
+      const p = (latestData?.processes || []).find(x => x.pid === pidToKill);
+      const pname = p ? p.command.replace(/^.*[\\\\/]/, '') : 'PID ' + pidToKill;
+      addLogEntry('ACTION', 'PROCESS',
+        \`Sent \${sig} to \${pname} (PID \${pidToKill})\`,
+        isForce ? 'Force kill' : 'Graceful quit');
       selectedPid = null;
       document.getElementById('btn-stop').disabled = true;
       document.getElementById('btn-inspect').disabled = true;
     } else {
+      addLogEntry('WARN', 'PROCESS',
+        \`Failed to send \${sig} to PID \${pidToKill}\`,
+        data.error || 'Unknown error');
       showToast('Error: ' + (data.error || 'Failed to kill process'));
     }
   } catch (e) {
@@ -1559,23 +2391,375 @@ function openInspectorSelected() {
   if (selectedPid !== null) openInspector(selectedPid);
 }
 
+// ═══════════════════ SETTINGS & PREFERENCES ═══════════════════
+
+let currentConfig = {};
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/config');
+    if (res.ok) {
+      currentConfig = await res.json();
+      applyConfigToUI(currentConfig);
+    }
+  } catch (err) {
+    console.error('Failed to load config:', err);
+  }
+}
+
+function applyConfigToUI(cfg) {
+  if (!cfg) return;
+  const setVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined && val !== null) el.value = val;
+  };
+  const setChecked = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val !== undefined) el.checked = !!val;
+  };
+
+  setVal('set-interval', cfg.interval || cfg.telemetryInterval || '2');
+  setVal('set-filter', cfg.defaultFilter || 'all');
+  setVal('set-sort', cfg.defaultSort || 'cpu');
+  setChecked('set-compact', cfg.compact);
+  setChecked('set-ontop', cfg.alwaysOnTop);
+  setChecked('set-lan', cfg.exposeLan);
+  setVal('set-port', cfg.port || 3000);
+  setVal('set-history-len', cfg.historyDuration || '60');
+  setChecked('set-show-graphs', cfg.showGraphs !== false);
+  setVal('set-density', cfg.tableDensity || 'standard');
+  if (cfg.tableDensity) onDensityChange(cfg.tableDensity, false);
+
+  setVal('set-cpu-alert', cfg.cpuAlertPct ?? 90);
+  setVal('set-temp-alert', cfg.tempAlertC ?? 95);
+  setVal('set-watchdog-proc', cfg.watchdogProcess || '');
+  setVal('set-watchdog-mem', cfg.watchdogMem ?? 80);
+  setVal('set-slack-url', cfg.slackAlertUrl || '');
+  setVal('set-discord-url', cfg.discordAlertUrl || '');
+  setVal('set-ntfy-url', cfg.ntfyUrl || '');
+
+  // Apply default filter to live state if filter is currently 'all'
+  if (cfg.defaultFilter && currentFilter === 'all') {
+    const filterSelect = document.getElementById('filter-select');
+    if (filterSelect) {
+      filterSelect.value = cfg.defaultFilter;
+      currentFilter = cfg.defaultFilter;
+    }
+  }
+}
+
+async function fetchServiceStatus() {
+  try {
+    const pill = document.getElementById('svc-status-pill');
+    if (pill) {
+      pill.className = 'status-pill inactive';
+      pill.textContent = 'Checking…';
+    }
+    const res = await fetch('/api/service/status');
+    if (res.ok) {
+      const s = await res.json();
+      const chk = document.getElementById('set-autostart');
+      if (chk) chk.checked = !!s.installed;
+      if (pill) {
+        if (s.installed) {
+          pill.className = 'status-pill active';
+          pill.textContent = 'Active (' + (s.platform === 'darwin' ? 'LaunchAgent loaded' : 'systemd active') + ')';
+        } else {
+          pill.className = 'status-pill inactive';
+          pill.textContent = 'Inactive (Not installed)';
+        }
+      }
+      const lbl = document.getElementById('svc-label');
+      if (lbl && s.serviceLabel) lbl.textContent = s.serviceLabel;
+      const pth = document.getElementById('svc-path');
+      if (pth && s.path) pth.textContent = s.path;
+      const logEl = document.getElementById('svc-log');
+      if (logEl && s.logPath) logEl.textContent = s.logPath;
+    }
+  } catch (err) {
+    console.error('Failed to get service status:', err);
+  }
+}
+
+function updateSysInfoInSettings() {
+  const container = document.getElementById('diag-sys-info');
+  if (!container) return;
+  const sys = latestData?.system;
+  if (!sys) {
+    container.innerHTML = '<div>System information waiting for initial telemetry frame…</div>';
+    return;
+  }
+  container.innerHTML = \`
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">Operating System:</span><span>\${escapeHtml(sys.platform || 'macOS')} (\${escapeHtml(sys.osRelease || '')})</span></div>
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">Hardware Architecture:</span><span>\${escapeHtml(sys.arch || 'arm64')}</span></div>
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">Processor Model:</span><span>\${escapeHtml(latestData.cpu?.model || 'Apple Silicon')}</span></div>
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">Physical / Logical Cores:</span><span>\${latestData.cpu?.physicalCores || latestData.cpu?.cores || 8} cores</span></div>
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">Installed Memory:</span><span>\${fmtBytes(latestData.memory?.total || 0)}</span></div>
+    <div style="display:flex;justify-content:space-between;"><span style="color:var(--text-secondary);">System Uptime:</span><span>\${fmtUptime(sys.uptime || 0)}</span></div>
+  \`;
+}
+
+function openSettingsModal() {
+  openModal('modal-settings');
+  loadConfig();
+  fetchServiceStatus();
+  updateSysInfoInSettings();
+}
+
+function closeSettingsModal() {
+  closeModal('modal-settings');
+}
+
+function switchSettingsTab(tabName) {
+  document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.stab === tabName);
+  });
+  document.querySelectorAll('.settings-pane').forEach(pane => {
+    pane.classList.toggle('active', pane.id === 'spane-' + tabName);
+  });
+  if (tabName === 'diagnostics') {
+    updateSysInfoInSettings();
+  }
+}
+
+async function onSettingChange() {
+  const getNum = (id, def) => {
+    const el = document.getElementById(id);
+    const n = parseFloat(el?.value);
+    return isNaN(n) ? def : n;
+  };
+  const getStr = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : def;
+  };
+  const getBool = (id, def = false) => {
+    const el = document.getElementById(id);
+    return el ? el.checked : def;
+  };
+
+  const patch = {
+    interval: getNum('set-interval', 2),
+    defaultFilter: getStr('set-filter', 'all'),
+    defaultSort: getStr('set-sort', 'cpu'),
+    compact: getBool('set-compact', false),
+    alwaysOnTop: getBool('set-ontop', false),
+    exposeLan: getBool('set-lan', false),
+    port: Math.round(getNum('set-port', 3000)),
+    historyDuration: Math.round(getNum('set-history-len', 60)),
+    showGraphs: getBool('set-show-graphs', true),
+    cpuAlertPct: getNum('set-cpu-alert', 90),
+    tempAlertC: getNum('set-temp-alert', 95),
+    watchdogProcess: getStr('set-watchdog-proc', ''),
+    watchdogMem: getNum('set-watchdog-mem', 80),
+    slackAlertUrl: getStr('set-slack-url', ''),
+    discordAlertUrl: getStr('set-discord-url', ''),
+    ntfyUrl: getStr('set-ntfy-url', '')
+  };
+
+  // Adjust graph buffer size if historyDuration changed
+  if (patch.historyDuration && patch.interval) {
+    MAX_POINTS = Math.max(20, Math.round(patch.historyDuration / patch.interval));
+  }
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentConfig = data.config || patch;
+      const hint = document.getElementById('settings-status-hint');
+      if (hint) {
+        hint.textContent = 'Saved to ~/.config/pyre/config.json • ' + new Date().toLocaleTimeString();
+        hint.style.color = 'var(--mac-green)';
+        setTimeout(() => {
+          hint.style.color = 'var(--text-tertiary)';
+          hint.textContent = 'Preferences saved to ~/.config/pyre/config.json';
+        }, 3000);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to save preferences:', err);
+  }
+}
+
+function onDensityChange(density, save = true) {
+  const table = document.getElementById('proc-table');
+  if (table) {
+    table.classList.remove('density-compact', 'density-standard', 'density-comfortable');
+    table.classList.add('density-' + density);
+  }
+  if (save) {
+    fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableDensity: density })
+    }).catch(console.error);
+    showToast('Table density: ' + density.charAt(0).toUpperCase() + density.slice(1));
+  }
+}
+
+async function toggleAutostartFromUI(enabled) {
+  const pill = document.getElementById('svc-status-pill');
+  if (pill) {
+    pill.textContent = 'Updating service…';
+    pill.className = 'status-pill';
+  }
+  try {
+    const res = await fetch('/api/service/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || (enabled ? 'Service enabled' : 'Service disabled'));
+      addLogEntry('ACTION', 'SYSTEM', 'Background service ' + (enabled ? 'enabled' : 'disabled'), data.message);
+      fetchServiceStatus();
+    } else {
+      showToast('Error: ' + (data.error || 'Failed to modify service'));
+      const chk = document.getElementById('set-autostart');
+      if (chk) chk.checked = !enabled;
+      fetchServiceStatus();
+    }
+  } catch (err) {
+    showToast('Failed to contact Pyre server');
+    const chk = document.getElementById('set-autostart');
+    if (chk) chk.checked = !enabled;
+    fetchServiceStatus();
+  }
+}
+
+async function sendTestAlertFromUI() {
+  showToast('Dispatching test notification…');
+  try {
+    const res = await fetch('/api/alerts/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Pyre Activity Monitor: Test notification triggered from Web Dashboard' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || 'Notification dispatched');
+      addLogEntry('WATCHDOG', 'SYSTEM', 'Test notification sent', data.message);
+    } else {
+      showToast('Alert test failed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showToast('Failed to dispatch test notification');
+  }
+}
+
+async function runDoctorFromUI() {
+  const btn = document.getElementById('btn-run-doctor');
+  const resEl = document.getElementById('doctor-results');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+  }
+  if (resEl) {
+    resEl.style.display = 'block';
+    resEl.textContent = 'Running system diagnostic checks…\\nScanning kernel metrics, thermal sensors, battery, launchd daemons, network interfaces…';
+  }
+
+  try {
+    const res = await fetch('/api/doctor');
+    const data = await res.json();
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Run Diagnostics';
+    }
+    if (resEl) {
+      if (data.success && data.report) {
+        let out = '✓ System Diagnostics Complete\\n';
+        out += 'Timestamp: ' + (data.report.timestamp || new Date().toISOString()) + '\\n';
+        out += 'Overall Status: ' + (data.report.status || 'HEALTHY').toUpperCase() + '\\n\\n';
+        if (Array.isArray(data.report.checks)) {
+          for (const c of data.report.checks) {
+            const sym = c.ok ? '  ✓ ' : '  ✗ ';
+            out += sym + c.name + (c.detail ? ': ' + c.detail : '') + '\\n';
+          }
+        }
+        resEl.textContent = out;
+        addLogEntry('INFO', 'SYSTEM', 'Diagnostics completed', data.report.status || 'OK');
+      } else {
+        resEl.textContent = 'Diagnostic run complete.\\n\\n' + JSON.stringify(data, null, 2);
+      }
+    }
+  } catch (err) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Run Diagnostics';
+    }
+    if (resEl) {
+      resEl.textContent = 'Error executing diagnostics: ' + err.message;
+    }
+  }
+}
+
+async function resetConfigFromUI() {
+  if (!confirm('Are you sure you want to reset all preferences to factory defaults?')) {
+    return;
+  }
+  try {
+    const res = await fetch('/api/config/reset', { method: 'POST' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Preferences reset to factory defaults');
+      addLogEntry('ACTION', 'UI', 'Preferences reset to factory defaults');
+      loadConfig();
+    } else {
+      showToast('Error resetting preferences: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    showToast('Failed to reset preferences');
+  }
+}
+
 // Keyboard Navigation
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closeModal('modal-quit');
     closeModal('modal-inspector');
+    closeSettingsModal();
+    return;
+  }
+
+  // Cmd+, or , (when not in an input/select/textarea) opens preferences
+  if ((e.key === ',' && (e.metaKey || e.ctrlKey)) ||
+      (e.key === ',' && !document.activeElement.matches('input, select, textarea'))) {
+    e.preventDefault();
+    openSettingsModal();
     return;
   }
 
   // If focused in search, don't hijack keys
-  if (document.activeElement === document.getElementById('search-input')) {
+  if (document.activeElement === document.getElementById('search-input') ||
+      document.activeElement === document.getElementById('log-search-input')) {
     return;
   }
 
-  // Segmented shortcuts 1-6
-  const keyTabs = { '1': 'cpu', '2': 'memory', '3': 'energy', '4': 'disk', '5': 'network', '6': 'gpu' };
+  // Segmented shortcuts 1-7
+  const keyTabs = { '1': 'cpu', '2': 'memory', '3': 'energy', '4': 'disk', '5': 'network', '6': 'gpu', '7': 'logs' };
   if (keyTabs[e.key]) {
     switchTab(keyTabs[e.key]);
+    return;
+  }
+
+  // r = toggle recording
+  if (e.key === 'r' && !e.metaKey && !e.ctrlKey) {
+    e.preventDefault();
+    toggleWebRecording();
+    return;
+  }
+
+  // l = focus log search (when on logs tab)
+  if (e.key === 'l' && currentTab === 'logs') {
+    e.preventDefault();
+    const ls = document.getElementById('log-search-input');
+    if (ls) { ls.focus(); ls.select(); }
     return;
   }
 
@@ -1616,6 +2800,280 @@ document.addEventListener('keydown', e => {
     s.select();
   }
 });
+
+// ═══════════════════ LOGGING & RECORDING ═══════════════════
+
+const MAX_LOG_ENTRIES = 500;
+
+function addLogEntry(level, subsys, msg, ctx) {
+  const entry = {
+    ts: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 1 }),
+    level,    // 'INFO','WARN','CRIT','ACTION','WATCHDOG'
+    subsys,   // 'CPU','MEM','DISK','NET','THERMAL','PROCESS','SYSTEM','LOGGER','UI'
+    msg,
+    ctx: ctx || '',
+    raw: { level, subsys, msg, ctx, ts: new Date().toISOString() }
+  };
+  logsBuffer.unshift(entry);
+  if (logsBuffer.length > MAX_LOG_ENTRIES) logsBuffer.pop();
+  if (currentTab === 'logs') renderLogs();
+}
+
+function fmtSizeB(b) {
+  if (!b) return '0 B';
+  if (b > 1e9) return (b/1e9).toFixed(1) + ' GB';
+  if (b > 1e6) return (b/1e6).toFixed(1) + ' MB';
+  if (b > 1e3) return (b/1e3).toFixed(0) + ' KB';
+  return b + ' B';
+}
+
+function renderLogs() {
+  const tbody = document.getElementById('logs-tbody');
+  if (!tbody) return;
+
+  const visible = logsBuffer.filter(e => {
+    if (logFilterLevel !== 'all' && e.level !== logFilterLevel) return false;
+    if (logFilterSubsys !== 'all' && e.subsys !== logFilterSubsys) return false;
+    if (logSearchQuery && !e.msg.toLowerCase().includes(logSearchQuery) && !e.ctx.toLowerCase().includes(logSearchQuery)) return false;
+    return true;
+  });
+
+  tbody.innerHTML = visible.map(e => {
+    const badgeCls = e.level.toLowerCase();
+    return \`<tr>
+      <td class="log-ctx">\${escapeHtml(e.ts)}</td>
+      <td><span class="log-badge \${badgeCls}">\${escapeHtml(e.level)}</span></td>
+      <td class="log-subsys">\${escapeHtml(e.subsys)}</td>
+      <td class="log-msg">\${escapeHtml(e.msg)}</td>
+      <td style="text-align:right;" class="log-ctx">\${escapeHtml(e.ctx)}</td>
+    </tr>\`;
+  }).join('');
+
+  if (autoScrollLogs && visible.length) {
+    const area = document.getElementById('logs-scroll-area');
+    if (area) area.scrollTop = 0;
+  }
+}
+
+function onLogLevelFilterChange(val) {
+  logFilterLevel = val;
+  renderLogs();
+}
+
+function onLogSubsysFilterChange(val) {
+  logFilterSubsys = val;
+  renderLogs();
+}
+
+function onLogSearchInput(val) {
+  logSearchQuery = (val || '').toLowerCase();
+  renderLogs();
+}
+
+function toggleAutoScroll() {
+  autoScrollLogs = !autoScrollLogs;
+  const btn = document.getElementById('btn-autoscroll');
+  if (btn) {
+    btn.textContent = 'Auto-scroll: ' + (autoScrollLogs ? 'ON' : 'OFF');
+    btn.style.color = autoScrollLogs ? 'var(--mac-green)' : 'var(--text-secondary)';
+  }
+}
+
+function clearLogs() {
+  logsBuffer = [];
+  renderLogs();
+  showToast('Event log cleared');
+}
+
+function downloadLogsExport() {
+  const json = JSON.stringify(logsBuffer.map(e => e.raw), null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pyre-ui-events-' + new Date().toISOString().slice(0,19).replace(/:/g,'-') + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Analyze incoming telemetry and emit structured log events
+function analyzeAndLog(d) {
+  if (!hasLoggedInit) {
+    hasLoggedInit = true;
+    addLogEntry('INFO', 'SYSTEM', 'Pyre-UI connected — live telemetry streaming started',
+      (d.header?.hostname || 'unknown') + ' · ' + (d.header?.os || 'macOS'));
+  }
+
+  const now = Date.now();
+  const cpu = d.cpu?.usage || 0;
+  const mem = d.memory?.usagePercent || 0;
+  const thermalState = d.thermal?.state || 'Nominal';
+
+  // CPU spike detection (>70% WARN, >90% CRIT), per-process
+  if (d.processes) {
+    d.processes.forEach(p => {
+      if (!p || !p.pid) return;
+      const lastSpike = lastCpuSpikeTimes[p.pid] || 0;
+      if (p.cpu > 90 && now - lastSpike > 30000) {
+        lastCpuSpikeTimes[p.pid] = now;
+        addLogEntry('CRIT', 'CPU',
+          \`Critical CPU usage: \${p.command.replace(/^.*[\\\\/]/,'')} (PID \${p.pid}) at \${p.cpu.toFixed(1)}%\`,
+          \`Threads: \${p.threads || 1} · User: \${p.user || 'root'}\`);
+      } else if (p.cpu > 70 && now - lastSpike > 60000) {
+        lastCpuSpikeTimes[p.pid] = now;
+        addLogEntry('WARN', 'CPU',
+          \`High CPU usage: \${p.command.replace(/^.*[\\\\/]/,'')} (PID \${p.pid}) at \${p.cpu.toFixed(1)}%\`,
+          \`Threads: \${p.threads || 1}\`);
+      }
+    });
+  }
+
+  // System-wide CPU
+  if (cpu > 90) {
+    addLogEntry('CRIT', 'CPU', \`System CPU at \${cpu.toFixed(1)}% — critical load\`, '');
+  } else if (cpu > 75) {
+    addLogEntry('WARN', 'CPU', \`System CPU elevated at \${cpu.toFixed(1)}%\`, '');
+  }
+
+  // Memory pressure
+  if (mem > 85 && now - lastHighMemAlert > 60000) {
+    lastHighMemAlert = now;
+    addLogEntry('CRIT', 'MEM', \`Memory pressure critical: \${mem.toFixed(0)}% used\`,
+      'Total: ' + fmtSizeB(d.memory?.total) + ' · Swap: ' + fmtSizeB(d.memory?.swapUsed));
+  } else if (mem > 70 && now - lastHighMemAlert > 120000) {
+    lastHighMemAlert = now;
+    addLogEntry('WARN', 'MEM', \`Memory usage high: \${mem.toFixed(0)}%\`, 'Swap: ' + fmtSizeB(d.memory?.swapUsed));
+  }
+
+  // Thermal state transitions
+  if (prevThermalState !== null && prevThermalState !== thermalState) {
+    const level = thermalState === 'Critical' ? 'CRIT' : thermalState === 'Nominal' ? 'INFO' : 'WARN';
+    addLogEntry(level, 'THERMAL',
+      \`Thermal state changed: \${prevThermalState} → \${thermalState}\`,
+      \`CPU temp: \${d.cpu?.temperature ? d.cpu.temperature + '°C' : '–'}\`);
+  }
+  prevThermalState = thermalState;
+
+  // Network burst detection
+  const rxRate = d.network?.rxRate || 0;
+  const txRate = d.network?.txRate || 0;
+  if ((rxRate > 50*1024*1024 || txRate > 50*1024*1024) && now - lastNetBurstAlert > 30000) {
+    lastNetBurstAlert = now;
+    addLogEntry('WARN', 'NET',
+      \`Network burst: ↓\${fmtSizeB(rxRate)}/s ↑\${fmtSizeB(txRate)}/s\`,
+      \`Interface: \${d.network?.interface || 'en0'}\`);
+  }
+}
+
+// ═══════════════════ RECORDING CONTROLS ═══════════════════
+
+async function toggleWebRecording() {
+  try {
+    if (isRecording) {
+      const res = await fetch('/api/logging/stop');
+      const data = await res.json();
+      isRecording = false;
+      updateRecordingUI(false);
+      addLogEntry('INFO', 'LOGGER',
+        \`Session recording stopped: \${data.samples} samples in \${data.durationSec}s\`,
+        data.file || '');
+      showToast(\`Recording stopped — \${data.samples} samples saved\`);
+    } else {
+      const res = await fetch('/api/logging/start');
+      const data = await res.json();
+      isRecording = true;
+      updateRecordingUI(true, data.file);
+      addLogEntry('INFO', 'LOGGER', 'Session recording started', data.file || '');
+      showToast('Recording started → ' + (data.file || './pyre-exports/'));
+    }
+    if (currentTab === 'logs') fetchLogHistory();
+  } catch (e) {
+    showToast('Recording error: ' + e.message);
+  }
+}
+
+function updateRecordingUI(recording, filename) {
+  const btn = document.getElementById('btn-record');
+  const label = document.getElementById('rec-label');
+  const panelBtn = document.getElementById('btn-panel-rec');
+  const badge = document.getElementById('logs-rec-badge');
+
+  if (btn) btn.classList.toggle('recording', recording);
+  if (label) label.textContent = recording ? 'Stop REC' : 'Record';
+  if (panelBtn) panelBtn.textContent = recording ? 'Stop Recording' : 'Start Recording';
+  if (badge) {
+    badge.textContent = recording ? 'REC' : 'IDLE';
+    badge.className = 'log-badge ' + (recording ? 'crit' : 'info');
+  }
+}
+
+async function syncRecordingStatus() {
+  try {
+    const res = await fetch('/api/logging/status');
+    const data = await res.json();
+    isRecording = data.recording;
+    updateRecordingUI(data.recording, data.file);
+
+    const statStatus = document.getElementById('rec-stat-status');
+    const statFile = document.getElementById('rec-stat-file');
+    const statSamples = document.getElementById('rec-stat-samples');
+    const statDuration = document.getElementById('rec-stat-duration');
+    const statDir = document.getElementById('rec-stat-dir');
+    if (statStatus) statStatus.textContent = data.recording ? 'Recording…' : 'Idle';
+    if (statFile) statFile.textContent = data.file || '–';
+    if (statSamples) statSamples.textContent = data.samples;
+    if (statDuration) statDuration.textContent = data.durationSec + 's';
+    if (statDir) statDir.textContent = data.exportDir;
+  } catch { /* ignore */ }
+}
+
+async function fetchLogHistory() {
+  try {
+    const res = await fetch('/api/logging/history');
+    const data = await res.json();
+    const tbody = document.getElementById('history-tbody');
+    if (!tbody) return;
+    if (!data.files || !data.files.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-tertiary);text-align:center;padding:12px;">No CSV logs found in ' + escapeHtml(data.exportDir) + '. Click Record to start a session.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.files.map(f => {
+      const kb = (f.sizeBytes / 1024).toFixed(1);
+      const mtime = f.mtime ? new Date(f.mtime).toLocaleString() : '–';
+      return \`<tr>
+        <td style="font-family:var(--font-mono);font-size:10px;">\${escapeHtml(f.name)}</td>
+        <td>\${kb} KB</td>
+        <td>\${mtime}</td>
+        <td><a class="history-link" href="/api/logging/download?file=\${encodeURIComponent(f.name)}" download="\${escapeHtml(f.name)}">↓ Download</a></td>
+      </tr>\`;
+    }).join('');
+  } catch { /* ignore */ }
+}
+
+// ═══════════════════ EXPORT DROPDOWN ═══════════════════
+
+function toggleExportMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('export-menu');
+  if (menu) menu.classList.toggle('show');
+}
+
+document.addEventListener('click', () => {
+  const menu = document.getElementById('export-menu');
+  if (menu) menu.classList.remove('show');
+});
+
+function downloadSnapshot(fmt) {
+  const menu = document.getElementById('export-menu');
+  if (menu) menu.classList.remove('show');
+  const url = '/api/export?format=' + fmt;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pyre-snapshot.' + fmt;
+  a.click();
+  showToast('Exporting snapshot as ' + fmt.toUpperCase() + '…');
+  addLogEntry('ACTION', 'UI', 'User exported snapshot', 'format: ' + fmt);
+}
 
 // SSE Connection
 let eventSource = null;
@@ -1666,11 +3124,19 @@ async function pollFallback() {
 renderTableHeader();
 initSSE();
 pollFallback();
+syncRecordingStatus();
+loadConfig();
 setInterval(() => {
   if (!latestData || document.getElementById('sb-status').textContent === 'Offline') {
     pollFallback();
   }
 }, 3000);
+// Periodically sync recording status & update panel stats
+setInterval(() => {
+  if (currentTab === 'logs' && isRecording) {
+    syncRecordingStatus();
+  }
+}, 5000);
 </script>
 </body>
 </html>`;

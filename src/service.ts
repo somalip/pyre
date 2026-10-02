@@ -36,6 +36,55 @@ export function uninstallService(): void {
   }
 }
 
+export interface ServiceStatus {
+  installed: boolean;
+  platform: string;
+  serviceLabel: string;
+  path: string;
+  logPath: string;
+}
+
+export function isServiceInstalled(): boolean {
+  const platform = process.platform;
+  if (platform === 'darwin') {
+    return fs.existsSync(PLIST_PATH);
+  } else if (platform === 'linux') {
+    return fs.existsSync(SYSTEMD_UNIT_PATH);
+  } else if (platform === 'win32') {
+    try {
+      execSync(`schtasks /query /tn "${TASK_NAME}"`, { stdio: 'pipe' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+export function getServiceStatus(): ServiceStatus {
+  const platform = process.platform;
+  const installed = isServiceInstalled();
+  let serviceLabel = SERVICE_LABEL;
+  let servicePath = PLIST_PATH;
+  const logPath = path.join(os.homedir(), '.config', 'pyre', 'web.log');
+
+  if (platform === 'linux') {
+    serviceLabel = 'pyre-web.service';
+    servicePath = SYSTEMD_UNIT_PATH;
+  } else if (platform === 'win32') {
+    serviceLabel = TASK_NAME;
+    servicePath = 'Windows Task Scheduler (onlogon)';
+  }
+
+  return {
+    installed,
+    platform,
+    serviceLabel,
+    path: servicePath,
+    logPath,
+  };
+}
+
 // Backward-compatible exports for existing callers
 export const installLaunchdAgent = installService;
 export const uninstallLaunchdAgent = uninstallService;

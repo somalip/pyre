@@ -11,7 +11,7 @@ import { History } from '../history.js';
 import type { StatsData } from '../monitors/index.js';
 import type { ExportFormat, InputMode, SortMode, GraphMode } from './types.js';
 import type { ThemeName, VisibleItems } from '../formatters/types.js';
-import { readConfig, type PyreConfig } from '../state/config.js';
+import { readConfig, type PyreConfig, type PyreBookmark } from '../state/config.js';
 
 export const SIGNAL_OPTIONS = ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGHUP', 'SIGSTOP', 'SIGCONT'] as const;
 
@@ -20,6 +20,49 @@ import { type SplashColorScheme, type SplashAnimation } from '../splash.js';
 export { type SplashColorScheme, type SplashAnimation };
 
 export const MENU_OPTIONS = ['Resume Dashboard', 'Settings (Customizer)', 'Readme', 'Credits', 'Quit pyre'] as const;
+
+const PALETTE_COMMANDS = [
+  { id: 'cpu', label: 'Switch to CPU panel', keys: '1', category: 'Navigation' },
+  { id: 'mem', label: 'Switch to Memory panel', keys: '2', category: 'Navigation' },
+  { id: 'gpu', label: 'Switch to GPU panel', keys: '3', category: 'Navigation' },
+  { id: 'power', label: 'Switch to Power panel', keys: '4', category: 'Navigation' },
+  { id: 'battery', label: 'Switch to Battery panel', keys: '5', category: 'Navigation' },
+  { id: 'thermal', label: 'Switch to Thermal panel', keys: '6', category: 'Navigation' },
+  { id: 'network', label: 'Switch to Network panel', keys: '7', category: 'Navigation' },
+  { id: 'packets', label: 'Switch to Connections panel', keys: '8', category: 'Navigation' },
+  { id: 'tasks', label: 'Switch to Tasks panel', keys: '9', category: 'Navigation' },
+  { id: 'disk', label: 'Switch to Disk panel', keys: '0', category: 'Navigation' },
+  { id: 'process', label: 'Switch to Process panel', keys: 'P', category: 'Navigation' },
+  { id: 'containers', label: 'Switch to Containers panel', keys: 'C', category: 'Navigation' },
+  { id: 'p2p', label: 'Switch to P2P panel', keys: 'R', category: 'Navigation' },
+  { id: 'anomalies', label: 'Switch to Anomalies panel', keys: 'A', category: 'Navigation' },
+  { id: 'blender', label: 'Switch to Blender panel', keys: 'B', category: 'Navigation' },
+  { id: 'grid', label: 'Switch to Grid dashboard', keys: 'Esc', category: 'Navigation' },
+  { id: 'graph-toggle', label: 'Toggle graphs on/off', keys: 'g', category: 'View' },
+  { id: 'graph-mode', label: 'Cycle graph mode (spark/bar)', keys: 'b', category: 'View' },
+  { id: 'pause', label: 'Pause / Resume dashboard', keys: 'p', category: 'View' },
+  { id: 'detailed', label: 'Toggle detailed sensor mode', keys: 'd', category: 'View' },
+  { id: 'tree', label: 'Toggle tree/flat process view', keys: 't', category: 'View' },
+  { id: 'temp-unit', label: 'Toggle temperature unit (C/F)', keys: 'T', category: 'View' },
+  { id: 'filter', label: 'Filter processes by name', keys: '/', category: 'Process' },
+  { id: 'sort', label: 'Cycle process sort mode', keys: 's', category: 'Process' },
+  { id: 'kill', label: 'Kill a process by PID', keys: 'k', category: 'Process' },
+  { id: 'signal', label: 'Send signal to a process', keys: 'S', category: 'Process' },
+  { id: 'follow', label: 'Follow selected process', keys: 'Space', category: 'Process' },
+  { id: 'inspect', label: 'Inspect selected process', keys: 'Enter', category: 'Process' },
+  { id: 'export', label: 'Export current snapshot', keys: 'e', category: 'Data' },
+  { id: 'log', label: 'Start / stop CSV logging', keys: 'l', category: 'Data' },
+  { id: 'format-cycle', label: 'Cycle export format', keys: 'f', category: 'Data' },
+  { id: 'interval-inc', label: 'Increase refresh interval', keys: '+', category: 'Data' },
+  { id: 'interval-dec', label: 'Decrease refresh interval', keys: '-', category: 'Data' },
+  { id: 'customize', label: 'Open UI customizer', keys: 'c', category: 'Settings' },
+  { id: 'ai-model', label: 'Change AI anomaly model', keys: 'm', category: 'Settings' },
+  { id: 'bookmark-save', label: 'Save current view as bookmark', keys: 'Shift+M', category: 'Bookmarks' },
+  { id: 'bookmark-recall', label: 'Recall next bookmark', keys: 'M', category: 'Bookmarks' },
+  { id: 'zoom-in', label: 'Zoom in history graph', keys: '[', category: 'Graphs' },
+  { id: 'zoom-out', label: 'Zoom out history graph', keys: ']', category: 'Graphs' },
+  { id: 'quick-ref', label: 'Show keyboard shortcuts', keys: '?', category: 'Help' },
+];
 
 const config = readConfig();
 
@@ -150,6 +193,13 @@ const state = {
         aiModel: config.aiModel || 'expert-rules-v1',
         aiBackend: config.aiBackend || 'builtin',
         modelSelectionIndex: 0,
+        // Power user tools state
+        bookmarks: [] as PyreBookmark[],
+        bookmarkRecallIndex: 0,
+        graphZoomLevel: 1,
+        panelHistory: [] as string[],
+        paletteIndex: 0,
+        paletteFilteredCommands: [...PALETTE_COMMANDS],
     };
 
 function setStatus(msg: string, ms = 3000) {
@@ -180,4 +230,4 @@ function getToggleKey(opt: string): keyof VisibleItems | null {
   return map[opt] ?? null;
 }
 
-export { state, setStatus, getToggleKey };
+export { state, setStatus, getToggleKey, PALETTE_COMMANDS };

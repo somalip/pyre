@@ -50,23 +50,26 @@ let _cachedGraphsVersion = -1;
 let _cachedGraphsParams = '';
 
 function tableCacheParams(): string {
-  const limit = processRowBudget();
-  return [
-    state.sortMode,
-    state.processFilter || '',
-    state.processSelectionIndex,
-    state.trackedPid || '',
-    state.inspectingProcess ? state.inspectingProcess.pid : '',
-    limit,
-    state.currentTheme,
-    state.activePanel,
-    state.treeView ? '1' : '0',
-    state.history.version,
-    JSON.stringify(state.visiblePanels),
-    JSON.stringify(state.panelLayout),
-    state.aiModel,
-  ].join('|');
-}
+   const limit = processRowBudget();
+   return [
+     state.sortMode,
+     state.processFilter || '',
+     state.processSelectionIndex,
+     state.trackedPid || '',
+     state.inspectingProcess ? state.inspectingProcess.pid : '',
+     limit,
+     state.currentTheme,
+     state.activePanel,
+     state.treeView ? '1' : '0',
+     state.history.version,
+     JSON.stringify(state.visiblePanels),
+     JSON.stringify(state.panelLayout),
+     state.aiModel,
+     state.graphZoomLevel,
+     JSON.stringify(state.panelHistory.slice(-5)),
+     JSON.stringify(state.bookmarks.map(b => b.name)),
+   ].join('|');
+  }
 
 function graphsCacheParams(): string {
   return [
@@ -161,6 +164,121 @@ function renderCustomizerOverlay(scrollOffset: number, maxVisibleItems: number):
 
    return lines.map(l => `  ${l}`).join('\n');
   }
+
+function renderQuickRefOverlay(): string {
+  const headerLine = chalk.bgGreen.black.bold(' ⚡ PYRE KEYBOARD SHORTCUTS (Press ? or Esc to close) ');
+
+  const categories: Record<string, [string, string][]> = {
+    'Navigation': [
+      ['1-9, 0', 'Switch to CPU/MEM/GPU/PWR/BAT/THM/NET/CONNS/TASKS/DISK panel'],
+      ['P', 'Process panel'],
+      ['C', 'Containers panel'],
+      ['R', 'P2P panel'],
+      ['A', 'Anomalies panel'],
+      ['B', 'Blender renders panel'],
+      ['←/→ or Tab', 'Cycle panels'],
+      ['Esc', 'Back to grid / menu'],
+    ],
+    'View Controls': [
+      ['g', 'Toggle graphs on/off'],
+      ['b', 'Cycle graph mode: spark ↔ bar'],
+      ['p', 'Pause / Resume live updates'],
+      ['d', 'Toggle detailed sensor mode'],
+      ['t', 'Toggle tree / flat process view'],
+      ['T', 'Toggle temperature unit: C ↔ F'],
+      ['c', 'Open UI Customizer'],
+    ],
+    'Process Actions': [
+      ['/ or f', 'Filter processes (type to search)'],
+      ['s', 'Cycle sort: cpu → mem → pid → user → command → state → threads → runtime'],
+      ['k', 'Kill process by PID'],
+      ['S', 'Send signal to process'],
+      ['Space', 'Follow / unfollow selected process'],
+      ['↑/↓', 'Navigate process list'],
+      ['Enter', 'Inspect selected process'],
+    ],
+    'Data & Export': [
+      ['e', 'Export current snapshot'],
+      ['l', 'Start / stop CSV logging'],
+      ['f', 'Cycle export format: json → csv → tsv → html → md'],
+      ['+/-', 'Increase / decrease refresh interval'],
+    ],
+    'Graph Controls': [
+      ['[', 'Zoom in history graph (more resolution)'],
+      [']', 'Zoom out history graph (wider window)'],
+    ],
+    'Bookmarks': [
+      ['Shift+M', 'Save current view as named bookmark'],
+      ['M', 'Recall next bookmark (cycles through saved)'],
+    ],
+    'Settings & Help': [
+      ['m', 'Change AI anomaly model'],
+      ['r', 'Start/stop P2P server'],
+      ['?', 'Show this quick reference'],
+      [':', 'Command palette (type to run any command)'],
+      ['q', 'Quit pyre'],
+    ],
+  };
+
+  const lines: string[] = [headerLine, ''];
+
+  for (const [category, items] of Object.entries(categories)) {
+    lines.push(chalk.bold.cyan(`  ${category}`));
+    for (const [key, desc] of items) {
+      lines.push(`    ${chalk.hex('#50fa7b').bold(key.padEnd(14))} ${chalk.dim(desc)}`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+function renderCommandPalette(): string {
+  const headerLine = chalk.bgMagenta.black.bold(' COMMAND PALETTE (Type to search · ↑/↓ navigate · Enter run · Esc close) ');
+  const cmds = state.paletteFilteredCommands;
+  const totalItems = cmds.length;
+  const maxVisible = Math.min(12, state.termHeight - 8);
+  const start = Math.max(0, state.paletteIndex - Math.floor(maxVisible / 2));
+  const end = Math.min(totalItems, start + maxVisible);
+
+  const lines: string[] = [headerLine, ''];
+
+  if (cmds.length === 0) {
+    lines.push(chalk.dim('  No matching commands found.'));
+  } else {
+    // Group by category
+    const byCategory = new Map<string, typeof cmds>();
+    for (const cmd of cmds.slice(start, end)) {
+      const cat = cmd.category;
+      if (!byCategory.has(cat)) byCategory.set(cat, []);
+      byCategory.get(cat)!.push(cmd);
+    }
+
+    let globalIdx = start;
+    for (const [cat, catCmds] of byCategory) {
+      lines.push(chalk.bold.dim(`  ${cat}`));
+      for (const cmd of catCmds) {
+        const isSelected = globalIdx === state.paletteIndex;
+        const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
+        const keyHint = chalk.dim(`[${cmd.keys}]`);
+        const label = isSelected ? chalk.bold.white(cmd.label) : chalk.dim(cmd.label);
+        lines.push(`${prefix}${keyHint} ${label}`);
+        globalIdx++;
+      }
+      lines.push('');
+    }
+  }
+
+  const filterLine = chalk.cyan(`  Filter: ${state.inputBuffer}${chalk.dim('_')}`);
+  lines.push(filterLine);
+
+  return lines.join('\n');
+}
+
+function renderBookmarkSaveOverlay(): string {
+  const headerLine = chalk.bgYellow.black.bold(' SAVE BOOKMARK (Type a name and press Enter · Esc to cancel) ');
+  return [headerLine, '', chalk.cyan(`  Bookmark name: ${state.inputBuffer}${chalk.dim('_')}`)].join('\n');
+}
 
 // --- frame diffing -------------------------------------------------------
 // Instead of erasing the whole screen (`\x1b[2J`) and repainting everything
@@ -340,6 +458,19 @@ function render() {
 
     bodyLines.push('');
     bodyLines.push(...renderCustomizerOverlay(scrollOffset, maxVisibleItems).split('\n'));
+  } else if (state.inputMode === 'quick-ref') {
+    const refLines = renderQuickRefOverlay().split('\n');
+    const maxRefLines = Math.min(refLines.length, Math.max(10, targetBodyHeight - 2));
+    bodyLines.push('');
+    for (let i = 0; i < maxRefLines; i++) {
+      bodyLines.push(refLines[i] || '');
+    }
+  } else if (state.inputMode === 'command-palette') {
+    bodyLines.push('');
+    bodyLines.push(...renderCommandPalette().split('\n'));
+  } else if (state.inputMode === 'bookmark-save') {
+    bodyLines.push('');
+    bodyLines.push(...renderBookmarkSaveOverlay().split('\n'));
   } else if (state.inputMode === 'filter') {
     bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
   } else if (state.inputMode === 'kill') {
@@ -405,7 +536,21 @@ function footerLine(): string[] {
    badges.push(chalk.magenta.bold(`AI:${state.aiModel}`));
    const badgeStr = badges.join('  ') || ' ';
 
-   return [str1, str2, badgeStr];
+   // Power user footer extras
+   const powerExtras: string[] = [];
+   if (state.bookmarks.length > 0) {
+     powerExtras.push(chalk.cyan.bold(`★ ${state.bookmarks.length} bookmarks`));
+   }
+   if (state.graphZoomLevel > 1) {
+     powerExtras.push(chalk.yellow.bold(`🔍 ${state.graphZoomLevel}x zoom`));
+   }
+   if (state.panelHistory.length > 0) {
+     powerExtras.push(chalk.green.bold(`↩ ${state.panelHistory.length} panels in history`));
+   }
+
+   const extraStr = powerExtras.join('  ') || ' ';
+
+   return [str1, str2, badgeStr + '  ' + extraStr];
   }
 
 function sendNotification(title: string, message: string) {

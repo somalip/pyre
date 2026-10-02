@@ -505,10 +505,11 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'power', label: 'Power', key: '4' },
   { id: 'battery', label: 'Battery', key: '5' },
   { id: 'thermal', label: 'Thermal', key: '6' },
-  { id: 'packets', label: 'Conns', key: '7' },
-  { id: 'tasks', label: 'Tasks', key: '8' },
-  { id: 'disk', label: 'Disk', key: '9' },
-  { id: 'process', label: 'Process', key: '0' },
+  { id: 'network', label: 'Network', key: '7' },
+  { id: 'packets', label: 'Conns', key: '8' },
+  { id: 'tasks', label: 'Tasks', key: '9' },
+  { id: 'disk', label: 'Disk', key: '0' },
+  { id: 'process', label: 'Process', key: 'P' },
   { id: 'p2p', label: 'P2P', key: 'R' },
   { id: 'anomalies', label: 'Anomalies', key: 'A' },
   { id: 'containers', label: 'Containers', key: 'C' },
@@ -528,16 +529,17 @@ const TAB_SEPARATOR_WIDTH = 3;
  * then the tab bar — i.e. row 4 in a 1-indexed terminal, row index 3 if
  * 0-indexed from the top of the dashboard).
  */
-export function getTabHitboxes(): { id: string; start: number; end: number }[] {
+export function getTabHitboxes(visible?: VisibleItems): { id: string; start: number; end: number }[] {
+  const tabs = visible ? TAB_DEFS.filter(t => visible[t.id as keyof VisibleItems] !== false) : TAB_DEFS;
   const boxes: { id: string; start: number; end: number }[] = [];
   let col = TAB_BAR_INDENT;
-  TAB_DEFS.forEach((t, i) => {
+  tabs.forEach((t, i) => {
     const text = `[${t.key}]${t.label}`;
     const start = col;
     const end = col + text.length;
     boxes.push({ id: t.id, start, end });
     col = end;
-    if (i < TAB_DEFS.length - 1) col += TAB_SEPARATOR_WIDTH;
+    if (i < tabs.length - 1) col += TAB_SEPARATOR_WIDTH;
   });
   return boxes;
 }
@@ -545,8 +547,9 @@ export function getTabHitboxes(): { id: string; start: number; end: number }[] {
 /** Row (1-indexed, matching terminal mouse-report coordinates) the tab bar renders on. */
 export const TAB_BAR_ROW = 4;
 
-function tabBar(activePanel: string, width: number, theme: ThemeColors): string {
-  const rendered = TAB_DEFS.map(t => {
+function tabBar(activePanel: string, width: number, theme: ThemeColors, visible?: VisibleItems): string {
+  const visibleTabs = visible ? TAB_DEFS.filter(t => visible[t.id as keyof VisibleItems] !== false) : TAB_DEFS;
+  const rendered = visibleTabs.map(t => {
     const isActive = activePanel === t.id;
     const label = isActive ? chalk.bold(t.label) : chalk.dim(t.label);
     const keyHint = chalk.dim(`[${t.key}]`);
@@ -1085,7 +1088,12 @@ function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: Ta
 function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
   const contentWidth = width - 4;
   const out: string[] = [];
-  const layout = opts.panelLayout || ['mem', 'disk', 'net'];
+  const rawLayout = opts.panelLayout || ['mem', 'disk', 'net'];
+  const visible = opts.visible || {};
+  const layout = rawLayout.filter(name => {
+    const key = name === 'net' ? 'network' : name;
+    return visible[key as keyof VisibleItems] !== false;
+  });
 
   for (const panelName of layout) {
     if (panelName === 'mem') {
@@ -1243,7 +1251,12 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
 
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   const width = clampWidth(opts.width);
-  const activePanel = opts.activePanel || 'grid';
+  let activePanel = opts.activePanel || 'grid';
+  const visible = opts.visible || {};
+
+  if (activePanel !== 'grid' && visible[activePanel as keyof VisibleItems] === false) {
+    activePanel = 'grid';
+  }
 
   const themeName = opts.theme || 'default';
   const theme = THEMES[themeName] || THEMES.default;
@@ -1258,7 +1271,7 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
     out.push('');
   }
 
-  out.push(tabBar(activePanel, width, theme));
+  out.push(tabBar(activePanel, width, theme, opts.visible));
   out.push('');
 
   if (opts.minimal) {

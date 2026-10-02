@@ -14,6 +14,20 @@ import os from 'node:os';
 import path from 'node:path';
 
 
+export interface PyreBookmark {
+  name: string;
+  activePanel: string;
+  sortMode: string;
+  processFilter: string;
+  treeView: boolean;
+  showGraphs: boolean;
+  graphMode: string;
+  trackedPid: number | null;
+  currentTheme: string;
+  panelLayout: string[];
+  detailed: boolean;
+}
+
 export interface PyreConfig {
   theme?: string;
   interval?: number;
@@ -77,6 +91,19 @@ export interface PyreConfig {
     tree?: boolean;
   };
   panelLayout?: string[];
+  /** Saved session bookmarks */
+  bookmarks?: PyreBookmark[];
+  /** Graph zoom level (1-5, higher = more history points visible) */
+  graphZoomLevel?: number;
+  /** Web UI preferences */
+  compact?: boolean;
+  alwaysOnTop?: boolean;
+  exposeLan?: boolean;
+  port?: number;
+  historyDuration?: number;
+  tableDensity?: string;
+  defaultFilter?: string;
+  defaultSort?: string;
 }
 
 export const DEFAULT_CONFIG: Required<PyreConfig> = {
@@ -132,6 +159,16 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
     tree: false,
   },
   panelLayout: ['mem', 'disk', 'net'],
+  bookmarks: [],
+  graphZoomLevel: 1,
+  compact: false,
+  alwaysOnTop: false,
+  exposeLan: false,
+  port: 3000,
+  historyDuration: 60,
+  tableDensity: 'standard',
+  defaultFilter: 'all',
+  defaultSort: 'cpu',
 };
 
 export function getConfigDir(): string {
@@ -224,5 +261,10 @@ function deepMerge(target: any, source: any): any {
 
 export function getConfigPath(): string {
   return getConfigFile();
+}
+
+export function resetConfig(): Required<PyreConfig> {
+  writeConfig(DEFAULT_CONFIG);
+  return { ...DEFAULT_CONFIG };
 }
 

@@ -2,9 +2,11 @@
  * pyre serve — Dedicated REST API Mode.
  *
  * Exposes all metrics as structured JSON REST endpoints with optional
- * API key authorization and CORS support.
+ * API key authorization and CORS support. Also serves a live Chart.js
+ * dashboard at the root path (/).
  *
  * Endpoints:
+ *   GET /              → Live Chart.js web dashboard (auto-refresh every 2s)
  *   GET /api/all
  *   GET /api/cpu
  *   GET /api/memory
@@ -20,6 +22,7 @@
 import http from 'node:http';
 import os from 'node:os';
 import chalk from 'chalk';
+import { getWebDashboardHtml } from './web/dashboard.js';
 import {
   collectAll,
   collectCpu,
@@ -77,6 +80,15 @@ export async function runServeCommand(opts: ServeOptions = {}): Promise<void> {
       let data: any;
 
       switch (pathname) {
+        case '/':
+        case '/dashboard':
+        case '/web': {
+          const apiBase = `http://${req.headers.host || `localhost:${port}`}/api/all`;
+          const html = getWebDashboardHtml(apiBase, apiKey);
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(html);
+          return;
+        }
         case '/api/all':
         case '/api/stats':
         case '/api':
@@ -128,6 +140,8 @@ export async function runServeCommand(opts: ServeOptions = {}): Promise<void> {
           res.end(JSON.stringify({
             error: 'Not found',
             availableEndpoints: [
+              '/',
+              '/dashboard',
               '/api/all',
               '/api/cpu',
               '/api/memory',
@@ -164,8 +178,9 @@ export async function runServeCommand(opts: ServeOptions = {}): Promise<void> {
 
   await new Promise<void>((resolve) => server.listen(port, '0.0.0.0', resolve));
 
-  console.log(chalk.bold('\n  🔥 pyre serve — REST API Server\n'));
+  console.log(chalk.bold('\n  🔥 pyre serve — REST API + Web Dashboard\n'));
   console.log(`  ${chalk.green('✔')} API base URL: ${chalk.cyan(`http://0.0.0.0:${port}/api/all`)}`);
+  console.log(`  ${chalk.green('✔')} Dashboard:    ${chalk.cyan(`http://0.0.0.0:${port}/`)}`);
   console.log(`  ${chalk.green('✔')} Health check: ${chalk.cyan(`http://0.0.0.0:${port}/api/health`)}`);
   if (apiKey) {
     console.log(`  ${chalk.yellow('🔒')} API Key protection: ${chalk.bold('ENABLED')} (Pass via header x-api-key or ?key=)`);

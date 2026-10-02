@@ -49,6 +49,9 @@ effort vs. impact rather than by category, so it's usable as an actual work queu
 - [x] **Menu bar / background daemon mode** — lightweight always-on stats display
       outside the terminal. Genuinely differentiates from a pure-TUI tool, but is
       the largest engineering lift (likely needs a native helper or Electron/tray shim).
+- [x] **Power user tools** — TUI quick reference (?), command palette (:),
+      session bookmarks (Shift+M/M), graph zoom ([/]), panel quick-stack (Tab/Shift+Tab),
+      and a live Chart.js web dashboard at `/` in `pyre serve`.
 
 ## Housekeeping (ongoing, not blocking)
 

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background squircle gradient -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#181c26"/>
+      <stop offset="50%" stop-color="#0c0e14"/>
+      <stop offset="100%" stop-color="#040508"/>
+    </linearGradient>
+
+    <!-- Flame silver-white chrome gradient -->
+    <linearGradient id="flame-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#e2e8f0"/>
+      <stop offset="100%" stop-color="#8a94a6"/>
+    </linearGradient>
+
+    <!-- Subtle flame inner fire glow -->
+    <radialGradient id="fire-glow" cx="50%" cy="65%" r="50%">
+      <stop offset="0%" stop-color="#ff5722" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#ff9800" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ff5722" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Top highlight rim -->
+    <linearGradient id="rim-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="30%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02"/>
+    </linearGradient>
+
+    <!-- Drop shadow for the icon itself -->
+    <filter id="icon-shadow" x="-10%" y="-10%" width="120%" height="125%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="24" flood-color="#000000" flood-opacity="0.55"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+
+    <!-- Drop shadow for the flame symbol -->
+    <filter id="flame-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Base Squircle Container -->
+  <g filter="url(#icon-shadow)">
+    <rect x="36" y="36" width="440" height="440" rx="100" ry="100" fill="url(#bg-grad)"/>
+    <rect x="36" y="36" width="440" height="440" rx="100" ry="100" fill="none" stroke="url(#rim-grad)" stroke-width="2.5"/>
+  </g>
+
+  <!-- Ambient Glow Behind Flame -->
+  <circle cx="256" cy="270" r="180" fill="url(#fire-glow)"/>
+
+  <!-- Top Glass Glint Highlight -->
+  <path d="M 120 40 Q 256 50 392 40 C 430 40 460 70 468 110 Q 256 120 44 110 C 52 70 82 40 120 40 Z" fill="#ffffff" opacity="0.04"/>
+
+  <!-- Official Pyre Flame Vector Mark -->
+  <g filter="url(#flame-shadow)" transform="translate(76, 56) scale(3.6)">
+    <path fill="url(#flame-grad)" fill-rule="evenodd" d="M50 5C53 22 79 35 79 60C79 79 67 93 50 93C33 93 21 79 21 60C21 48 27 40 33 32C35 42 40 47 45 47C42 30 44 16 50 5ZM50 50C58 60 64 67 64 74C64 82 58 87 50 87C42 87 36 82 36 74C36 67 42 60 50 50Z"/>
+  </g>
+</svg>

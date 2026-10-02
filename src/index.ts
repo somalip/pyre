@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -21,7 +22,9 @@ import { runDoctor, printDoctorReport } from './doctor.js';
 import { generateZshCompletions, generateBashCompletions, generateFishCompletions, generatePowerShellCompletions } from './completions.js';
 import { runHistoryCommand } from './historyCmd.js';
 import { runDiffCommand } from './diffCmd.js';
-import { readConfig, CONFIG_FILE } from './state/config.js';
+import { readConfig, writeConfig, resetConfig, CONFIG_FILE } from './state/config.js';
+import { getServiceStatus, installService, uninstallService } from './service.js';
+import { sendTestAlert } from './alertChannels.js';
 import { generateXbarPlugin } from './xbar.js';
 import { runFleetCommand } from './fleet.js';
 
@@ -80,6 +83,9 @@ program
     .option('--install', 'Install pyre web as a background launchd agent')
     .option('--uninstall', 'Uninstall pyre web launchd agent')
     .option('--port <port>', 'Port number for web server mode', '3000')
+    .option('--host <host>', 'Host address to bind web/UI server (e.g. 127.0.0.1 or 0.0.0.0)')
+    .option('--lan', 'Expose web/UI server to local network (Accessible on same Wi-Fi / LAN)')
+    .option('--no-lan', 'Do not expose server to local network (bind to localhost only)')
     .option('--prometheus-port <port>', 'Port number for Prometheus exporter (default: 9090)', '9090')
     .option('--speed <n>', 'Playback speed multiplier for pyre replay (default: 1)', '1')
     .option('--llm-backend <backend>', 'AI backend: builtin (local zero-setup), ollama, or openai (default: builtin)', 'builtin')
@@ -958,9 +964,75 @@ async function runSshCommand(host: string): Promise<void> {
   });
 }
 
-async function runWebCommand(): Promise<number> {
+async function runWebCommand(bindHost?: string): Promise<number> {
   const http = await import('node:http');
   const port = parseInt(opts.port || process.env.PORT || '3000', 10) || (opts.port === '0' ? 0 : 3000);
+
+  const exportDir = opts.exportDir || './pyre-exports';
+  const webLogSession = {
+    recording: false,
+    filePath: '',
+    fileName: '',
+    stream: null as any,
+    samples: 0,
+    startedAt: 0,
+    timer: null as any,
+  };
+
+  function writeCsvSample(data: any) {
+    if (!webLogSession.recording || !webLogSession.stream) return;
+    try {
+      const temp = data.cpu?.temperature ?? data.thermal?.temperatures?.cpu_die ?? '';
+      const rxPackets = data.network?.rxPackets ?? 0;
+      const txPackets = data.network?.txPackets ?? 0;
+      const connections = data.network?.connections ?? 0;
+      webLogSession.stream.write(
+        `${data.timestamp || new Date().toISOString()},${data.cpu?.usage ?? 0},${data.memory?.usagePercent ?? 0},${temp},${data.network?.rxBytes ?? 0},${data.network?.txBytes ?? 0},${rxPackets},${txPackets},${connections},${data.thermal?.state ?? 'Nominal'}\n`
+      );
+      webLogSession.samples++;
+    } catch {
+      // ignore write error
+    }
+  }
+
+  function startWebLogging() {
+    if (webLogSession.recording) return;
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
+    const tsStr = new Date().toISOString().replace(/[:.]/g, '-');
+    webLogSession.fileName = `pyre-log-${tsStr}.csv`;
+    webLogSession.filePath = path.join(exportDir, webLogSession.fileName);
+    webLogSession.stream = fs.createWriteStream(webLogSession.filePath, { flags: 'a' });
+    webLogSession.stream.write('timestamp,cpu_usage,mem_usage_percent,temp_c,net_rx_bytes,net_tx_bytes,net_rx_packets,net_tx_packets,connections,thermal_state\n');
+    webLogSession.recording = true;
+    webLogSession.samples = 0;
+    webLogSession.startedAt = Date.now();
+
+    if (webLogSession.timer) clearInterval(webLogSession.timer);
+    webLogSession.timer = setInterval(async () => {
+      if (!webLogSession.recording) return;
+      try {
+        const d = await collectAll({ detailed: true });
+        writeCsvSample(d);
+      } catch {
+        // ignore
+      }
+    }, 2000);
+  }
+
+  function stopWebLogging() {
+    if (!webLogSession.recording) return;
+    webLogSession.recording = false;
+    if (webLogSession.timer) {
+      clearInterval(webLogSession.timer);
+      webLogSession.timer = null;
+    }
+    if (webLogSession.stream) {
+      webLogSession.stream.end();
+      webLogSession.stream = null;
+    }
+  }
 
   const server = http.createServer(async (req, res) => {
     const url = req.url || '/';
@@ -993,6 +1065,9 @@ async function runWebCommand(): Promise<number> {
       const sendStats = async () => {
         try {
           const data = await collectAll({ detailed: true });
+          if (webLogSession.recording && !webLogSession.timer) {
+            writeCsvSample(data);
+          }
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         } catch {
           // ignore stream collect error
@@ -1028,6 +1103,128 @@ async function runWebCommand(): Promise<number> {
         'Access-Control-Allow-Methods': 'GET, OPTIONS',
       });
       res.end(JSON.stringify(data, null, 2));
+    } else if (url.startsWith('/api/logging/status')) {
+      let fileSize = 0;
+      if (webLogSession.filePath && fs.existsSync(webLogSession.filePath)) {
+        try { fileSize = fs.statSync(webLogSession.filePath).size; } catch {}
+      }
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      });
+      res.end(JSON.stringify({
+        recording: webLogSession.recording,
+        file: webLogSession.fileName,
+        path: webLogSession.filePath,
+        samples: webLogSession.samples,
+        durationSec: webLogSession.recording ? Math.round((Date.now() - webLogSession.startedAt) / 1000) : 0,
+        sizeBytes: fileSize,
+        exportDir,
+      }));
+    } else if (url.startsWith('/api/logging/start')) {
+      startWebLogging();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      });
+      res.end(JSON.stringify({
+        success: true,
+        recording: true,
+        file: webLogSession.fileName,
+        path: webLogSession.filePath,
+      }));
+    } else if (url.startsWith('/api/logging/stop')) {
+      const summary = {
+        success: true,
+        recording: false,
+        file: webLogSession.fileName,
+        path: webLogSession.filePath,
+        samples: webLogSession.samples,
+        durationSec: webLogSession.startedAt ? Math.round((Date.now() - webLogSession.startedAt) / 1000) : 0,
+      };
+      stopWebLogging();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      });
+      res.end(JSON.stringify(summary));
+    } else if (url.startsWith('/api/logging/history')) {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      });
+      const files: any[] = [];
+      if (fs.existsSync(exportDir)) {
+        try {
+          const logFiles = fs.readdirSync(exportDir)
+            .filter(f => f.startsWith('pyre-log-') && f.endsWith('.csv'))
+            .sort().reverse();
+          for (const lf of logFiles) {
+            const p = path.join(exportDir, lf);
+            const st = fs.statSync(p);
+            files.push({
+              name: lf,
+              sizeBytes: st.size,
+              mtime: st.mtime.toISOString(),
+            });
+          }
+        } catch {}
+      }
+      res.end(JSON.stringify({ exportDir, files }));
+    } else if (url.startsWith('/api/logging/download')) {
+      const parsedUrl = new URL(url, 'http://localhost');
+      const filename = path.basename(parsedUrl.searchParams.get('file') || '');
+      const filePath = path.join(exportDir, filename);
+      if (!filename || !fs.existsSync(filePath)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('File not found');
+        return;
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Access-Control-Allow-Origin': '*',
+      });
+      fs.createReadStream(filePath).pipe(res);
+    } else if (url.startsWith('/api/export')) {
+      const parsedUrl = new URL(url, 'http://localhost');
+      const fmt = (parsedUrl.searchParams.get('format') || 'json').toLowerCase();
+      const data = await collectAll({ detailed: true });
+      const ts = new Date().toISOString().replace(/[:.]/g, '-');
+      let body: string;
+      let ctype = 'text/plain';
+      let ext = 'txt';
+      if (fmt === 'csv') {
+        body = formatCsv(data);
+        ctype = 'text/csv';
+        ext = 'csv';
+      } else if (fmt === 'tsv') {
+        body = formatTsv(data);
+        ctype = 'text/tab-separated-values';
+        ext = 'tsv';
+      } else if (fmt === 'md' || fmt === 'markdown') {
+        body = formatMarkdown(data);
+        ctype = 'text/markdown';
+        ext = 'md';
+      } else if (fmt === 'html') {
+        body = formatHtml(data);
+        ctype = 'text/html';
+        ext = 'html';
+      } else {
+        body = formatJson(data);
+        ctype = 'application/json';
+        ext = 'json';
+      }
+      res.writeHead(200, {
+        'Content-Type': `${ctype}; charset=utf-8`,
+        'Content-Disposition': `attachment; filename="pyre-snapshot-${ts}.${ext}"`,
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(body);
     } else if (url.startsWith('/api/kill')) {
       const parsedUrl = new URL(url, 'http://localhost');
       const pidStr = parsedUrl.searchParams.get('pid');
@@ -1048,6 +1245,103 @@ async function runWebCommand(): Promise<number> {
       } catch (err: any) {
         res.end(JSON.stringify({ success: false, error: err.message }));
       }
+    } else if (url === '/api/config' || url.startsWith('/api/config?')) {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      if (req.method === 'POST') {
+        let raw = '';
+        req.on('data', chunk => { raw += chunk; });
+        req.on('end', () => {
+          try {
+            const patch = raw ? JSON.parse(raw) : {};
+            writeConfig(patch);
+            res.end(JSON.stringify({ success: true, config: readConfig(), configFile: CONFIG_FILE }));
+          } catch (e: any) {
+            res.end(JSON.stringify({ success: false, error: e.message }));
+          }
+        });
+        return;
+      }
+      res.end(JSON.stringify({ success: true, config: readConfig(), configFile: CONFIG_FILE }));
+    } else if (url === '/api/config/reset') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      resetConfig();
+      res.end(JSON.stringify({ success: true, config: readConfig() }));
+    } else if (url === '/api/service/status') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      res.end(JSON.stringify(getServiceStatus()));
+    } else if (url === '/api/service/toggle') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      let raw = '';
+      req.on('data', chunk => { raw += chunk; });
+      req.on('end', () => {
+        try {
+          const body = raw ? JSON.parse(raw) : {};
+          const enable = body.enabled === true;
+          if (enable) {
+            installService(body.port || 3000);
+          } else {
+            uninstallService();
+          }
+          res.end(JSON.stringify({ success: true, ...getServiceStatus() }));
+        } catch (e: any) {
+          res.end(JSON.stringify({ success: false, error: e.message, ...getServiceStatus() }));
+        }
+      });
+      return;
+    } else if (url === '/api/alerts/test') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      let raw = '';
+      req.on('data', chunk => { raw += chunk; });
+      req.on('end', async () => {
+        try {
+          const body = raw ? JSON.parse(raw) : {};
+          const cfg = readConfig();
+          const channelConfig = {
+            slackUrl: body.slackAlertUrl || cfg.slackAlertUrl || undefined,
+            discordUrl: body.discordAlertUrl || cfg.discordAlertUrl || undefined,
+            pushoverToken: body.pushoverToken || cfg.pushoverToken || undefined,
+            pushoverUser: body.pushoverUser || cfg.pushoverUser || undefined,
+            ntfyUrl: body.ntfyUrl || cfg.ntfyUrl || undefined,
+          };
+          await sendTestAlert(channelConfig);
+          res.end(JSON.stringify({ success: true, message: 'Test alert dispatched' }));
+        } catch (e: any) {
+          res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      });
+      return;
+    } else if (url === '/api/doctor') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      });
+      try {
+        const results = await runDoctor();
+        res.end(JSON.stringify({ success: true, results }));
+      } catch (e: any) {
+        res.end(JSON.stringify({ success: false, error: e.message }));
+      }
     } else {
       res.writeHead(404);
       res.end('Not found');
@@ -1066,24 +1360,34 @@ async function runWebCommand(): Promise<number> {
     }
   });
 
+  const host = bindHost || opts.host || (opts.lan === true ? '0.0.0.0' : (opts.lan === false || opts.noLan) ? '127.0.0.1' : '0.0.0.0');
   const ip = detectLocalIP() || 'localhost';
+  const isLan = host === '0.0.0.0' || (!['127.0.0.1', 'localhost', '::1'].includes(host));
 
   return new Promise((resolve) => {
-    server.listen(port, '0.0.0.0', () => {
+    server.listen(port, host, () => {
       const address = server.address();
       const actualPort = typeof address === 'object' && address ? address.port : port;
       
       console.log(chalk.bold(`\n  pyre web server running on port ${actualPort}`));
       console.log(chalk.dim(`  Local URL:   http://localhost:${actualPort}/`));
-      console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${actualPort}/  (Accessible on same Wi-Fi / LAN)`));
-      console.log(chalk.dim(`  API:         http://${ip}:${actualPort}/api`));
-      console.log(chalk.dim(`  Metrics:     http://${ip}:${actualPort}/metrics`));
-      console.log(chalk.dim(`  SSE Stream:  http://${ip}:${actualPort}/api/stream`));
+      if (isLan) {
+        console.log(chalk.hex('#ff6a39').bold(`  Network URL: http://${ip}:${actualPort}/  (Accessible on same Wi-Fi / LAN)`));
+        console.log(chalk.dim(`  API:         http://${ip}:${actualPort}/api`));
+        console.log(chalk.dim(`  Metrics:     http://${ip}:${actualPort}/metrics`));
+        console.log(chalk.dim(`  SSE Stream:  http://${ip}:${actualPort}/api/stream`));
+      } else {
+        console.log(chalk.dim(`  Network:     Disabled (localhost only for security)`));
+        console.log(chalk.dim(`  API:         http://localhost:${actualPort}/api`));
+        console.log(chalk.dim(`  Metrics:     http://localhost:${actualPort}/metrics`));
+        console.log(chalk.dim(`  SSE Stream:  http://localhost:${actualPort}/api/stream`));
+      }
       
       resolve(actualPort);
     });
 
     process.once('SIGINT', () => {
+      stopWebLogging();
       server.close();
       process.exit(0);
     });
@@ -1103,18 +1407,146 @@ async function openBrowserUrl(url: string): Promise<void> {
 }
 
 async function runUiCommand(): Promise<void> {
+  let bindHost = '127.0.0.1';
+
+  if (opts.lan === true || opts.host === '0.0.0.0') {
+    bindHost = '0.0.0.0';
+  } else if (opts.lan === false || opts.noLan || opts.host === '127.0.0.1' || opts.host === 'localhost') {
+    bindHost = '127.0.0.1';
+  } else if (opts.host) {
+    bindHost = opts.host;
+  } else if (process.stdin.isTTY && process.stdout.isTTY) {
+    const ip = detectLocalIP();
+    console.log(chalk.bold('\n  pyre ui'));
+    console.log(chalk.yellow('  ⚠️  Security Notice: Exposing pyre allows any device on your Wi-Fi / LAN'));
+    console.log(chalk.yellow('     to inspect system telemetry, export logs, and control processes.'));
+    const netHint = ip ? ` (${ip})` : '';
+
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    try {
+      const answer = await new Promise<string>((resolve) => {
+        rl.question(chalk.hex('#ff6a39').bold(`  Expose to Network URL (Accessible on same Wi-Fi / LAN)${netHint}? [y/N]: `), (ans) => {
+          resolve(ans.trim().toLowerCase());
+        });
+        rl.once('close', () => resolve(''));
+      });
+      if (answer === 'y' || answer === 'yes') {
+        bindHost = '0.0.0.0';
+      } else {
+        bindHost = '127.0.0.1';
+      }
+    } finally {
+      rl.close();
+    }
+  } else {
+    bindHost = '127.0.0.1';
+  }
+
   // Use a random ephemeral port to avoid collisions
   opts.port = '0';
-  const port = await runWebCommand();
+  const port = await runWebCommand(bindHost);
   const url = `http://localhost:${port}`;
 
   if (process.platform === 'darwin') {
     const { run } = await import('./monitors/run.js');
     const hasSwift = (await run('which swift 2>/dev/null', '')).trim().length > 0;
     if (hasSwift) {
+      const isCompact = !!opts.compact;
+      const isAlwaysOnTop = !!opts.ontop;
+      const widthExpr = isCompact ? '420.0' : 'min(1180.0, screen.width - 80)';
+      const heightExpr = isCompact ? '280.0' : 'min(820.0, screen.height - 80)';
+      const windowTitle = isCompact ? 'Pyre Widget' : 'Pyre';
+      const minSizeExpr = isCompact ? 'NSSize(width: 320, height: 200)' : 'NSSize(width: 860, height: 560)';
+
       const swiftScript = `
 import Cocoa
 import WebKit
+
+ProcessInfo.processInfo.processName = "Pyre"
+
+func makePyreIcon() -> NSImage? {
+    let size = NSSize(width: 512, height: 512)
+    let img = NSImage(size: size)
+    img.lockFocus()
+
+    // 1. Apple-style squircle background
+    let pad: CGFloat = 36.0
+    let bgRect = NSRect(x: pad, y: pad, width: size.width - pad * 2, height: size.height - pad * 2)
+    let squircle = NSBezierPath(roundedRect: bgRect, xRadius: 104, yRadius: 104)
+
+    // Dark obsidian/slate gradient (matching official Pyre liquid-glass design)
+    if let bgGrad = NSGradient(colors: [
+        NSColor(red: 0.114, green: 0.133, blue: 0.176, alpha: 1.0),
+        NSColor(red: 0.039, green: 0.043, blue: 0.059, alpha: 1.0)
+    ]) {
+        bgGrad.draw(in: squircle, angle: 270)
+    }
+
+    // Subtle inner rim highlight
+    NSColor(white: 1.0, alpha: 0.12).setStroke()
+    squircle.lineWidth = 2.5
+    squircle.stroke()
+
+    // 2. Official Pyre Flame Vector Path (exact SVG bezier curves from Pyre design)
+    func pt(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+        let s: CGFloat = 3.65
+        let cx: CGFloat = 256.0
+        let cy: CGFloat = 256.0
+        let px = cx + (x - 50.0) * s
+        let py = cy - (y - 49.0) * s
+        return NSPoint(x: px, y: py)
+    }
+
+    let flame = NSBezierPath()
+    flame.windingRule = .evenOdd
+
+    // Outer flame contour
+    flame.move(to: pt(50, 5))
+    flame.curve(to: pt(79, 60), controlPoint1: pt(53, 22), controlPoint2: pt(79, 35))
+    flame.curve(to: pt(50, 93), controlPoint1: pt(79, 79), controlPoint2: pt(67, 93))
+    flame.curve(to: pt(21, 60), controlPoint1: pt(33, 93), controlPoint2: pt(21, 79))
+    flame.curve(to: pt(33, 32), controlPoint1: pt(21, 48), controlPoint2: pt(27, 40))
+    flame.curve(to: pt(45, 47), controlPoint1: pt(35, 42), controlPoint2: pt(40, 47))
+    flame.curve(to: pt(50, 5), controlPoint1: pt(42, 30), controlPoint2: pt(44, 16))
+    flame.close()
+
+    // Inner flame cutout (even-odd winding rule cuts this out)
+    flame.move(to: pt(50, 50))
+    flame.curve(to: pt(64, 74), controlPoint1: pt(58, 60), controlPoint2: pt(64, 67))
+    flame.curve(to: pt(50, 87), controlPoint1: pt(64, 82), controlPoint2: pt(58, 87))
+    flame.curve(to: pt(36, 74), controlPoint1: pt(42, 87), controlPoint2: pt(36, 82))
+    flame.curve(to: pt(50, 50), controlPoint1: pt(36, 67), controlPoint2: pt(42, 60))
+    flame.close()
+
+    // Drop shadow under flame
+    let ctx = NSGraphicsContext.current
+    ctx?.saveGraphicsState()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.45)
+    shadow.shadowOffset = NSSize(width: 0, height: -8)
+    shadow.shadowBlurRadius = 16
+    shadow.set()
+
+    // Silver-white gradient fill for the flame mark
+    if let flameGrad = NSGradient(colors: [
+        NSColor(white: 1.0, alpha: 1.0),
+        NSColor(red: 0.60, green: 0.64, blue: 0.72, alpha: 1.0)
+    ]) {
+        flameGrad.draw(in: flame, angle: 270)
+    }
+    ctx?.restoreGraphicsState()
+
+    // Top glint highlight
+    let glintRect = NSRect(x: 64, y: 468, width: size.width - 128, height: 1.5)
+    NSColor(white: 1.0, alpha: 0.22).setFill()
+    NSBezierPath(roundedRect: glintRect, xRadius: 1, yRadius: 1).fill()
+
+    img.unlockFocus()
+    return img
+}
 
 // WKWebView subclass that allows the window to be dragged from any pixel
 class DraggableWebView: WKWebView {
@@ -1128,12 +1560,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let serverPort = ${port}
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        // Main Application Menu
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        mainMenu.addItem(appMenuItem)
+        let appMenu = NSMenu(title: "Pyre")
+        appMenuItem.submenu = appMenu
+        appMenu.addItem(withTitle: "About Pyre", action: nil, keyEquivalent: "")
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(withTitle: "Quit Pyre", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        NSApp.mainMenu = mainMenu
+
         // Window
-        let isCompact = ${!!opts.compact}
-        let isAlwaysOnTop = ${!!opts.ontop}
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x:0, y:0, width:1280, height:800)
-        let W = isCompact ? 420.0 : min(1180.0, screen.width - 80)
-        let H = isCompact ? 280.0 : min(820.0, screen.height - 80)
+        let W = ${widthExpr}
+        let H = ${heightExpr}
         let rect = NSRect(x: screen.minX + (screen.width - W) / 2,
                           y: screen.minY + (screen.height - H) / 2,
                           width: W, height: H)
@@ -1141,12 +1582,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = NSWindow(contentRect: rect,
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
-        window.title = isCompact ? "Pyre Widget" : "Activity Monitor"
-        window.minSize = isCompact ? NSSize(width: 320, height: 200) : NSSize(width: 860, height: 560)
-        if isAlwaysOnTop {
-            window.level = .floating
-        }
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.title = "${windowTitle}"
+        window.minSize = ${minSizeExpr}
+${isAlwaysOnTop ? '        window.level = .floating\n' : ''}        window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = NSColor(white: 0, alpha: 1)
         window.isReleasedWhenClosed = false
         window.delegate = self
@@ -1160,12 +1598,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         // Load the dashboard HTML from the local server
         var req = URLRequest(url: URL(string: "http://localhost:\\(serverPort)/")!)
-        req.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         webView.load(req)
 
         window.contentView?.addSubview(webView)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        let icon = makePyreIcon()
+        NSApp.applicationIconImage = icon
+        NSApp.dockTile.display()
 
         // Start native data timer (URLSession has full network access — no sandbox issues)
         // We wait 1.5 s for the page to load, then start pushing data every 2 s.
@@ -1220,7 +1661,7 @@ app.run()
 
       const { spawn } = await import('node:child_process');
       console.log(chalk.cyan(`\n  Launching native UI window...`));
-      const ui = spawn('swift', [scriptPath], { stdio: 'inherit' });
+      const ui = spawn('swift', ['-suppress-warnings', scriptPath], { stdio: 'inherit' });
       
       ui.on('close', () => {
         console.log(chalk.dim('UI window closed, shutting down server...'));
@@ -1235,7 +1676,34 @@ app.run()
     }
   }
 
-  // Cross-platform browser / app-mode launch for Linux, Windows, or macOS without Swift
+  if (process.platform === 'win32') {
+    const scriptPath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      'monitors',
+      'platform',
+      'windows-ui.ps1'
+    );
+    const { spawn } = await import('node:child_process');
+    console.log(chalk.cyan(`\n  Launching native UI window...`));
+    const ui = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Port', String(port)],
+      { stdio: 'inherit' }
+    );
+
+    ui.on('close', () => {
+      console.log(chalk.dim('UI window closed, shutting down server...'));
+      process.exit(0);
+    });
+
+    process.once('SIGINT', () => {
+      ui.kill();
+      process.exit(0);
+    });
+    return;
+  }
+
+  // Cross-platform browser / app-mode launch for Linux, or macOS without Swift
   console.log(chalk.cyan(`\n  Opening live UI dashboard at ${url}...`));
   await openBrowserUrl(url);
   console.log(chalk.dim('  Press Ctrl+C to stop server.\n'));

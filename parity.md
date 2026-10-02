@@ -527,6 +527,8 @@ pyre provides Mac-native security, diagnostics, and ecosystem capabilities that 
 * **Kill Confirmation Guard Rails** — Hard confirmation safety check when attempting to terminate protected system PIDs (`launchd`, pyre PID, parent PID).
 * **Accessible Plain-Text Mode** — `--plain`/`--a11y` mode for screen reader compatibility and clean file logging without ANSI noise.
 * **P2P Live Data Streaming & Fleet** — Multi-Mac live streaming with password/TLS auth, HMAC signing, rate-limiting, and IP filtering.
+* **Power User TUI Tools** — Quick-reference overlay (?), fuzzy-search command palette (:), session bookmarks (Shift+M save / M recall), graph zoom ([/]), panel quick-stack (Tab/Shift+Tab), and a footer badge showing active bookmarks, zoom level, and panel history depth.
+* **Live Web Dashboard** — `pyre serve` now serves a Chart.js-based auto-refreshing dashboard at `/` with live CPU, memory, temperature, network, and power sparkline charts.
 
 ---
 
