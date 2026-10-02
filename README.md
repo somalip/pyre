@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/pyre-cli"><img src="https://img.shields.io/npm/v/pyre-cli.svg?style=flat" alt="npm version" /></a>
-  <a href="package.json"><img src="https://img.shields.io/badge/version-10.1.0-blue?style=flat" alt="Version" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/version-10.2.0-blue?style=flat" alt="Version" /></a>
   <a href="#requirements"><img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat" alt="Platforms" /></a>
   <a href="#requirements"><img src="https://img.shields.io/badge/node-%3E%3D18.0.0-green?style=flat" alt="Node" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat" alt="License" /></a>
@@ -144,19 +144,19 @@ pyre web --lan --port 3000
 
 ## Comparison
 
-| Feature | Pyre | btop | htop | Glances |
-|---|:---:|:---:|:---:|:---:|
-| **Interactive TUI & Sparklines** | Yes (6 themes + JSON) | Yes | Limited | Yes |
-| **Native macOS Desktop Window** | Yes (Swift Cocoa) | No | No | No |
-| **Apple Silicon P/E + GPU + ANE** | Yes (Granular watts) | Partial | Partial | Partial |
-| **Encrypted P2P Telemetry** | Yes (TLS + HMAC) | No | No | Partial (Plain) |
-| **Real-time Web Dashboard (SSE)** | Yes (Zero-config) | No | No | Yes |
-| **Multi-Host Fleet Aggregation** | Yes (SSH / P2P) | No | No | Yes (Web only) |
-| **Socket Connection Forensics** | Yes | Partial | No | Partial |
-| **Statistical Anomaly Radar** | Yes (Z-score) | No | No | No |
-| **Energy & Cost Profiler** | Yes (kWh / Joules) | No | No | No |
-| **System Security Doctor** | Yes (SIP / Sensors) | No | No | No |
-| **Export Formats** | JSON, CSV, TSV, HTML, MD | No | No | InfluxDB, CSV |
+| Feature | Pyre | btop | macmon | mactop | asitop | htop | Glances |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Interactive TUI & Sparklines** | Yes (6 themes + JSON) | Yes | Yes (Glanceable) | Yes | Yes | Limited | Yes |
+| **Native macOS Desktop Window** | Yes (Swift Cocoa) | No | No | No | No | No | No |
+| **Apple Silicon P/E + GPU + ANE** | Yes (Granular watts) | Partial | Yes (IOReport watts) | Yes (Powermetrics) | Yes (Powermetrics) | Partial | Partial |
+| **Encrypted P2P Telemetry** | Yes (TLS + HMAC) | No | No | No | No | No | Partial (Plain) |
+| **Real-time Web Dashboard (SSE)** | Yes (Zero-config) | No | No | No | No | No | Yes |
+| **Multi-Host Fleet Aggregation** | Yes (SSH / P2P) | No | No | No | No | No | Yes (Web only) |
+| **Socket Connection Forensics** | Yes | Partial | No | No | No | No | Partial |
+| **Statistical Anomaly Radar** | Yes (Z-score) | No | No | No | No | No | No |
+| **Energy & Cost Profiler** | Yes (kWh / Joules) | No | No | No | No | No | No |
+| **System Security Doctor** | Yes (SIP / Sensors) | No | No | No | No | No | No |
+| **Export Formats** | JSON, CSV, TSV, HTML, MD | No | None | None | None | No | InfluxDB, CSV |
 
 ---
 
@@ -213,6 +213,15 @@ pyre brew                       # Package manager health check & disk cache repo
 pyre smart                      # S.M.A.R.T. disk health monitor & drive wear
 pyre blender                    # Background Blender 3D render job tracker
 pyre pipe                       # Continuous newline-delimited JSON stream
+pyre stress                     # Synthetic CPU/GPU load generator
+pyre extensions                 # System Extensions and Driver inspector
+pyre info                       # Hardware summary including battery health & displays
+pyre explain                    # Plain-English anomaly explanation (Ollama/OpenAI/builtin)
+pyre diff <file1> <file2>       # Compare two saved snapshot files side-by-side
+pyre history                    # Graph historical resource trends from CSV logs
+pyre replay <file>              # Play back a pyre CSV log file in the TUI
+pyre build                      # Active compiler and build system tracker
+pyre topo                       # Network topology mapper and pyre peer auto-discovery
 ```
 
 ### Automation, Profiles & Daemon
@@ -220,10 +229,17 @@ pyre pipe                       # Continuous newline-delimited JSON stream
 ```bash
 pyre watchdog                   # Autonomous daemon monitoring rules & killing rogue procs
 pyre serve [--port 8080]        # Lightweight REST API server exposing JSON endpoints
-pyre profile save <name>        # Save active configuration profile
-pyre profile load <name>        # Restore saved profile
-pyre config show                # Display current settings (~/.config/pyre/config.json)
-pyre completions <zsh|bash>     # Generate shell auto-completions
+pyre profile <save|load|list>   # Atomic configuration profile management
+pyre config <show|reset>        # View or reset persistent configuration file
+pyre completions <shell>        # Generate shell auto-completions (zsh, bash, fish, powershell)
+pyre prometheus                 # Start a Prometheus metrics exporter on localhost
+pyre p2p <server|connect>       # Start a P2P server or connect to one
+pyre server                     # Print one-line helper commands for P2P pairing
+pyre alert test                 # Send a test notification to all configured alert channels
+pyre profile-proc <pid>         # CPU call-tree profiler and hot function sampler
+pyre sync <push|pull|status>    # Synchronize config profiles across machines
+pyre xbar                       # Generate an xbar / SwiftBar menu bar plugin script
+pyre update                     # Check for pyre-cli updates
 ```
 
 ---

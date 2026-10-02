@@ -1,6 +1,6 @@
 {
   "name": "pyre-cli",
-  "version": "10.1.0",
+  "version": "10.2.0",
   "description": "Cross-platform system monitoring CLI for macOS, Linux, and Windows: temps, system stats, live dashboard, packet monitor, battery predictor, export",
   "main": "dist/index.js",
   "type": "module",

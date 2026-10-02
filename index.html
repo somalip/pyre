@@ -263,17 +263,17 @@ dialog[open]::backdrop{opacity:1}
   <p class="lede">Hardware telemetry, encrypted streaming, web portal.</p>
   <div class="tbl">
    <table>
-    <thead><tr><th>Feature</th><th class="p">Pyre</th><th>btop</th><th>htop</th><th>Glances</th></tr></thead>
+    <thead><tr><th>Feature</th><th class="p">Pyre</th><th>btop</th><th>macmon</th><th>mactop</th><th>asitop</th><th>htop</th><th>Glances</th></tr></thead>
     <tbody>
-     <tr><td>Interactive TUI with themes</td><td class="p">6 themes</td><td class="y">✓</td><td>Limited</td><td class="y">✓</td></tr>
-     <tr><td>Encrypted peer-to-peer streaming</td><td class="p">TLS + HMAC</td><td>—</td><td>—</td><td>Partial</td></tr>
-     <tr><td>Multi-host fleet view</td><td class="p">✓</td><td>—</td><td>—</td><td class="y">✓</td></tr>
-     <tr><td>Web portal</td><td class="p">✓</td><td>—</td><td>—</td><td class="y">✓</td></tr>
-     <tr><td>Apple Silicon power draw</td><td class="p">Watts, P/E cores</td><td>Partial</td><td>Partial</td><td>Partial</td></tr>
-     <tr><td>Socket forensics</td><td class="p">✓</td><td>Partial</td><td>—</td><td>Partial</td></tr>
-     <tr><td>Anomaly detection</td><td class="p">Z-score</td><td>—</td><td>—</td><td>—</td></tr>
-     <tr><td>Energy profiler</td><td class="p">kWh, joules</td><td>—</td><td>—</td><td>—</td></tr>
-     <tr><td>Export formats</td><td class="p">JSON, CSV, HTML, MD</td><td>—</td><td>—</td><td>InfluxDB, CSV</td></tr>
+     <tr><td>Interactive TUI with themes</td><td class="p">6 themes</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td><td>Limited</td><td class="y">✓</td></tr>
+     <tr><td>Encrypted peer-to-peer streaming</td><td class="p">TLS + HMAC</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Partial</td></tr>
+     <tr><td>Multi-host fleet view</td><td class="p">✓</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="y">✓</td></tr>
+     <tr><td>Web portal</td><td class="p">✓</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="y">✓</td></tr>
+     <tr><td>Apple Silicon power draw</td><td class="p">Watts, P/E cores</td><td>Partial</td><td class="y">IOReport</td><td class="y">Powermetrics</td><td class="y">Powermetrics</td><td>Partial</td><td>Partial</td></tr>
+     <tr><td>Socket forensics</td><td class="p">✓</td><td>Partial</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Partial</td></tr>
+     <tr><td>Anomaly detection</td><td class="p">Z-score</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+     <tr><td>Energy profiler</td><td class="p">kWh, joules</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+     <tr><td>Export formats</td><td class="p">JSON, CSV, HTML, MD</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>InfluxDB, CSV</td></tr>
     </tbody>
    </table>
   </div>
@@ -297,28 +297,62 @@ dialog[open]::backdrop{opacity:1}
  <div class="dh"><h3 id="docs-title">Documentation</h3><button id="docs-x" aria-label="Close">✕</button></div>
  <div class="db">
   <table>
+   <thead><tr><th style="text-align:left;color:#fff;padding-bottom:8px">Command</th><th style="text-align:left;color:#fff;padding-bottom:8px">Description</th></tr></thead>
    <tbody>
     <tr><td>pyre</td><td>Snapshot of CPU, memory, disk, network, and thermals</td></tr>
-    <tr><td>pyre live</td><td>Full-screen dashboard with real-time graphs</td></tr>
-    <tr><td>pyre live --interval 1 --log</td><td>Refresh every second and log to CSV</td></tr>
-    <tr><td>pyre web --port 3000</td><td>Browser dashboard with live updates</td></tr>
-    <tr><td>pyre fleet &lt;host1&gt; &lt;host2&gt;</td><td>Aggregated dashboard for several hosts</td></tr>
-    <tr><td>pyre ssh &lt;user@host&gt;</td><td>Stream stats from a remote machine</td></tr>
-    <tr><td>pyre anomalies --since 7d</td><td>Digest of unusual spikes and runaway processes</td></tr>
-    <tr><td>pyre doctor</td><td>Check permissions, SIP, Gatekeeper, and sensors</td></tr>
-    <tr><td>pyre bench "&lt;command&gt;"</td><td>Measure CPU, memory, and energy for a command</td></tr>
-    <tr><td>pyre info</td><td>Hardware summary including battery health</td></tr>
-    <tr><td>pyre --json</td><td>Export as JSON (also --csv, --html, --md)</td></tr>
-    <tr><td>? (in TUI)</td><td>Power user quick reference: all shortcuts</td></tr>
-    <tr><td>: (in TUI)</td><td>Command palette: fuzzy-search any action</td></tr>
-    <tr><td>Shift+M</td><td>Save current TUI view as a named bookmark</td></tr>
-    <tr><td>M</td><td>Recall next saved bookmark</td></tr>
-    <tr><td>[ / ]</td><td>Zoom in/out on history graphs</td></tr>
-    <tr><td>Tab / Shift+Tab</td><td>Cycle panels / go back in panel history</td></tr>
-    <tr><td>pyre web</td><td>Live Chart.js dashboard (auto-refresh 2s)</td></tr>
+    <tr><td>pyre live</td><td>Interactive live full-screen dashboard with real-time graphs</td></tr>
+    <tr><td>pyre check</td><td>One-line plain-English health summary</td></tr>
+    <tr><td>pyre doctor</td><td>Run system diagnostics (permissions, SIP, Gatekeeper, sensors)</td></tr>
+    <tr><td>pyre web [--port 3000]</td><td>Serve an auto-refreshing live web portal with SSE stream</td></tr>
+    <tr><td>pyre ui [--compact]</td><td>Launch native macOS Activity Monitor window</td></tr>
+    <tr><td>pyre netusage [--top 15]</td><td>Real-time per-application network usage breakdown</td></tr>
+    <tr><td>pyre fleet &lt;host1&gt; &lt;host2&gt;</td><td>Multi-host live dashboard monitoring multiple hosts</td></tr>
+    <tr><td>pyre ssh &lt;user@host&gt;</td><td>Stream live stats from a remote host over SSH</td></tr>
+    <tr><td>pyre bench "&lt;cmd&gt;"</td><td>Log CPU, memory, power draw, and estimate kWh cost</td></tr>
+    <tr><td>pyre benchmark</td><td>Run a 1-minute CPU benchmark calculating digits of PI</td></tr>
+    <tr><td>pyre anomalies [--since 7d]</td><td>Compute z-score anomalies and print plain-language digest</td></tr>
+    <tr><td>pyre info</td><td>Concise hardware summary including battery health &amp; displays</td></tr>
+    <tr><td>pyre brew</td><td>Package manager health panel (brew/apt/pacman/winget)</td></tr>
+    <tr><td>pyre smart</td><td>S.M.A.R.T. disk health report (requires smartmontools)</td></tr>
+    <tr><td>pyre extensions</td><td>System Extensions / Driver inspector</td></tr>
+    <tr><td>pyre blender</td><td>Track active Blender render jobs and their progress</td></tr>
+    <tr><td>pyre build</td><td>Active compiler and build system tracker</td></tr>
+    <tr><td>pyre topo</td><td>Network topology mapper and pyre peer auto-discovery</td></tr>
+    <tr><td>pyre explain</td><td>AI-powered anomaly explanation (Ollama/OpenAI/builtin)</td></tr>
+    <tr><td>pyre diff &lt;file1&gt; &lt;file2&gt;</td><td>Compare two saved snapshot files side-by-side</td></tr>
+    <tr><td>pyre history</td><td>Graph historical resource trends from CSV logs</td></tr>
+    <tr><td>pyre replay &lt;file&gt;</td><td>Play back a pyre CSV log file in the TUI</td></tr>
+    <tr><td>pyre pipe</td><td>Continuous newline-delimited JSON stream for scripting</td></tr>
+    <tr><td>pyre stress</td><td>Synthetic CPU/GPU load generator</td></tr>
+    <tr><td>pyre watchdog</td><td>Persistent autonomous monitoring daemon and rules engine</td></tr>
+    <tr><td>pyre serve [--port 8080]</td><td>Lightweight structured JSON REST API server</td></tr>
+    <tr><td>pyre profile &lt;save|load|list&gt;</td><td>Atomic configuration profile management</td></tr>
+    <tr><td>pyre config &lt;show|reset&gt;</td><td>View or reset persistent configuration file</td></tr>
+    <tr><td>pyre completions &lt;shell&gt;</td><td>Generate shell auto-completion scripts (zsh, bash, fish, powershell)</td></tr>
+    <tr><td>pyre prometheus</td><td>Start a Prometheus metrics exporter on localhost</td></tr>
+    <tr><td>pyre p2p &lt;server|connect&gt;</td><td>Start a P2P server or connect to one</td></tr>
+    <tr><td>pyre server</td><td>Print commands for starting P2P server/client with generated password</td></tr>
+    <tr><td>pyre sync &lt;push|pull|status&gt;</td><td>Synchronize config profiles across machines</td></tr>
+    <tr><td>pyre xbar</td><td>Generate an xbar / SwiftBar menu bar plugin script</td></tr>
+    <tr><td>pyre --json</td><td>Export as JSON (also --csv, --tsv, --html, --md)</td></tr>
    </tbody>
   </table>
-  <p style="font-size:13px;color:var(--mute)">Private streaming: run <code>pyre p2p server --p2p-password "secret" --p2p-port 9876</code> on one machine, then <code>pyre p2p connect --p2p-host &lt;server-ip&gt; --p2p-password "secret" --p2p-port 9876</code> on another.</p>
+  <h4 style="margin:20px 0 10px;font-size:15px;color:#fff">TUI Shortcuts (inside pyre live)</h4>
+  <table>
+   <tbody>
+    <tr><td>?</td><td>Power user quick reference: all shortcuts</td></tr>
+    <tr><td>:</td><td>Command palette: fuzzy-search any action</td></tr>
+    <tr><td>Shift+M / M</td><td>Save / recall named session bookmarks</td></tr>
+    <tr><td>[ / ]</td><td>Zoom in / out on history graphs</td></tr>
+    <tr><td>Tab / Shift+Tab</td><td>Cycle panels / go back in panel history</td></tr>
+    <tr><td>/</td><td>Filter processes (search-as-you-type)</td></tr>
+    <tr><td>t</td><td>Toggle process tree view hierarchy</td></tr>
+    <tr><td>c</td><td>Open theme &amp; panel customizer</td></tr>
+    <tr><td>k / S</td><td>Process kill mode / select termination signal</td></tr>
+    <tr><td>p / q</td><td>Pause live feed / quit</td></tr>
+   </tbody>
+  </table>
+  <p style="font-size:13px;color:var(--mute)">Private streaming: run <code>pyre server</code> on host to generate pairing command with a secure random token, then run the client command on the viewer.</p>
   <p style="margin-top:16px"><a href="https://github.com/somalip/pyre#readme" target="_blank" rel="noopener noreferrer">Full documentation on GitHub ›</a></p>
  </div>
 </dialog>

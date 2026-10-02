@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import readline from 'node:readline';
 import { Command } from 'commander';
@@ -202,7 +203,7 @@ async function runServerCommand(): Promise<void> {
   }
 
   const port = 9876;
-  const password = 'mysecret';
+  const password = crypto.randomBytes(12).toString('hex');
 
   console.log(chalk.bold(`\n  pyre server`));
   console.log(chalk.dim(`  Detected IP: ${ip}`));
