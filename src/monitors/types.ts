@@ -43,6 +43,14 @@ export interface GpuData {
    utilization: number;
    temperature?: number;
    processes: number;
+   powerDraw?: number;
+ }
+
+ export interface DisplayInfo {
+   name: string;
+   resolution: string;
+   connectionType?: string;
+   isMain?: boolean;
  }
 
  export interface PowerData {

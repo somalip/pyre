@@ -11,6 +11,14 @@ export default defineConfig({
     } catch {
       // ignore
     }
+    try {
+      if (!fs.existsSync('dist/monitors/platform')) {
+        fs.mkdirSync('dist/monitors/platform', { recursive: true });
+      }
+      fs.copyFileSync('src/monitors/platform/windows-ui.ps1', 'dist/monitors/platform/windows-ui.ps1');
+    } catch {
+      // ignore
+    }
   },
 });
 

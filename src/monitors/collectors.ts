@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import { run } from './run.js';
 import { getSmcMetrics, parseSuffix } from './smc.js';
 import { resolveIp } from './dns_cache.js';
-import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData, ProtocolStats, ConnectionStateStats, RemoteHostInfo } from './types.js';
+import type { StatsData, CpuData, MemoryData, ThermalData, BatteryData, PowerData, DiskData, NetworkData, ProcessData, GpuData, PacketData, NetworkProcess, TaskData, ContainerData, NetworkConnection, BlenderRenderData, ProtocolStats, ConnectionStateStats, RemoteHostInfo, DisplayInfo } from './types.js';
 import { collectBlenderRenders } from './blender.js';
 import {
   collectLinuxSystem,
@@ -1350,15 +1350,8 @@ export async function collectTasks(limit = 12): Promise<TaskData[]> {
        .filter((t): t is TaskData => t !== null && t.pid > 0);
    } catch {
      return [];
-   }
- }
-
-export interface DisplayInfo {
-  name: string;
-  resolution: string;
-  connectionType?: string;
-  isMain?: boolean;
-}
+    }
+  }
 
 export async function getDisplayInfo(): Promise<DisplayInfo[]> {
   if (process.platform === 'linux') return getLinuxDisplayInfo();
