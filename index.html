@@ -6,6 +6,13 @@
 <meta name="color-scheme" content="dark">
 <title>Pyre — System monitoring for your Mac</title>
 <meta name="description" content="High-precision system monitoring CLI with real-time insights.">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
 <style>
 :root{--ink:#f5f5f7;--mute:#a1a1a6;--bg:#000;--border:rgba(255,255,255,.1);--border-h:rgba(255,255,255,.2);--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--spring:cubic-bezier(.16,1,.3,1);--out:cubic-bezier(.22,1,.36,1)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -169,6 +176,9 @@ dialog[open]::backdrop{opacity:1}
 .pi-glass::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.4) 50%,transparent 62%);transform:translateX(-130%);animation:glint 7s var(--out) 1.4s infinite}
 @keyframes glint{0%{transform:translateX(-130%)}16%,100%{transform:translateX(130%)}}
 .pi-shadow{position:absolute;left:14%;right:14%;bottom:-8%;height:12%;border-radius:50%;background:radial-gradient(ellipse at center,rgba(255,255,255,.16),rgba(0,0,0,0) 70%);filter:blur(12px)}
+#three-canvas{display:block;width:100%;height:100%;position:absolute;inset:0;cursor:grab}
+#three-canvas:active{cursor:grabbing}
+.pi-stage canvas{position:absolute;inset:0}
 
 @media(max-width:820px){
   section{padding:64px 22px}
@@ -184,6 +194,9 @@ dialog[open]::backdrop{opacity:1}
   *,*::before,*::after{animation:none!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
   .js .rv,.js #compare tr.rr,.step{opacity:1;transform:none;filter:none}
 }
+</style>
+
+
 </style>
 <script>document.documentElement.className="js"</script>
 </head>
@@ -207,17 +220,18 @@ dialog[open]::backdrop{opacity:1}
    <a class="btn" href="#install">Install</a>
    <button class="link" id="hero-docs">Docs</button>
   </div>
-  <div class="pi-stage" id="piStage" role="img" aria-label="Pyre app icon">
-   <div class="pi-shadow"></div>
-   <div class="pi">
-    <div class="pi-base"></div>
-    <svg class="pi-logo" viewBox="0 0 100 100" aria-hidden="true">
-     <defs><linearGradient id="pi-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9aa3b2"/></linearGradient></defs>
-     <path fill="url(#pi-g)" fill-rule="evenodd" d="M50 5C53 22 79 35 79 60C79 79 67 93 50 93C33 93 21 79 21 60C21 48 27 40 33 32C35 42 40 47 45 47C42 30 44 16 50 5ZM50 50C58 60 64 67 64 74C64 82 58 87 50 87C42 87 36 82 36 74C36 67 42 60 50 50Z"/>
-    </svg>
-    <div class="pi-glass"></div>
+   <div class="pi-stage" id="piStage" role="img" aria-label="Pyre app icon">
+    <div class="pi-shadow"></div>
+    <div class="pi">
+     <div class="pi-base"></div>
+     <svg class="pi-logo" viewBox="0 0 100 100" aria-hidden="true">
+      <defs><linearGradient id="pi-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9aa3b2"/></linearGradient></defs>
+      <path fill="url(#pi-g)" fill-rule="evenodd" d="M50 5C53 22 79 35 79 60C79 79 67 93 50 93C33 93 21 79 21 60C21 48 27 40 33 32C35 42 40 47 45 47C42 30 44 16 50 5ZM50 50C58 60 64 67 64 74C64 82 58 87 50 87C42 87 36 82 36 74C36 67 42 60 50 50Z"/>
+     </svg>
+     <div class="pi-glass"></div>
+    </div>
+    <canvas id="three-canvas" aria-hidden="true"></canvas>
    </div>
-  </div>
  </div>
 </section>
 
@@ -501,6 +515,193 @@ onScroll();
   }
   addEventListener('pointermove',e=>{if(!vis)return;px=e.clientX;py=e.clientY;if(!raf)raf=requestAnimationFrame(apply)},{passive:true});
   document.addEventListener('mouseleave',()=>['--rx','--ry'].forEach(k=>st.removeProperty(k)));
+})();
+
+// Three.js interactive 3D logo
+(function(){
+  const canvas=$('three-canvas');
+  if(!canvas)return;
+  const stage=$('piStage');
+  if(!stage)return;
+  const pi=stage.querySelector('.pi');
+  if(pi)pi.style.display='none';
+
+  import('three').then(({
+    WebGLRenderer,
+    Scene,
+    PerspectiveCamera,
+    Group,
+    Mesh,
+    MeshStandardMaterial,
+    MeshPhysicalMaterial,
+    Shape,
+    Path,
+    ExtrudeGeometry,
+    DirectionalLight,
+    PointLight,
+    AmbientLight,
+    Color,
+    SRGBColorSpace,
+    ACESFilmicToneMapping
+  })=>{
+    const renderer=new WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.outputColorSpace=SRGBColorSpace;
+    renderer.toneMapping=ACESFilmicToneMapping;
+    renderer.toneMappingExposure=1.35;
+
+    const scene=new Scene();
+    const camera=new PerspectiveCamera(42,1,.1,10);
+    camera.position.set(0,0,3.6);
+
+    // Apple Fitness achievement badge: sculpted 3D flame emblem
+    const flameShape=new Shape();
+    // Flame coordinates transformed to badge center
+    const s=0.024;
+    const ox=50,oy=50;
+    const tx=x=>(x-ox)*s;
+    const ty=y=>(oy-y)*s;
+
+    // Outer flame silhouette
+    flameShape.moveTo(tx(50),ty(5));
+    flameShape.bezierCurveTo(tx(53),ty(22),tx(79),ty(35),tx(79),ty(60));
+    flameShape.bezierCurveTo(tx(79),ty(79),tx(67),ty(93),tx(50),ty(93));
+    flameShape.bezierCurveTo(tx(33),ty(93),tx(21),ty(79),tx(21),ty(60));
+    flameShape.bezierCurveTo(tx(21),ty(48),tx(27),ty(40),tx(33),ty(32));
+    flameShape.bezierCurveTo(tx(35),ty(42),tx(40),ty(47),tx(45),ty(47));
+    flameShape.bezierCurveTo(tx(42),ty(30),tx(44),ty(16),tx(50),ty(5));
+
+    // Inner flame cutout (Apple Fitness badge cutout core)
+    const holePath=new Path();
+    holePath.moveTo(tx(50),ty(50));
+    holePath.bezierCurveTo(tx(58),ty(60),tx(64),ty(67),tx(64),ty(74));
+    holePath.bezierCurveTo(tx(64),ty(82),tx(58),ty(87),tx(50),ty(87));
+    holePath.bezierCurveTo(tx(42),ty(87),tx(36),ty(82),tx(36),ty(74));
+    holePath.bezierCurveTo(tx(36),ty(67),tx(42),ty(60),tx(50),ty(50));
+    flameShape.holes.push(holePath);
+
+    // Precision 3D extrusion with bevels matching Apple Fitness awards
+    const badgeGeo=new ExtrudeGeometry(flameShape,{
+      depth:.18,
+      bevelEnabled:true,
+      bevelSegments:8,
+      steps:2,
+      bevelSize:.055,
+      bevelThickness:.055,
+      curveSegments:64
+    });
+    badgeGeo.center();
+
+    // Apple Fitness medal materials: polished mirror bevels & satin brushed metal face
+    const badgeMatFace=new MeshPhysicalMaterial({
+      color:new Color('#f4f5f8'),
+      metalness:.96,
+      roughness:.22,
+      clearcoat:.6,
+      clearcoatRoughness:.18,
+      ior:1.52,
+      reflectivity:.95
+    });
+
+    const badgeMatSide=new MeshStandardMaterial({
+      color:new Color('#d0d4dc'),
+      metalness:.98,
+      roughness:.14
+    });
+
+    const badgeMesh=new Mesh(badgeGeo,[badgeMatFace,badgeMatSide]);
+
+    // Badge group
+    const badgeGroup=new Group();
+    badgeGroup.add(badgeMesh);
+    scene.add(badgeGroup);
+
+    // Studio multi-point metallic illumination (Apple keynote / Fitness showcase style)
+    const ambient=new AmbientLight('#dbe5f1',.7);
+    scene.add(ambient);
+
+    // Top-right key light
+    const key=new PointLight('#ffffff',280,12);
+    key.position.set(3.5,4.5,4.5);
+    scene.add(key);
+
+    // Left fill light with subtle titanium tone
+    const fill=new PointLight('#e2e9f5',160,12);
+    fill.position.set(-3.5,2,3.5);
+    scene.add(fill);
+
+    // Strong iridescent blue/cyan rim light for Apple edge reflection
+    const rim=new PointLight('#7eaaf5',200,12);
+    rim.position.set(-3.2,-2.5,-3);
+    scene.add(rim);
+
+    // Gold/warm bottom reflection highlight
+    const warmBounce=new PointLight('#ffebd2',140,12);
+    warmBounce.position.set(2.8,-3.5,2.5);
+    scene.add(warmBounce);
+
+    // Specular top highlight
+    const topGlint=new DirectionalLight('#ffffff',1.8);
+    topGlint.position.set(0,5,2);
+    scene.add(topGlint);
+
+    function resize(){
+      const w=stage.clientWidth,h=stage.clientHeight;
+      if(!w||!h)return;
+      renderer.setSize(w,h);
+      camera.aspect=w/h;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    new ResizeObserver(resize).observe(stage);
+
+    let targetRx=0,targetRy=0,targetRz=0;
+    let curRx=0,curRy=0,curRz=0;
+    let dragging=false,prevX=0,prevY=0,velX=0,velY=0;
+    let ptrActive=false,ptrX=0,ptrY=0;
+
+    stage.addEventListener('pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      dragging=true;prevX=e.clientX;prevY=e.clientY;velX=0;velY=0;
+      stage.setPointerCapture(e.pointerId);
+    });
+    stage.addEventListener('pointermove',e=>{
+      ptrActive=true;ptrX=e.clientX;ptrY=e.clientY;
+      if(dragging){
+        velX=e.clientX-prevX;velY=e.clientY-prevY;
+        targetRy+=velX*.02;
+        targetRx+=velY*.02;
+        prevX=e.clientX;prevY=e.clientY;
+      }
+    });
+    const endDrag=()=>{dragging=false};
+    stage.addEventListener('pointerup',endDrag);
+    stage.addEventListener('pointercancel',endDrag);
+    stage.addEventListener('pointerleave',()=>{ptrActive=false;dragging=false});
+
+    function animate(){
+      requestAnimationFrame(animate);
+      if(dragging){
+        velX*=.92;velY*=.92;
+        targetRy+=velX*.015;
+        targetRx+=velY*.015;
+      }
+      const ax=ptrActive?(1-((stage.getBoundingClientRect().height-(ptrY-stage.getBoundingClientRect().top))/stage.getBoundingClientRect().height)*2)*.5:0;
+      targetRz+=(targetRy*.08-targetRz)*.05;
+      targetRx+=(ax-targetRx)*.04;
+      if(!dragging&&Math.abs(velX)<.01&&Math.abs(velY)<.01){
+        targetRy+=.006;
+      }
+      curRx+=(targetRx-curRx)*.08;
+      curRy+=(targetRy-curRy)*.08;
+      curRz+=(targetRz-curRz)*.08;
+      badgeGroup.rotation.set(curRx,curRy,curRz);
+      renderer.render(scene,camera);
+    }
+    animate();
+  }).catch(()=>{
+    if(pi)pi.style.display='';
+  });
 })();
 </script>
 </body>
