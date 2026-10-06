@@ -128,16 +128,21 @@ dialog[open]::backdrop{opacity:1}
 .ph{margin-top:32px;aspect-ratio:16/10;display:grid;place-items:center;color:#a1a1a6;font-size:13px;background:#141414}
 .stack .win,.step .m .win{overflow:auto}
 
-/* Sticky showcase */
-.show{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px;margin-top:35vh;align-items:start}
-.step{min-height:70vh;display:flex;flex-direction:column;justify-content:center;opacity:.28;transform:translateX(-10px);filter:blur(1.5px);transition:opacity .6s var(--out),transform .8s var(--spring),filter .6s var(--out);text-align:left}
-.step.on{opacity:1;transform:none;filter:none}
+/* Showcase */
+.tabs{display:inline-flex;gap:6px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:980px;padding:4px;margin-top:24px}
+.tab{font:500 13px -apple-system,sans-serif;color:var(--mute);background:transparent;border:0;padding:6px 16px;border-radius:980px;cursor:pointer;transition:color .2s,background .2s}
+.tab:hover{color:#fff}
+.tab.on{color:#fff;background:rgba(255,255,255,.14)}
+.show-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px;align-items:center;margin-top:48px}
+.steps{position:relative;display:grid;grid-template-areas:"step";align-items:center}
+.step{grid-area:step;opacity:0;transform:translateY(12px);filter:blur(4px);pointer-events:none;transition:opacity .35s var(--out),transform .45s var(--spring),filter .35s var(--out);text-align:left}
+.step.on{opacity:1;transform:none;filter:none;pointer-events:auto}
 .step h3{font-size:32px;line-height:1.08;letter-spacing:-.02em;font-weight:600}
 .step p{margin-top:12px;font-size:16px;line-height:1.4;color:var(--mute);max-width:340px}
-.step code{margin-top:16px;font-size:13px;background:rgba(255,255,255,.08);color:#fff;border:1px solid var(--border);padding:5px 10px;border-radius:6px;align-self:flex-start}
+.step code{margin-top:16px;font-size:13px;background:rgba(255,255,255,.08);color:#fff;border:1px solid var(--border);padding:5px 10px;border-radius:6px;display:inline-block}
 .step .m{display:none;margin-top:24px}
-.stack{position:sticky;top:50%;transform:translateY(-50%);aspect-ratio:16/10}
-.stack .win{position:absolute;inset:0;opacity:0;transform:translateY(28px) scale(.94);filter:blur(14px);transition:opacity .7s var(--out),transform 1s var(--spring),filter .7s var(--out)}
+.stack{position:relative;aspect-ratio:16/10;width:100%}
+.stack .win{position:absolute;inset:0;opacity:0;transform:scale(.97);filter:blur(10px);transition:opacity .45s var(--out),transform .5s var(--spring),filter .45s var(--out)}
 .stack .win.on{opacity:1;transform:none;filter:none}
 .stack .ph{height:calc(100% - 32px);aspect-ratio:auto}
 .chip{position:absolute;left:12px;bottom:12px;z-index:3;font:12px var(--mono);color:#f5f5f7;padding:6px 12px;border-radius:980px;background:rgba(30,30,30,.65);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%)}
@@ -184,15 +189,17 @@ dialog[open]::backdrop{opacity:1}
   section{padding:64px 22px}
   .caps{grid-template-columns:1fr;gap:28px}
   nav .hide{display:none}
-  .show{margin-top:38vh;grid-template-columns:1fr;gap:0}
+  .tabs{display:none}
+  .show-grid{display:block;margin-top:32px}
   .stack{display:none}
-  .step{min-height:0;opacity:1;transform:none;filter:none;margin-bottom:48px}
+  .steps{display:block}
+  .step{position:static;display:block;opacity:1;transform:none;filter:none;pointer-events:auto;margin-bottom:48px}
   .step .m{display:block}
   .step h3{font-size:28px}
 }
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
-  .js .rv,.js #compare tr.rr,.step{opacity:1;transform:none;filter:none}
+  .js .rv,.js #compare tr.rr{opacity:1;transform:none;filter:none}
 }
 </style>
 
@@ -237,17 +244,25 @@ dialog[open]::backdrop{opacity:1}
 
 <section class="gray" id="features">
  <div class="wrap">
-  <div class="center"><h2>Four views.</h2>
-  <p class="lede">Hardware-level detail, no configuration needed.</p></div>
-  <div class="show">
+  <div class="center">
+   <h2>Four views.</h2>
+   <p class="lede">Hardware-level detail, no configuration needed.</p>
+   <div class="tabs" role="tablist">
+    <button class="tab on" data-i="0">Silicon</button>
+    <button class="tab" data-i="1">Thermals</button>
+    <button class="tab" data-i="2">Network</button>
+    <button class="tab" data-i="3">Power</button>
+   </div>
+  </div>
+  <div class="show-grid">
    <div class="steps">
-    <div class="step" data-cmd="$ pyre live"><h3>Silicon</h3><p>Performance and efficiency cores, memory bandwidth, Neural Engine.</p><code>$ pyre live</code><div class="win m" data-slot="Silicon view · 1600 × 1000"></div></div>
+    <div class="step on" data-cmd="$ pyre live"><h3>Silicon</h3><p>Performance and efficiency cores, memory bandwidth, Neural Engine.</p><code>$ pyre live</code><div class="win m" data-slot="Silicon view · 1600 × 1000"></div></div>
     <div class="step" data-cmd="$ pyre check"><h3>Thermals</h3><p>SMC temperatures, fan speeds, throttling status.</p><code>$ pyre check</code><div class="win m" data-slot="Thermals view · 1600 × 1000"></div></div>
     <div class="step" data-cmd="$ pyre netusage"><h3>Network</h3><p>Per-connection forensics with socket-level detail.</p><code>$ pyre netusage</code><div class="win m" data-slot="Network view · 1600 × 1000"></div></div>
     <div class="step" data-cmd="$ pyre bench &quot;npm test&quot;"><h3>Power</h3><p>Battery health, cycle count, and per-process energy.</p><code>$ pyre bench &quot;npm test&quot;</code><div class="win m" data-slot="Power view · 1600 × 1000"></div></div>
    </div>
    <div class="stack">
-    <div class="win" data-slot="Silicon view · 1600 × 1000"></div>
+    <div class="win on" data-slot="Silicon view · 1600 × 1000"></div>
     <div class="win" data-slot="Thermals view · 1600 × 1000"></div>
     <div class="win" data-slot="Network view · 1600 × 1000"></div>
     <div class="win" data-slot="Power view · 1600 × 1000"></div>
@@ -463,12 +478,13 @@ document.querySelectorAll('section:not(.hero) :is(h2,.lede,.caps>div,.tbl,.cmd,.
 const ro=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');ro.unobserve(e.target)}}),{threshold:.4});
 document.querySelectorAll('#compare tbody tr').forEach((r,i)=>{r.classList.add('rr');r.style.transitionDelay=(i%9)*55+'ms';ro.observe(r)});
 
-// Sticky showcase: active step swaps the window, chip types the command
-const steps=[...document.querySelectorAll('.step')],wins=[...document.querySelectorAll('.stack .win')],chip=$('chip');
-let lastStep=-1,typeTimer;
+// Showcase: active step swaps the window, chip types the command
+const steps=[...document.querySelectorAll('.step')],wins=[...document.querySelectorAll('.stack .win')],tabs=[...document.querySelectorAll('.tab')],chip=$('chip');
+let lastStep=-1,typeTimer,autoTimer;
 function setStep(i){
   steps.forEach((s,k)=>s.classList.toggle('on',k===i));
   wins.forEach((w,k)=>w.classList.toggle('on',k===i));
+  tabs.forEach((t,k)=>t.classList.toggle('on',k===i));
   const t=steps[i].dataset.cmd;
   if(i===lastStep)return;
   lastStep=i;clearTimeout(typeTimer);
@@ -476,8 +492,25 @@ function setStep(i){
   let n=0;chip.textContent='';
   (function k(){chip.textContent=t.slice(0,++n);if(n<t.length)typeTimer=setTimeout(k,26)})();
 }
-const so=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)setStep(steps.indexOf(e.target))}),{rootMargin:'-45% 0px -45% 0px'});
-steps.forEach(s=>so.observe(s));setStep(0);
+tabs.forEach((t,i)=>t.addEventListener('click',()=>{
+  clearInterval(autoTimer);
+  setStep(i);
+}));
+let curView=0;
+const featSec=$('features');
+const featObserver=new IntersectionObserver(es=>{
+  if(es[0].isIntersecting){
+    clearInterval(autoTimer);
+    autoTimer=setInterval(()=>{
+      curView=(curView+1)%steps.length;
+      setStep(curView);
+    },4500);
+  }else{
+    clearInterval(autoTimer);
+  }
+},{threshold:.2});
+if(featSec)featObserver.observe(featSec);
+setStep(0);
 
 // Capability cards: spotlight follows the pointer
 document.querySelectorAll('.caps>div').forEach(c=>c.addEventListener('pointermove',e=>{
@@ -655,47 +688,38 @@ onScroll();
     resize();
     new ResizeObserver(resize).observe(stage);
 
-    let targetRx=0,targetRy=0,targetRz=0;
-    let curRx=0,curRy=0,curRz=0;
-    let dragging=false,prevX=0,prevY=0,velX=0,velY=0;
-    let ptrActive=false,ptrX=0,ptrY=0;
+    let targetRy=0;
+    let curRy=0;
+    let dragging=false,prevX=0,velX=0;
 
     stage.addEventListener('pointerdown',e=>{
       if(e.pointerType==='mouse'&&e.button!==0)return;
-      dragging=true;prevX=e.clientX;prevY=e.clientY;velX=0;velY=0;
+      dragging=true;prevX=e.clientX;velX=0;
       stage.setPointerCapture(e.pointerId);
     });
     stage.addEventListener('pointermove',e=>{
-      ptrActive=true;ptrX=e.clientX;ptrY=e.clientY;
       if(dragging){
-        velX=e.clientX-prevX;velY=e.clientY-prevY;
+        velX=e.clientX-prevX;
         targetRy+=velX*.02;
-        targetRx+=velY*.02;
-        prevX=e.clientX;prevY=e.clientY;
+        prevX=e.clientX;
       }
     });
     const endDrag=()=>{dragging=false};
     stage.addEventListener('pointerup',endDrag);
     stage.addEventListener('pointercancel',endDrag);
-    stage.addEventListener('pointerleave',()=>{ptrActive=false;dragging=false});
+    stage.addEventListener('pointerleave',()=>{dragging=false});
 
     function animate(){
       requestAnimationFrame(animate);
       if(dragging){
-        velX*=.92;velY*=.92;
+        velX*=.92;
         targetRy+=velX*.015;
-        targetRx+=velY*.015;
       }
-      const ax=ptrActive?(1-((stage.getBoundingClientRect().height-(ptrY-stage.getBoundingClientRect().top))/stage.getBoundingClientRect().height)*2)*.5:0;
-      targetRz+=(targetRy*.08-targetRz)*.05;
-      targetRx+=(ax-targetRx)*.04;
-      if(!dragging&&Math.abs(velX)<.01&&Math.abs(velY)<.01){
+      if(!dragging&&Math.abs(velX)<.01){
         targetRy+=.006;
       }
-      curRx+=(targetRx-curRx)*.08;
       curRy+=(targetRy-curRy)*.08;
-      curRz+=(targetRz-curRz)*.08;
-      badgeGroup.rotation.set(curRx,curRy,curRz);
+      badgeGroup.rotation.set(0,curRy,0);
       renderer.render(scene,camera);
     }
     animate();
