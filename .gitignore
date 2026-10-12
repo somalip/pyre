@@ -2,3 +2,6 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+pyre-monitor*.sh
+pyre-exports/
+

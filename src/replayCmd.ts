@@ -100,14 +100,15 @@ function renderFrame(row: LogRow, idx: number, total: number, speed: number, pau
   lines.push('  ' + divider);
 
   // Scrub bar
-  const progWidth = 30;
+  const progWidth = Math.min(40, Math.max(20, cols - 30));
+  const pct = total > 1 ? (idx / (total - 1)) * 100 : 0;
   const progress = total > 1 ? Math.round((idx / (total - 1)) * progWidth) : 0;
-  const progressBar = chalk.cyan('█'.repeat(progress)) + chalk.dim('░'.repeat(progWidth - progress));
+  const progressBar = chalk.cyan('━'.repeat(progress)) + chalk.bold.yellow('◆') + chalk.dim('─'.repeat(Math.max(0, progWidth - progress)));
   const icon = paused ? chalk.yellow('⏸') : chalk.green('▶');
   const spStr = speed === 1 ? '1×' : `${speed}×`;
-  lines.push(`  ${icon} ${progressBar}  ${chalk.bold(`${idx + 1}/${total}`)}  ${chalk.dim(spStr)}`);
+  lines.push(`  ${icon} [${progressBar}] ${chalk.bold(`${pct.toFixed(0)}%`)} (${idx + 1}/${total})  ${chalk.dim(spStr)}`);
   lines.push('');
-  lines.push(chalk.dim('  Space/p=pause  ]/[=speed  ←/→=step  q=quit'));
+  lines.push(chalk.dim('  Space/p=pause  ]/[=speed  ←/→=step  0-9=jump %  Home/End=seek  q=quit'));
 
   return lines;
 }
@@ -166,8 +167,16 @@ export async function runReplayCommand(opts: ReplayOptions): Promise<void> {
     if (key.name === 'space' || key.name === 'p') { paused = !paused; renderCurrent(); return; }
     if (str === ']') { speed = Math.min(speed * 2, 32); renderCurrent(); return; }
     if (str === '[') { speed = Math.max(speed / 2, 0.125); renderCurrent(); return; }
-    if (key.name === 'right') { frameIdx = Math.min(frameIdx + 1, rows.length - 1); renderCurrent(); return; }
-    if (key.name === 'left') { frameIdx = Math.max(frameIdx - 1, 0); renderCurrent(); return; }
+    if (key.name === 'right') { frameIdx = Math.min(frameIdx + (key.shift ? 10 : 1), rows.length - 1); renderCurrent(); return; }
+    if (key.name === 'left') { frameIdx = Math.max(frameIdx - (key.shift ? 10 : 1), 0); renderCurrent(); return; }
+    if (key.name === 'home' || str === '0') { frameIdx = 0; renderCurrent(); return; }
+    if (key.name === 'end') { frameIdx = rows.length - 1; renderCurrent(); return; }
+    if (str >= '1' && str <= '9') {
+      const frac = parseInt(str, 10) / 10;
+      frameIdx = Math.min(rows.length - 1, Math.round(frac * (rows.length - 1)));
+      renderCurrent();
+      return;
+    }
   });
 
   const BASE_MS = 2000;

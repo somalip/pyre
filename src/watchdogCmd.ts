@@ -29,7 +29,9 @@ export interface WatchdogRule {
   process?: string;
   threshold: number;
   durationSec?: number;
-  action: 'kill' | 'notify' | 'alert';
+  action: 'kill' | 'notify' | 'alert' | 'renice' | 'command';
+  command?: string;
+  dumpFlight?: boolean;
   cooldownSec?: number;
 }
 
@@ -168,6 +170,35 @@ export async function runWatchdogCommand(opts: WatchdogOptions = {}): Promise<vo
             } catch (err: any) {
               console.log(chalk.red(`    ✖ Failed to kill PID ${targetPid}: ${err.message}`));
             }
+          }
+
+          if (rule.action === 'renice' && targetPid) {
+            try {
+              execSync(`renice +10 -p ${targetPid}`, { stdio: 'pipe' });
+              console.log(chalk.green(`    ✔ Deprioritized runaway PID ${targetPid} to nice +10`));
+            } catch (err: any) {
+              console.log(chalk.red(`    ✖ Failed to renice PID ${targetPid}: ${err.message}`));
+            }
+          }
+
+          if (rule.action === 'command' && rule.command) {
+            try {
+              console.log(chalk.cyan(`    ▶ Executing remediation command: ${rule.command}`));
+              execSync(rule.command, { stdio: 'pipe' });
+              console.log(chalk.green(`    ✔ Remediation command executed successfully.`));
+            } catch (err: any) {
+              console.log(chalk.red(`    ✖ Remediation command failed: ${err.message}`));
+            }
+          }
+
+          if (rule.dumpFlight) {
+            try {
+              const { captureCurrentFlightFrame, globalFlightRecorder } = await import('./flightRecorder.js');
+              const frame = await captureCurrentFlightFrame();
+              globalFlightRecorder.push(frame);
+              const path = globalFlightRecorder.dump();
+              console.log(chalk.green(`    ✔ Forensic flight recording dumped: ${path}`));
+            } catch {}
           }
 
           if (rule.action === 'alert') {

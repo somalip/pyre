@@ -111,13 +111,25 @@ program
     .option('--empty', 'Empty the Trash after confirmation (optimize trash)')
     .option('--auto-quit <duration>', 'Let the optimize tracker automatically quit apps idle this long')
     .option('-m, --menu', 'Launch interactive TUI command center & tools navigator')
-    .option('-i, --interactive', 'Alias for --menu');
+    .option('-i, --interactive', 'Alias for --menu')
+    .option('--budget-cpu <pct>', 'Maximum allowable peak CPU % for pyre run')
+    .option('--budget-mem <bytes>', 'Maximum allowable peak memory for pyre run (e.g. 500MB, 2GB)')
+    .option('--budget-time <sec>', 'Maximum allowable duration for pyre run in seconds')
+    .option('--nice <val>', 'Nice value for pyre inspect --nice (-20 to 19)')
+    .option('--format <format>', 'Output format for statusline (tmux, starship, json, pango, plain)');
 
 program.addHelpText('after', `
   💡 Tip: Can't remember all commands? Run 'pyre menu' to browse and run all tools interactively!
 
  Commands:
    menu, tui, launcher            Interactive TUI command center & tools navigator
+   playbook [run|list]            Execute sequenced multi-step macro recipes (audit, clean, triage)
+   flight [dump|status|record]    Forensic flight recorder black box in RAM
+   run [options] -- <cmd...>      Performance budgeting runner for CI/CD gates
+   bench-git <b1> <b2> <cmd>      Cross-branch git performance differ
+   statusline                     Headless terminal statusline string (tmux, starship, neovim)
+   inspect <pid>                  Process deep-dive inspector (lsof, sockets, nice)
+   containers                     Container and micro-VM telemetry (Docker, Podman, OrbStack)
    live                           Interactive live dashboard
    check                          One-line plain-English health summary
    pipe                           Continuous newline-delimited JSON stream for scripting
@@ -252,6 +264,90 @@ async function main() {
     const { runMenu } = await import('./menu/index.js');
     await runMenu({
       theme: opts.theme || config.theme,
+    });
+    return;
+  }
+
+  if (cmd === 'playbook') {
+    const sub = program.args[1];
+    const { runPlaybook, listPlaybooks } = await import('./playbookCmd.js');
+    if (sub === 'list' || !sub) {
+      listPlaybooks();
+    } else if (sub === 'run') {
+      const id = program.args[2] || 'audit';
+      await runPlaybook(id);
+    } else {
+      await runPlaybook(sub);
+    }
+    return;
+  }
+
+  if (cmd === 'flight') {
+    const sub = program.args[1] || 'dump';
+    const { runFlightCommand } = await import('./flightRecorder.js');
+    await runFlightCommand(sub, {
+      out: opts.out,
+      duration: opts.duration ? parseInt(opts.duration, 10) : undefined,
+    });
+    return;
+  }
+
+  if (cmd === 'run') {
+    const rawArgs = process.argv;
+    const dashDashIdx = rawArgs.indexOf('--');
+    const targetCommand = dashDashIdx !== -1 ? rawArgs.slice(dashDashIdx + 1) : program.args.slice(1);
+    const { runWithBudget, parseBytesString } = await import('./budgetCmd.js');
+    const res = await runWithBudget(targetCommand, {
+      maxCpuPct: opts.budgetCpu ? parseFloat(opts.budgetCpu) : undefined,
+      maxMemoryBytes: opts.budgetMem ? parseBytesString(opts.budgetMem) : undefined,
+      maxTimeSec: opts.budgetTime ? parseFloat(opts.budgetTime) : undefined,
+    }, {
+      markdown: !!opts.markdown || !!opts.md,
+      outFile: opts.out,
+    });
+    if (res.exitCode !== 0) {
+      process.exit(res.exitCode);
+    }
+    if (res.violations.length > 0) {
+      process.exit(124);
+    }
+    return;
+  }
+
+  if (cmd === 'bench-git') {
+    const branchA = program.args[1];
+    const branchB = program.args[2];
+    const commandStr = program.args.slice(3).join(' ');
+    if (!branchA || !branchB || !commandStr) {
+      console.log(chalk.red('  ✖ Usage: pyre bench-git <branchA> <branchB> "<command>"'));
+      process.exit(1);
+    }
+    const { runBenchGitCommand } = await import('./benchGitCmd.js');
+    await runBenchGitCommand(branchA, branchB, commandStr);
+    return;
+  }
+
+  if (cmd === 'statusline') {
+    const { runStatuslineCommand } = await import('./statuslineCmd.js');
+    await runStatuslineCommand(opts.format || 'plain');
+    return;
+  }
+
+  if (cmd === 'inspect') {
+    const targetPid = parseInt(program.args[1], 10);
+    const { runInspectCommand } = await import('./inspectCmd.js');
+    const niceVal = opts.nice !== undefined ? parseInt(opts.nice, 10) : undefined;
+    await runInspectCommand(targetPid, {
+      nice: niceVal,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'containers') {
+    const { runContainersCommand } = await import('./containersCmd.js');
+    await runContainersCommand({
+      json: !!opts.json,
     });
     return;
   }
@@ -627,7 +723,12 @@ async function main() {
   }
 
   if (cmd === 'xbar') {
-    generateXbarPlugin();
+    const sub = program.args[1];
+    await generateXbarPlugin({
+      install: !!opts.install || sub === 'install',
+      yes: !!opts.yes,
+      dir: opts.dir,
+    });
     return;
   }
 
@@ -691,6 +792,7 @@ async function main() {
       animation: config.splashAnimation as any,
     });
     const interval = parseFloat(opts.interval) || 2;
+    const tempUnit: 'c' | 'f' = (opts.tempUnit?.toLowerCase() === 'f' || config.tempUnit === 'f') ? 'f' : 'c';
     await startLive({
       interval,
       detailed: opts.detailed ?? config.detailed,
@@ -725,13 +827,14 @@ async function main() {
 
   const data = await collectAll({ detailed: opts.detailed, processLimit });
 
+  const tempUnit: 'c' | 'f' = (opts.tempUnit?.toLowerCase() === 'f' || config.tempUnit === 'f') ? 'f' : 'c';
   let output: string;
   if (opts.json) output = formatJson(data);
   else if (opts.html) output = formatHtml(data);
   else if (opts.md) output = formatMarkdown(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, minimal: !!opts.minimal, visible: { packets: opts.packets ? true : undefined } });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, minimal: !!opts.minimal, visible: { packets: opts.packets ? true : undefined }, tempUnit });
 
   console.log(output);
 

@@ -7,6 +7,13 @@ _pyre() {
         'menu:Interactive TUI command center and tools navigator'
         'tui:Alias for menu'
         'launcher:Alias for menu'
+        'playbook:Execute sequenced multi-step macro recipes'
+        'flight:Forensic flight recorder black box'
+        'run:Performance budgeting runner for CI/CD gates'
+        'bench-git:Cross-branch git performance differ'
+        'statusline:Headless terminal statusline string'
+        'inspect:Process deep-dive inspector'
+        'containers:Container and micro-VM telemetry'
         'live:Start interactive live monitoring dashboard'
         'info:Display static system overview'
         'doctor:Run system permissions and diagnostic checks'
@@ -62,8 +69,8 @@ _pyre_completions() {
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
-    commands="menu tui launcher live info doctor web ui launch config p2p ssh bench completions optimize"
-    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit --idle --keep --yes --force --clean --empty --dry-run --auto-quit -m --menu -i --interactive"
+    commands="menu tui launcher playbook flight run bench-git statusline inspect containers live info doctor web ui launch config p2p ssh bench completions optimize"
+    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit --idle --keep --yes --force --clean --empty --dry-run --auto-quit -m --menu -i --interactive --budget-cpu --budget-mem --budget-time --markdown --nice --format"
 
     case "${prev}" in
         --theme)
@@ -90,6 +97,18 @@ _pyre_completions() {
             COMPREPLY=( $(compgen -W "apps track memory caches trash startup dns protect unprotect help" -- ${cur}) )
             return 0
             ;;
+        playbook)
+            COMPREPLY=( $(compgen -W "run list audit clean triage bench" -- ${cur}) )
+            return 0
+            ;;
+        flight)
+            COMPREPLY=( $(compgen -W "dump status record" -- ${cur}) )
+            return 0
+            ;;
+        statusline)
+            COMPREPLY=( $(compgen -W "tmux starship json pango plain" -- ${cur}) )
+            return 0
+            ;;
     esac
 
     if [[ ${cur} == -* ]] ; then
@@ -110,6 +129,13 @@ export function generateFishCompletions(): string {
 complete -c pyre -n "__fish_use_subcommand" -a menu -d "Interactive TUI command center and tools navigator"
 complete -c pyre -n "__fish_use_subcommand" -a tui -d "Alias for menu"
 complete -c pyre -n "__fish_use_subcommand" -a launcher -d "Alias for menu"
+complete -c pyre -n "__fish_use_subcommand" -a playbook -d "Execute sequenced multi-step macro recipes"
+complete -c pyre -n "__fish_use_subcommand" -a flight -d "Forensic flight recorder black box"
+complete -c pyre -n "__fish_use_subcommand" -a run -d "Performance budgeting runner for CI/CD gates"
+complete -c pyre -n "__fish_use_subcommand" -a bench-git -d "Cross-branch git performance differ"
+complete -c pyre -n "__fish_use_subcommand" -a statusline -d "Headless terminal statusline string"
+complete -c pyre -n "__fish_use_subcommand" -a inspect -d "Process deep-dive inspector"
+complete -c pyre -n "__fish_use_subcommand" -a containers -d "Container and micro-VM telemetry"
 complete -c pyre -n "__fish_use_subcommand" -a live -d "Start interactive live monitoring dashboard"
 complete -c pyre -n "__fish_use_subcommand" -a info -d "Display static system overview"
 complete -c pyre -n "__fish_use_subcommand" -a doctor -d "Run system diagnostics"
@@ -138,7 +164,7 @@ export function generatePowerShellCompletions(): string {
   return `# PowerShell completion for pyre
 Register-ArgumentCompleter -Native -CommandName pyre -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $commands = @('menu', 'tui', 'launcher', 'live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain', 'optimize')
+    $commands = @('menu', 'tui', 'launcher', 'playbook', 'flight', 'run', 'bench-git', 'statusline', 'inspect', 'containers', 'live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain', 'optimize')
     $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
 
     $elements = $commandAst.CommandElements

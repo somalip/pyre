@@ -137,6 +137,17 @@ export const ALL_COMMANDS: CommandDefinition[] = [
     },
     examples: ['pyre ssh user@myserver.com'],
   },
+  {
+    id: 'containers',
+    name: 'Container Telemetry',
+    cli: 'pyre containers',
+    category: 'dashboards',
+    badge: 'CTNR',
+    description: 'Inspect CPU, memory limits, and network I/O of Docker and Podman containers',
+    detailedHelp: 'Queries active Docker, Podman, or OrbStack containers and reports container IDs, names, images, CPU percentage, memory usage against host limits, and network throughput.',
+    tags: ['containers', 'docker', 'podman', 'orbstack', 'cgroups', 'microvm'],
+    examples: ['pyre containers', 'pyre containers --json'],
+  },
 
   // --- Health & Diagnostics ---
   {
@@ -227,6 +238,41 @@ export const ALL_COMMANDS: CommandDefinition[] = [
     ],
     examples: ['pyre alert test'],
   },
+  {
+    id: 'flight',
+    name: 'Forensic Flight Recorder',
+    cli: 'pyre flight',
+    category: 'health',
+    badge: 'BLACKBOX',
+    description: 'In-memory black box recording recent telemetry for post-mortem analysis',
+    detailedHelp: 'Maintains a rolling circular buffer of high-resolution telemetry in RAM. Generates forensic reports showing peak CPU, memory, and top runaway processes leading up to a system freeze or crash.',
+    tags: ['flight', 'blackbox', 'forensic', 'dump', 'crash', 'freeze', 'ram'],
+    flags: [
+      { flag: 'dump', desc: 'Generate post-mortem forensic report file' },
+      { flag: 'status', desc: 'Display active buffer frames and RAM footprint' },
+      { flag: 'record', desc: 'Record fresh frames for a duration' },
+    ],
+    examples: ['pyre flight dump', 'pyre flight status', 'pyre flight record --duration 30'],
+  },
+  {
+    id: 'inspect',
+    name: 'Process Deep-Dive Inspector',
+    cli: 'pyre inspect',
+    category: 'health',
+    badge: 'PROC',
+    description: 'Inspect open file handles (lsof), active sockets, threads, and adjust nice priority',
+    detailedHelp: 'Examines low-level process attributes for any PID: open files, network sockets, parent hierarchy, memory RSS, and allows dynamic priority adjustment via renice.',
+    tags: ['inspect', 'lsof', 'sockets', 'files', 'nice', 'renice', 'priority', 'pid'],
+    requiresArgs: {
+      prompt: 'Enter PID to inspect:',
+      placeholder: '1234',
+    },
+    flags: [
+      { flag: '--nice <val>', desc: 'Adjust nice priority (-20 to 19)' },
+      { flag: '--json', desc: 'Output details in structured JSON' },
+    ],
+    examples: ['pyre inspect 1234', 'pyre inspect 1234 --nice 10'],
+  },
 
   // --- Performance & Benchmarks ---
   {
@@ -289,6 +335,44 @@ export const ALL_COMMANDS: CommandDefinition[] = [
       { flag: '--raw', desc: 'Output unparsed profiler raw text' },
     ],
     examples: ['pyre profile-proc 1234', 'pyre profile-proc 1234 --duration 10'],
+  },
+  {
+    id: 'run',
+    name: 'Performance Budgeting Runner',
+    cli: 'pyre run',
+    category: 'performance',
+    badge: 'GATE',
+    description: 'Execute command and enforce CPU, memory, or runtime ceilings for CI/CD gates',
+    detailedHelp: 'Wraps any shell command and monitors its full execution lifecycle. Enforces performance ceilings (--budget-cpu, --budget-mem, --budget-time), exiting non-zero if limits are breached. Perfect for regression testing in CI.',
+    tags: ['run', 'budget', 'ci', 'gate', 'threshold', 'ceiling', 'benchmark'],
+    requiresArgs: {
+      prompt: 'Enter command to run with budget (e.g. --budget-time 10 -- ls -la):',
+      placeholder: '--budget-cpu 80 -- ls -la',
+      defaultVal: '--budget-cpu 90 -- ls -la',
+    },
+    flags: [
+      { flag: '--budget-cpu <pct>', desc: 'Maximum allowable peak CPU %' },
+      { flag: '--budget-mem <bytes>', desc: 'Maximum allowable peak memory (e.g. 500MB, 2GB)' },
+      { flag: '--budget-time <sec>', desc: 'Maximum allowable duration in seconds' },
+      { flag: '--markdown', desc: 'Output formatted markdown report' },
+    ],
+    examples: ['pyre run --budget-time 30 -- npm test', 'pyre run --budget-mem 1GB --budget-cpu 80 -- make'],
+  },
+  {
+    id: 'bench-git',
+    name: 'Git Branch Benchmark Differ',
+    cli: 'pyre bench-git',
+    category: 'performance',
+    badge: 'GIT',
+    description: 'Benchmark a command across two git branches and compute percentage deltas',
+    detailedHelp: 'Checks out branch A, measures duration, memory, and CPU usage, checks out branch B, measures again, and outputs a formatted side-by-side comparison with green/red regression indicators.',
+    tags: ['bench-git', 'git', 'branch', 'compare', 'delta', 'regression', 'diff'],
+    requiresArgs: {
+      prompt: 'Enter branchA branchB "command":',
+      placeholder: 'main feature "npm test"',
+      defaultVal: 'main HEAD "npm test"',
+    },
+    examples: ['pyre bench-git main feature "npm test"'],
   },
 
   // --- System & Maintenance ---
@@ -374,6 +458,21 @@ export const ALL_COMMANDS: CommandDefinition[] = [
     detailedHelp: 'Queries the registry to compare the running version with the latest release, showing change highlights and one-line upgrade commands.',
     tags: ['update', 'upgrade', 'version', 'npm', 'new'],
     examples: ['pyre update'],
+  },
+  {
+    id: 'playbook',
+    name: 'Macro Recipes & Playbooks',
+    cli: 'pyre playbook',
+    category: 'maintenance',
+    badge: 'RECIPE',
+    description: 'Execute sequenced multi-step audit, benchmark, or maintenance playbooks',
+    detailedHelp: 'Runs pre-configured or custom multi-step Pyre sequences with progress reporting. Includes built-in recipes: audit (health+doctor+smart+brew), clean (optimize apps+mem+caches+dns), and triage (anomalies+netusage+extensions).',
+    tags: ['playbook', 'recipe', 'macro', 'sequence', 'audit', 'clean', 'triage'],
+    flags: [
+      { flag: 'list', desc: 'List all available playbooks' },
+      { flag: 'run <id>', desc: 'Run a playbook (audit, clean, triage, bench)' },
+    ],
+    examples: ['pyre playbook list', 'pyre playbook run audit', 'pyre playbook run clean'],
   },
 
   // --- Network & Remote ---
@@ -595,6 +694,23 @@ export const ALL_COMMANDS: CommandDefinition[] = [
       defaultVal: 'zsh',
     },
     examples: ['pyre completions zsh', 'pyre completions fish', 'pyre completions bash'],
+  },
+  {
+    id: 'statusline',
+    name: 'Headless Terminal Statusline',
+    cli: 'pyre statusline',
+    category: 'config',
+    badge: 'STATUS',
+    description: 'Ultra-fast telemetry string for Tmux, Starship prompt, Waybar, or Neovim',
+    detailedHelp: 'Emits sub-millisecond status strings formatted for Tmux status-right, Starship shell prompt, Pango markup (Waybar/Polybar), or minimal JSON for Neovim lualine.',
+    tags: ['statusline', 'tmux', 'starship', 'waybar', 'polybar', 'neovim', 'prompt'],
+    flags: [
+      { flag: '--format tmux', desc: 'Format with Tmux color codes' },
+      { flag: '--format starship', desc: 'Plain formatted string for Starship' },
+      { flag: '--format json', desc: 'Raw minimal JSON object' },
+      { flag: '--format pango', desc: 'Pango XML for Waybar and Polybar' },
+    ],
+    examples: ['pyre statusline --format tmux', 'pyre statusline --format starship', 'pyre statusline --format json'],
   },
 ];
 

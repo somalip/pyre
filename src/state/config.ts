@@ -41,6 +41,7 @@ export interface PyreConfig {
   mouseEnabled?: boolean;
   cpuAlertPct?: number;
   tempAlertC?: number;
+  tempUnit?: 'c' | 'f';
   electricityRateKwH?: number;
   notificationsEnabled?: boolean;
   p2pPort?: number;
