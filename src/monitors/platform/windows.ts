@@ -562,7 +562,15 @@ export async function collectWindowsPower(): Promise<PowerData | null> {
 
 // ─── GPU Telemetry Across Intel, AMD, NVIDIA ─────────────────────────────────
 
+let nvidiaSmiPathCache: { path: string | null; checkedAt: number } | null = null;
+const NVIDIA_SMI_NEGATIVE_TTL_MS = 5 * 60 * 1000;
+
 async function findNvidiaSmiPath(): Promise<string> {
+  if (nvidiaSmiPathCache) {
+    if (nvidiaSmiPathCache.path) return nvidiaSmiPathCache.path;
+    // Not found previously: only re-probe occasionally (e.g. driver installed while running)
+    if (Date.now() - nvidiaSmiPathCache.checkedAt < NVIDIA_SMI_NEGATIVE_TTL_MS) return 'nvidia-smi';
+  }
   const commonPaths = [
     'nvidia-smi',
     path.join(process.env.ProgramFiles || 'C:\\Program Files', 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
@@ -571,14 +579,19 @@ async function findNvidiaSmiPath(): Promise<string> {
   for (const p of commonPaths) {
     try {
       const test = await run(`"${p}" -L 2>nul`, '');
-      if (test.includes('GPU 0:')) return p;
+      if (test.includes('GPU 0:')) {
+        nvidiaSmiPathCache = { path: p, checkedAt: Date.now() };
+        return p;
+      }
     } catch {}
   }
+  nvidiaSmiPathCache = { path: null, checkedAt: Date.now() };
   return 'nvidia-smi';
 }
 
 async function runNvidiaSmiQuery(query: string): Promise<string> {
   const smiPath = await findNvidiaSmiPath();
+  if (nvidiaSmiPathCache && nvidiaSmiPathCache.path === null) return '';
   return (await run(`"${smiPath}" --query-gpu=${query} --format=csv,noheader,nounits 2>nul`, '')).trim();
 }
 
@@ -656,50 +669,60 @@ export function parseWindowsVideoControllers(csvRaw: string): WindowsVideoContro
   return controllers;
 }
 
+function isVirtualGpuName(name: string): boolean {
+  return /microsoft basic|remote display|hyper-v|virtual|vmware|virtualbox|parsec|citrix|indirect display|displaylink/i.test(name);
+}
+
+function isDiscreteGpuName(name: string): boolean {
+  const n = name.toLowerCase();
+  if (isVirtualGpuName(n)) return false;
+  return (
+    /\b(rtx|gtx|geforce|quadro|titan|tesla)\b/.test(n) ||
+    /\bnvidia\b/.test(n) ||
+    /radeon\s+(rx|pro|vii|r[5-9]|hd)\b/.test(n) ||
+    /\bfirepro\b/.test(n) ||
+    (/\barc\b/.test(n) && /\b(a\d{3}|b\d{3}|pro)\b/.test(n))
+  );
+}
+
 export function prioritizeGpuControllers(controllers: WindowsVideoControllerInfo[]): WindowsVideoControllerInfo[] {
-  // Sort discrete cards (NVIDIA, AMD Radeon RX, Intel Arc) before integrated adapters (Intel UHD, AMD Radeon(TM) Graphics)
+  // Order: discrete (NVIDIA, AMD Radeon RX/Pro, Intel Arc) > integrated (Intel UHD/Iris/Xe, AMD Radeon(TM) Graphics) > virtual/basic adapters
+  const rank = (c: WindowsVideoControllerInfo) =>
+    isVirtualGpuName(c.name) ? 2 : isDiscreteGpuName(c.name) ? 0 : 1;
   return [...controllers].sort((a, b) => {
-    const aName = a.name.toLowerCase();
-    const bName = b.name.toLowerCase();
-    const aIsDiscrete = aName.includes('rtx') || aName.includes('gtx') || aName.includes('geforce') ||
-      aName.includes('radeon rx') || aName.includes('arc');
-    const bIsDiscrete = bName.includes('rtx') || bName.includes('gtx') || bName.includes('geforce') ||
-      bName.includes('radeon rx') || bName.includes('arc');
-    if (aIsDiscrete && !bIsDiscrete) return -1;
-    if (!aIsDiscrete && bIsDiscrete) return 1;
+    const ra = rank(a);
+    const rb = rank(b);
+    if (ra !== rb) return ra - rb;
     return b.adapterRam - a.adapterRam;
   });
 }
 
-export async function getWindowsGpu64BitVram(): Promise<number> {
+export async function getWindowsGpu64BitVram(adapterName?: string): Promise<number> {
   // Win32_VideoController clamps AdapterRAM to 4GB (UInt32).
-  // Read exact 64-bit VRAM from Registry Display Class hardware information:
+  // Read exact 64-bit VRAM from the Display Class registry keys. The value is literally named
+  // 'HardwareInformation.qwMemorySize' (dot is part of the name), so it must be quoted.
+  // Match by DriverDesc so hybrid systems report the VRAM of the selected adapter.
   try {
+    const safeName = (adapterName || '').replace(/'/g, "''");
     const raw = await runPowerShell(
-      `Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' -ErrorAction SilentlyContinue | Where-Object { $_.HardwareInformation.qwMemorySize -gt 0 } | Select-Object -First 1 -ExpandProperty HardwareInformation.qwMemorySize`,
+      `$name = '${safeName}'; $items = Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' -ErrorAction SilentlyContinue | Where-Object { $_.'HardwareInformation.qwMemorySize' -gt 0 }; $pick = $items | Where-Object { $name -and $_.DriverDesc -eq $name } | Select-Object -First 1; if (-not $pick) { $pick = $items | Sort-Object -Property 'HardwareInformation.qwMemorySize' -Descending | Select-Object -First 1 }; if ($pick) { [string][uint64]$pick.'HardwareInformation.qwMemorySize' }`,
       ''
     );
-    const bytes = safeParseInt(raw, 0);
-    if (bytes > 0) return bytes;
-  } catch {}
-
-  // Fallback to Performance Counters Dedicated Usage + Free
-  try {
-    const rawDedicated = await runPowerShell(
-      `(Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum | Select-Object -ExpandProperty Sum`,
-      ''
-    );
-    const bytes = safeParseFloat(rawDedicated);
+    const bytes = safeParseFloat(raw.trim());
     if (bytes > 0) return bytes;
   } catch {}
 
   return 0;
 }
 
+/**
+ * 3D engine utilization via CIM performance classes. Unlike Get-Counter paths these class/property
+ * names are not localized, so this works on non-English Windows. Works for NVIDIA, AMD and Intel (WDDM 2.0+).
+ */
 export async function getWindowsGpu3dUtilization(): Promise<{ utilization: number; processCount: number }> {
   try {
     const raw = await runPowerShell(
-      `$samples = (Get-Counter '\\GPU Engine(*engtype_3D*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples; if ($samples) { $activePids = $samples | Where-Object { $_.CookedValue -gt 0 } | ForEach-Object { if ($_.InstanceName -match 'pid_(\\d+)') { $matches[1] } } | Select-Object -Unique; $total = ($samples | Measure-Object -Property CookedValue -Sum).Sum; "$total|$($activePids.Count)" } else { '0|0' }`,
+      `$samples = Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*engtype_3D*' }; if ($samples) { $activePids = $samples | Where-Object { $_.UtilizationPercentage -gt 0 } | ForEach-Object { if ($_.Name -match 'pid_(\\d+)') { $matches[1] } } | Select-Object -Unique; $total = ($samples | Measure-Object -Property UtilizationPercentage -Sum).Sum; "$total|$(@($activePids).Count)" } else { '0|0' }`,
       '0|0'
     );
     const [utilStr, procCountStr] = raw.split('|');
@@ -729,7 +752,7 @@ export async function collectWindowsGpu(): Promise<GpuData | null> {
     const bestController = prioritized[0];
 
     // Read 64-bit VRAM (avoids 4GB uint32 clamp on RX 7900, Arc A770, etc.)
-    let vramBytes = await getWindowsGpu64BitVram();
+    let vramBytes = await getWindowsGpu64BitVram(bestController.name);
     if (vramBytes === 0 && bestController.adapterRam > 0) {
       vramBytes = bestController.adapterRam;
     }

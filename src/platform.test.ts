@@ -119,6 +119,17 @@ describe('Intel, AMD & NVIDIA Hardware Telemetry', () => {
     assert.strictEqual(prioritized[0].name, 'Intel(R) Arc(TM) A770 Graphics');
   });
 
+  it('should rank hybrid laptop adapters: discrete > integrated > virtual', async () => {
+    const { prioritizeGpuControllers } = await import('./monitors/platform/windows.js');
+    const mk = (name: string, adapterRam = 0) => ({ name, adapterRam, driverVersion: '', videoProcessor: '', pnpDeviceId: '' });
+    const order = (names: string[]) => prioritizeGpuControllers(names.map(n => mk(n))).map(c => c.name);
+
+    assert.strictEqual(order(['Microsoft Basic Display Adapter', 'Intel(R) Iris(R) Xe Graphics', 'NVIDIA GeForce RTX 4060 Laptop GPU'])[0], 'NVIDIA GeForce RTX 4060 Laptop GPU');
+    assert.strictEqual(order(['Intel(R) UHD Graphics', 'Microsoft Remote Display Adapter'])[0], 'Intel(R) UHD Graphics');
+    assert.strictEqual(order(['AMD Radeon(TM) Graphics', 'AMD Radeon Pro W7800'])[0], 'AMD Radeon Pro W7800');
+  });
+
+
   it('should detect CPU vendors and estimate architecture TDP accurately', async () => {
     const { detectProcessorVendor, estimateCpuTdp } = await import('./monitors/platform/windows.js');
     // AMD tests
