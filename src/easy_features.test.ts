@@ -230,3 +230,86 @@ describe('Pyre Preferences, Autostart Service, and Settings UI', () => {
 
 
 
+describe('Mac Optimizer (pyre optimize)', async () => {
+  const opt = await import('./optimizeCmd.js');
+
+  it('parses durations', () => {
+    assert.strictEqual(opt.parseDuration('2h', 0), 7_200_000);
+    assert.strictEqual(opt.parseDuration('30m', 0), 1_800_000);
+    assert.strictEqual(opt.parseDuration('90s', 0), 90_000);
+    assert.strictEqual(opt.parseDuration('1d', 0), 86_400_000);
+    assert.strictEqual(opt.parseDuration('15', 0), 900_000);
+    assert.strictEqual(opt.parseDuration(undefined, 42), 42);
+    assert.ok(Number.isNaN(opt.parseDuration('soon', 0)));
+  });
+
+  it('parses lsappinfo list output (Foreground apps only)', () => {
+    const raw = ` 1) "loginwindow" ASN:0x0-0x3003: 
+    bundleID="com.apple.loginwindow"
+    pid = 414 type="UIElement" flavor=3
+ 4) "Terminal" ASN:0x0-0xa00a: 
+    bundleID="com.apple.Terminal"
+    pid = 615 type="Foreground" flavor=3 Version="470.2"
+    checkin time = 2026/10/10 09:07:09 ( 2 days ago )
+ 5) "Safari" ASN:0x0-0xb00b: 
+    bundleID="com.apple.Safari"
+    pid = 619 type="Foreground" flavor=3
+`;
+    const apps = opt.parseLsappinfoList(raw);
+    assert.strictEqual(apps.length, 2);
+    assert.deepStrictEqual(apps.map(a => a.bundleId), ['com.apple.Terminal', 'com.apple.Safari']);
+    assert.strictEqual(apps[0].pid, 615);
+    assert.strictEqual(apps[0].asn, 'ASN:0x0-0xa00a');
+    assert.strictEqual(apps[0].launchedAt, new Date(2026, 9, 10, 9, 7, 9).getTime());
+  });
+
+  it('parses visible process order', () => {
+    const order = opt.parseAsnList('ASN:0x0-0xb00b-"Safari": ASN:0x0-0x598598-"Antigravity": ASN:0x0-0xb00b-"Safari":');
+    assert.deepStrictEqual(order, ['ASN:0x0-0xb00b', 'ASN:0x0-0x598598']);
+  });
+
+  const now = new Date(2026, 9, 12, 12, 0, 0).getTime();
+  const H = 3_600_000;
+  const mk = (name: string, rank: number, extra: Partial<import('./optimizeCmd.js').RunningApp> = {}) => ({
+    asn: `ASN:0x0-0x${rank}`, name, bundleId: `com.test.${name.toLowerCase()}`, pid: 1000 + rank,
+    launchedAt: now - 24 * H, rank, cpu: 0, rssKb: 100_000, frontmost: false, ...extra,
+  });
+  const baseCtx = { now, idleThresholdMs: 2 * H, keepRecent: 2, protectedApps: [] as string[], selfPids: new Set<number>() };
+
+  it('selects by rank when no tracking data, honoring keep/protected/busy/self', () => {
+    const apps = [
+      mk('Front', 0, { frontmost: true }),
+      mk('Recent', 1),
+      mk('Finder', 2, { bundleId: 'com.apple.finder' }),
+      mk('Busy', 3, { cpu: 30 }),
+      mk('Mine', 4, { pid: 777 }),
+      mk('Fresh', 5, { launchedAt: now - 10 * 60_000 }),
+      mk('Music', 6, { bundleId: 'com.apple.Music', cpu: 2 }),
+      mk('Old', 7),
+      mk('Custom', 8),
+    ];
+    const { candidates, skipped } = opt.selectIdleApps(apps, { ...baseCtx, protectedApps: ['custom'], selfPids: new Set([777]) });
+    assert.deepStrictEqual(candidates.map(c => c.app.name), ['Old']);
+    assert.strictEqual(candidates[0].idleMs, undefined);
+    assert.strictEqual(skipped.length, 8);
+  });
+
+  it('uses fresh tracking data for real idle times', () => {
+    const usage = {
+      version: 1 as const, trackingSince: now - 10 * H, updatedAt: now - 5000,
+      apps: { 'com.test.used': { name: 'Used', lastActive: now - 30 * 60_000 }, 'com.test.stale': { name: 'Stale', lastActive: now - 5 * H } },
+    };
+    const apps = [mk('A', 0), mk('B', 1), mk('Used', 2), mk('Stale', 3), mk('Never', 4)];
+    const { candidates } = opt.selectIdleApps(apps, { ...baseCtx, usage });
+    assert.deepStrictEqual(candidates.map(c => c.app.name), ['Stale', 'Never']);
+    assert.strictEqual(candidates[0].idleMs, 5 * H);
+    // Never seen since tracking began 10h ago → idle bounded by trackingSince
+    assert.strictEqual(candidates[1].idleMs, 10 * H);
+  });
+
+  it('ignores stale tracking data (tracker not running)', () => {
+    const usage = { version: 1 as const, trackingSince: now - 10 * H, updatedAt: now - 3 * H, apps: {} };
+    assert.strictEqual(opt.isTrackingFresh(usage, now), false);
+    assert.strictEqual(opt.computeIdleMs(mk('X', 5), usage, now), undefined);
+  });
+});

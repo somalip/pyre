@@ -15,6 +15,7 @@ _pyre() {
         'ssh:Stream metrics over SSH'
         'bench:Benchmark command while logging system stats'
         'completions:Generate shell completion scripts'
+        'optimize:Mac optimizer (quit idle apps, memory, caches, trash, startup, dns)'
     )
 
     _arguments -s \\
@@ -58,38 +59,42 @@ _pyre_completions() {
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
-    commands="live info doctor web ui launch config p2p ssh bench completions"
-    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit"
+    commands="live info doctor web ui launch config p2p ssh bench completions optimize"
+    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit --idle --keep --yes --force --clean --empty --dry-run --auto-quit"
 
-    case "${prev}" in
+    case "\${prev}" in
         --theme)
-            COMPREPLY=( $(compgen -W "default dracula cyberpunk monochrome nord gruvbox" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "default dracula cyberpunk monochrome nord gruvbox" -- \${cur}) )
             return 0
             ;;
         --sort)
-            COMPREPLY=( $(compgen -W "cpu mem pid user command state threads runtime" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "cpu mem pid user command state threads runtime" -- \${cur}) )
             return 0
             ;;
         --temp-unit)
-            COMPREPLY=( $(compgen -W "c f" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "c f" -- \${cur}) )
             return 0
             ;;
         config)
-            COMPREPLY=( $(compgen -W "show reset" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "show reset" -- \${cur}) )
             return 0
             ;;
         p2p)
-            COMPREPLY=( $(compgen -W "server connect" -- ${cur}) )
+            COMPREPLY=( $(compgen -W "server connect" -- \${cur}) )
+            return 0
+            ;;
+        optimize)
+            COMPREPLY=( $(compgen -W "apps track memory caches trash startup dns protect unprotect help" -- \${cur}) )
             return 0
             ;;
     esac
 
-    if [[ ${cur} == -* ]] ; then
-        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    if [[ \${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "\${opts}" -- \${cur}) )
         return 0
     fi
 
-    COMPREPLY=( $(compgen -W "${commands}" -- ${cur}) )
+    COMPREPLY=( $(compgen -W "\${commands}" -- \${cur}) )
 }
 
 complete -F _pyre_completions pyre
@@ -108,6 +113,8 @@ complete -c pyre -n "__fish_use_subcommand" -a launch -d "Launch Activity Monito
 complete -c pyre -n "__fish_use_subcommand" -a config -d "Show or reset configuration options"
 complete -c pyre -n "__fish_use_subcommand" -a p2p -d "P2P streaming mode"
 complete -c pyre -n "__fish_use_subcommand" -a completions -d "Generate shell completions"
+complete -c pyre -n "__fish_use_subcommand" -a optimize -d "Mac optimizer: quit idle apps, clean caches"
+complete -c pyre -n "__fish_seen_subcommand_from optimize" -a "apps track memory caches trash startup dns protect unprotect help"
 
 complete -c pyre -l json -s j -d "Output snapshot as JSON"
 complete -c pyre -l html -d "Output snapshot as HTML"
@@ -125,7 +132,7 @@ export function generatePowerShellCompletions(): string {
   return `# PowerShell completion for pyre
 Register-ArgumentCompleter -Native -CommandName pyre -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $commands = @('live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain')
+    $commands = @('live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain', 'optimize')
     $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
 
     $elements = $commandAst.CommandElements

@@ -107,6 +107,7 @@ Launch with `pyre live` for a responsive, full-terminal dashboard featuring:
 | **Fleet & SSH Aggregation** | Monitor remote nodes over SSH (`pyre ssh <host>`) or aggregate hundreds of servers into an auto-tiled overview (`pyre fleet`). |
 | **Socket & Packet Forensics** | Track socket connection states (`ESTABLISHED`, `LISTENING`, `TIME_WAIT`), top remote hosts, and per-process network bandwidth. |
 | **AI Anomaly Explanation** | Explain performance spikes and thermal throttles in plain English using local Ollama models or OpenAI (`pyre explain`). |
+| **macOS System Optimizer** | Reclaim memory and disk space: quit idle/forgotten apps, flush DNS, purge inactive RAM, clean developer caches, empty trash, and audit broken startup agents (`pyre optimize`). |
 | **Multi-Format Export** | Export instant snapshots to JSON, CSV, TSV, HTML, or Markdown reports, plus an importable Grafana dashboard template. |
 
 ---
@@ -239,6 +240,7 @@ pyre alert test                 # Send a test notification to all configured ale
 pyre profile-proc <pid>         # CPU call-tree profiler and hot function sampler
 pyre sync <push|pull|status>    # Synchronize config profiles across machines
 pyre xbar                       # Generate an xbar / SwiftBar menu bar plugin script
+pyre optimize [subcommand]      # macOS optimizer: quit idle apps, memory, caches, trash, startup, dns
 pyre update                     # Check for pyre-cli updates
 ```
 
@@ -261,6 +263,45 @@ Security and networking capabilities:
 - **Challenge Verification**: SHA-256 handshake challenge-response prevents replay attacks.
 - **Integrity Signing**: Cryptographic HMAC-SHA256 signatures validated on every packet payload.
 - **Access Control**: IP address whitelisting (`--p2p-allow <ips>`) and rate limiting (`--p2p-rate-limit <n>`).
+
+---
+
+## macOS System Optimizer (`pyre optimize`)
+
+Active memory, disk, and application lifecycle optimization for macOS:
+
+```bash
+# 1. System health & optimization overview report (safe, dry-run by default)
+pyre optimize
+
+# 2. Find and gracefully quit apps open but unused recently
+pyre optimize apps                          # Interactive prompt with memory & CPU summary
+pyre optimize apps --idle 30m --keep 3      # Custom idle duration & recent apps to keep
+pyre optimize apps --dry-run                # Preview without quitting
+
+# 3. Background app activity tracker (records precise frontmost app usage)
+pyre optimize track                         # Run tracker in current terminal
+pyre optimize track --install               # Install lightweight background launchd agent
+pyre optimize track --auto-quit 2h          # Daemon auto-quits idle apps & sends desktop alert
+pyre optimize track --uninstall             # Remove background tracker
+
+# 4. Memory pressure & inactive purge
+pyre optimize memory                        # Shows pressure, swap, compressed RAM, top consumers
+pyre optimize memory -y                     # Flushes inactive file cache via `sudo purge`
+
+# 5. Developer & system caches
+pyre optimize caches                        # Measure Xcode DerivedData, Homebrew, npm/yarn/pnpm
+pyre optimize caches --clean                # Clean selected caches (safely skips running apps)
+
+# 6. Trash & startup maintenance
+pyre optimize trash --empty                 # Measure and empty macOS Trash
+pyre optimize startup                       # Audit Login Items & LaunchAgents, flag broken leftovers
+pyre optimize dns                           # Flush macOS DNS cache via dscacheutil & mDNSResponder
+
+# 7. Protect whitelist
+pyre optimize protect "Spotify"             # Whitelist app so it is never automatically quit
+pyre optimize unprotect "Spotify"           # Remove app from custom whitelist
+```
 
 ---
 

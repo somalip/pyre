@@ -102,7 +102,14 @@ program
     .option('--top <n>', 'Number of items to display in netusage command (default: 15)')
     .option('--raw', 'Print unparsed output for profiler')
     .option('--sync-dir <dir>', 'Custom directory path for cloud profile/config sync')
-    .option('--scan', 'Perform active network sweep on LAN neighbors for topology map');
+    .option('--scan', 'Perform active network sweep on LAN neighbors for topology map')
+    .option('--idle <duration>', 'Idle threshold for optimize apps (e.g. 30m, 2h)')
+    .option('--keep <n>', 'Always keep the N most recently used apps open (optimize)')
+    .option('-y, --yes', 'Skip confirmation prompts (optimize)')
+    .option('--force', 'Terminate apps that do not quit gracefully (optimize apps)')
+    .option('--clean', 'Delete measured caches after confirmation (optimize caches)')
+    .option('--empty', 'Empty the Trash after confirmation (optimize trash)')
+    .option('--auto-quit <duration>', 'Let the optimize tracker automatically quit apps idle this long');
 
 program.addHelpText('after', `
  Commands:
@@ -143,6 +150,8 @@ program.addHelpText('after', `
    build                          Active compiler and build system tracker
    topo                           Network topology mapper and pyre peer auto-discovery
    sync <push|pull|status>        Synchronize config profiles across Macs via iCloud/Drive
+   optimize [apps|track|memory|caches|trash|startup|dns]
+                                  Mac optimizer: quit idle apps, free memory, clean caches
  `);
 
 program.parse(process.argv);
@@ -306,6 +315,23 @@ async function main() {
   if (cmd === 'smart') {
     const { runSmartCommand } = await import('./smartCmd.js');
     await runSmartCommand();
+    return;
+  }
+
+  if (cmd === 'optimize') {
+    const { runOptimizeCommand } = await import('./optimizeCmd.js');
+    await runOptimizeCommand(program.args[1], program.args.slice(2), {
+      idle: opts.idle,
+      keep: opts.keep,
+      yes: !!opts.yes,
+      force: !!opts.force,
+      clean: !!opts.clean,
+      empty: !!opts.empty,
+      dryRun: !!opts.dryRun,
+      install: !!opts.install,
+      uninstall: !!opts.uninstall,
+      autoQuit: opts.autoQuit,
+    });
     return;
   }
 

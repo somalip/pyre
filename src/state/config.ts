@@ -104,6 +104,12 @@ export interface PyreConfig {
   tableDensity?: string;
   defaultFilter?: string;
   defaultSort?: string;
+  /** Extra apps (name or bundle id) that `pyre optimize` will never quit */
+  optimizeProtectedApps?: string[];
+  /** Default idle threshold for `pyre optimize apps` (e.g. "2h") */
+  optimizeIdleThreshold?: string;
+  /** Number of most-recently-used apps `pyre optimize apps` always keeps open */
+  optimizeKeepRecent?: number;
 }
 
 export const DEFAULT_CONFIG: Required<PyreConfig> = {
@@ -169,6 +175,9 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   tableDensity: 'standard',
   defaultFilter: 'all',
   defaultSort: 'cpu',
+  optimizeProtectedApps: [],
+  optimizeIdleThreshold: '2h',
+  optimizeKeepRecent: 5,
 };
 
 export function getConfigDir(): string {
