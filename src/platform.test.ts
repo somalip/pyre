@@ -119,6 +119,19 @@ describe('Intel, AMD & NVIDIA Hardware Telemetry', () => {
     assert.strictEqual(prioritized[0].name, 'Intel(R) Arc(TM) A770 Graphics');
   });
 
+  it('should parse Windows battery cycles, capacity and rate output', async () => {
+    const { parseWindowsBatteryOutput } = await import('./monitors/platform/windows.js');
+    const b = parseWindowsBatteryOutput('87|1|312||214|41200|50000|11500\r\n');
+    assert.ok(b);
+    assert.strictEqual(b.level, 87);
+    assert.strictEqual(b.cycles, 214);
+    assert.strictEqual(b.fullChargeMWh, 41200);
+    assert.strictEqual(b.designMWh, 50000);
+    assert.strictEqual(b.rateMilliwatts, 11500);
+    assert.strictEqual(parseWindowsBatteryOutput(''), null);
+  });
+
+
   it('should rank hybrid laptop adapters: discrete > integrated > virtual', async () => {
     const { prioritizeGpuControllers } = await import('./monitors/platform/windows.js');
     const mk = (name: string, adapterRam = 0) => ({ name, adapterRam, driverVersion: '', videoProcessor: '', pnpDeviceId: '' });

@@ -1557,6 +1557,10 @@ async function runWebCommand(bindHost?: string): Promise<number> {
         console.log(chalk.dim(`  SSE Stream:  http://localhost:${actualPort}/api/stream`));
       }
       
+      if (process.platform === 'win32') {
+        collectAll({ detailed: true }).catch(() => {});
+      }
+
       resolve(actualPort);
     });
 
@@ -1857,15 +1861,39 @@ app.run()
       'platform',
       'windows-ui.ps1'
     );
+
+    if (!fs.existsSync(scriptPath)) {
+      // Launcher script missing from this install: open the default browser instead.
+      console.log(chalk.cyan(`\n  Opening live UI dashboard at ${url}...`));
+      await openBrowserUrl(url);
+      console.log(chalk.dim('  Press Ctrl+C to stop server.\n'));
+      await new Promise(() => {});
+      return;
+    }
+
     const { spawn } = await import('node:child_process');
     console.log(chalk.cyan(`\n  Launching native UI window...`));
+    const startedAt = Date.now();
     const ui = spawn(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Port', String(port)],
-      { stdio: 'inherit' }
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Port', String(port)],
+      { stdio: 'inherit', windowsHide: true }
     );
 
+    ui.on('error', async () => {
+      console.log(chalk.cyan(`\n  Opening live UI dashboard at ${url}...`));
+      await openBrowserUrl(url);
+      console.log(chalk.dim('  Press Ctrl+C to stop server.\n'));
+    });
+
     ui.on('close', () => {
+      if (Date.now() - startedAt < 5000) {
+        // Launcher returned immediately (default-browser fallback or browser handoff):
+        // the page is still open in a browser, so keep serving it.
+        console.log(chalk.dim(`  UI opened in your browser at ${url}`));
+        console.log(chalk.dim('  Press Ctrl+C to stop server.\n'));
+        return;
+      }
       console.log(chalk.dim('UI window closed, shutting down server...'));
       process.exit(0);
     });
@@ -1874,6 +1902,7 @@ app.run()
       ui.kill();
       process.exit(0);
     });
+    await new Promise(() => {});
     return;
   }
 

@@ -10,7 +10,28 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { run, runPowerShell } from '../run.js';
+import { run, runPowerShell as rawRunPowerShell } from '../run.js';
+
+/**
+ * Cache policy per query (stale-while-revalidate, see run.ts). Each powershell.exe launch is
+ * expensive, so static facts are cached for minutes and volatile ones for a few seconds.
+ * Order matters: the first matching rule wins.
+ */
+const PS_TTL_RULES: Array<[RegExp, number]> = [
+  [/Win32_Battery|BatteryCycleCount|BatteryStatus/, 10_000],
+  [/Win32_Processor|Win32_VideoController|HardwareInformation|Win32_OperatingSystem/, 10 * 60_000],
+  [/GPUEngine/, 3_000],
+  [/LibreHardwareMonitor|OpenHardwareMonitor|MSAcpi_ThermalZone|Thermal Zone Information/, 20_000],
+  [/Win32_PageFileUsage|Win32_LogicalDisk/, 30_000],
+  [/Get-NetIPConfiguration/, 60_000],
+  [/Get-NetTCPConnection/, 5_000],
+  [/Get-Process\b/, 5_000],
+];
+
+function runPowerShell(script: string, fallback = '', timeout = 10000): Promise<string> {
+  const rule = PS_TTL_RULES.find(([re]) => re.test(script));
+  return rawRunPowerShell(script, fallback, timeout, rule ? rule[1] : 0);
+}
 import type {
   CpuData,
   MemoryData,
@@ -226,48 +247,24 @@ export async function collectWindowsCpu(prevCpuTimesRef: { current: { total: num
 }
 
 export async function getWindowsCpuTemperature(): Promise<number | undefined> {
-  // 1. Try LibreHardwareMonitor or OpenHardwareMonitor WMI (widely supported on AMD Ryzen and Intel desktops)
-  try {
-    const lhmRaw = await runPowerShell(
-      `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%CPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
-      ''
-    );
-    const lhmVal = safeParseFloat(lhmRaw);
-    if (lhmVal >= 15 && lhmVal <= 115) return Math.round(lhmVal * 10) / 10;
-  } catch {}
+  // One PowerShell launch that tries, in order: LibreHardwareMonitor / OpenHardwareMonitor WMI
+  // (AMD Ryzen + Intel desktops), ACPI thermal zone (needs admin on many machines), then the
+  // locale-independent thermal zone performance class. Outputs Celsius or nothing.
+  const script = [
+    `$t = $null`,
+    `foreach ($ns in 'root/LibreHardwareMonitor','root/OpenHardwareMonitor') {`,
+    `  if ($t) { break }`,
+    `  try { $v = Get-CimInstance -Namespace $ns -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%CPU%'" -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Value; if ($v) { $t = [double]$v } } catch {}`,
+    `}`,
+    `if (-not $t) { try { $k = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction Stop | Select-Object -First 1 -ExpandProperty CurrentTemperature; if ($k -gt 2732) { $t = ($k - 2732) / 10 } } catch {} }`,
+    `if (-not $t) { try { $k = Get-CimInstance -ClassName Win32_PerfFormattedData_Counters_ThermalZoneInformation -ErrorAction Stop | Where-Object { $_.Temperature -gt 273 -and $_.Temperature -lt 400 } | Select-Object -First 1 -ExpandProperty Temperature; if ($k) { $t = $k - 273.15 } } catch {} }`,
+    `if ($t) { [string]([math]::Round($t, 1)) }`,
+  ].join('\n');
 
   try {
-    const ohmRaw = await runPowerShell(
-      `Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%CPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
-      ''
-    );
-    const ohmVal = safeParseFloat(ohmRaw);
-    if (ohmVal >= 15 && ohmVal <= 115) return Math.round(ohmVal * 10) / 10;
-  } catch {}
-
-  // 2. Try PowerShell CIM MSAcpi_ThermalZoneTemperature (modern Windows 10/11 replacement for wmic)
-  try {
-    const cimRaw = await runPowerShell(
-      `(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty CurrentTemperature)`,
-      ''
-    );
-    const kelvinTenths = safeParseInt(cimRaw);
-    if (kelvinTenths > 2732 && kelvinTenths < 4200) {
-      const c = Math.round(((kelvinTenths - 2732) / 10) * 10) / 10;
-      if (c >= 15 && c <= 115) return c;
-    }
-  } catch {}
-
-  // 3. Try Windows Performance Counter
-  try {
-    const raw = await runPowerShell(
-      `(Get-Counter '\\Thermal Zone Information(*)\\*' -ErrorAction SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 200 -and $_.CookedValue -lt 400 } | Select-Object -First 1 -ExpandProperty CookedValue`,
-      ''
-    );
-    const tempK = safeParseFloat(raw);
-    if (tempK > 200 && tempK < 400) {
-      return Math.round((tempK - 273.15) * 10) / 10;
-    }
+    const raw = await runPowerShell(script, '');
+    const val = safeParseFloat(raw.replace(',', '.'));
+    if (val >= 15 && val <= 115) return Math.round(val * 10) / 10;
   } catch {}
 
   return undefined;
@@ -358,18 +355,54 @@ export async function collectWindowsDisk(): Promise<DiskData[]> {
     // fallback
   }
 
-  return [
-    {
-      filesystem: 'C:',
-      size: '500G',
-      used: '150G',
-      available: '350G',
-      capacity: '30%',
-      mountpoint: 'C:',
-      readBytesSec: 0,
-      writeBytesSec: 0,
-    },
-  ];
+  // Fallback: real numbers from the filesystem API (no PowerShell needed)
+  const fallback: DiskData[] = [];
+  for (let code = 67; code <= 90; code++) { // C..Z
+    const drive = `${String.fromCharCode(code)}:`;
+    try {
+      const st = (fs as any).statfsSync?.(`${drive}\\`);
+      if (!st) break;
+      const totalBytes = Number(st.blocks) * Number(st.bsize);
+      const freeBytes = Number(st.bavail) * Number(st.bsize);
+      if (totalBytes > 0) {
+        const usedBytes = Math.max(0, totalBytes - freeBytes);
+        fallback.push({
+          filesystem: drive,
+          size: formatBytesStr(totalBytes),
+          used: formatBytesStr(usedBytes),
+          available: formatBytesStr(freeBytes),
+          capacity: `${Math.round((usedBytes / totalBytes) * 100)}%`,
+          mountpoint: drive,
+          readBytesSec: 0,
+          writeBytesSec: 0,
+        });
+      }
+    } catch {
+      // drive letter not present
+    }
+  }
+  if (fallback.length === 0) {
+    try {
+      const st = (fs as any).statfsSync?.(os.homedir());
+      const totalBytes = st ? Number(st.blocks) * Number(st.bsize) : 0;
+      const freeBytes = st ? Number(st.bavail) * Number(st.bsize) : 0;
+      if (totalBytes > 0) {
+        const usedBytes = Math.max(0, totalBytes - freeBytes);
+        const drive = path.parse(os.homedir()).root.replace(/[\\/]+$/, '') || 'C:';
+        fallback.push({
+          filesystem: drive,
+          size: formatBytesStr(totalBytes),
+          used: formatBytesStr(usedBytes),
+          available: formatBytesStr(freeBytes),
+          capacity: `${Math.round((usedBytes / totalBytes) * 100)}%`,
+          mountpoint: drive,
+          readBytesSec: 0,
+          writeBytesSec: 0,
+        });
+      }
+    } catch {}
+  }
+  return fallback;
 }
 
 function formatBytesStr(bytes: number): string {
@@ -381,39 +414,96 @@ function formatBytesStr(bytes: number): string {
 
 // ─── Battery ───────────────────────────────────────────────────────────────────
 
+export interface WindowsBatteryRaw {
+  level: number;
+  statusCode: number;
+  runTimeMinutes: number;
+  winDischargeRate: number;
+  cycles: number;
+  fullChargeMWh: number;
+  designMWh: number;
+  rateMilliwatts: number;
+}
+
+export function parseWindowsBatteryOutput(raw: string): WindowsBatteryRaw | null {
+  const line = raw.split('\n').map(l => l.trim()).find(l => l.includes('|'));
+  if (!line) return null;
+  const p = line.split('|');
+  return {
+    level: safeParseInt(p[0], 0),
+    statusCode: safeParseInt(p[1], 1),
+    runTimeMinutes: safeParseInt(p[2], 0),
+    winDischargeRate: safeParseInt(p[3], 0),
+    cycles: safeParseInt(p[4], 0),
+    fullChargeMWh: safeParseInt(p[5], 0),
+    designMWh: safeParseInt(p[6], 0),
+    rateMilliwatts: safeParseInt(p[7], 0),
+  };
+}
+
 export async function collectWindowsBattery(): Promise<BatteryData | null> {
   try {
-    const raw = await runPowerShell(
-      `$bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue; if ($bat) { "$($bat.EstimatedChargeRemaining)|$($bat.BatteryStatus)|$($bat.EstimatedRunTime)|$($bat.DischargeRate)" } else { '' }`,
-      ''
-    );
-    if (!raw) return null;
+    // Win32_Battery gives level/status; the root/wmi classes (supported by most modern laptops)
+    // give cycle count, design vs. full-charge capacity and instantaneous charge/discharge rate.
+    // Everything is fetched in ONE PowerShell launch. Output: level|status|runtime|discharge|cycles|full|design|rate
+    const script = [
+      `$b = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1`,
+      `if ($b) {`,
+      `  $cyc = (Get-CimInstance -Namespace root/wmi -ClassName BatteryCycleCount -ErrorAction SilentlyContinue | Select-Object -First 1).CycleCount`,
+      `  $full = (Get-CimInstance -Namespace root/wmi -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Select-Object -First 1).FullChargedCapacity`,
+      `  $des = (Get-CimInstance -Namespace root/wmi -ClassName BatteryStaticData -ErrorAction SilentlyContinue | Select-Object -First 1).DesignedCapacity`,
+      `  $st = Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus -ErrorAction SilentlyContinue | Select-Object -First 1`,
+      `  $rate = 0; if ($st) { if ($st.Charging) { $rate = $st.ChargeRate } elseif ($st.Discharging) { $rate = $st.DischargeRate } }`,
+      `  "$($b.EstimatedChargeRemaining)|$($b.BatteryStatus)|$($b.EstimatedRunTime)|$($b.DischargeRate)|$cyc|$full|$des|$rate"`,
+      `}`,
+    ].join('\n');
 
-    const parts = raw.split('|');
-    const level = safeParseInt(parts[0], 0);
-    const statusCode = safeParseInt(parts[1], 1);
-    const runTimeMinutes = safeParseInt(parts[2], 0);
-    const dischargeRate = safeParseInt(parts[3], 0);
+    const raw = await runPowerShell(script, '');
+    const b = parseWindowsBatteryOutput(raw);
+    if (!b) return null;
 
-    const powerSource = statusCode === 2 || statusCode === 3 || statusCode === 6 ? 'AC' : 'Battery';
-    const state = statusCode === 3 ? 'charged' : statusCode === 6 || statusCode === 2 ? 'charging' : 'discharging';
+    // BatteryStatus: 1 discharging, 2 on AC, 3 fully charged, 4 low, 5 critical, 6-9 charging, 11 partially charged
+    const charging = [2, 6, 7, 8, 9].includes(b.statusCode);
+    const onAc = [2, 3, 6, 7, 8, 9, 11].includes(b.statusCode);
+    const powerSource = onAc ? 'AC' : 'Battery';
+    const state = b.statusCode === 3 || (onAc && b.level >= 100) ? 'charged' : charging ? 'charging' : 'discharging';
+
     let timeRemaining = 'calculating';
     if (state === 'charged') timeRemaining = '∞';
-    else if (runTimeMinutes && runTimeMinutes > 0 && runTimeMinutes < 70000) {
-      const h = Math.floor(runTimeMinutes / 60);
-      const m = runTimeMinutes % 60;
+    else if (state === 'discharging' && b.runTimeMinutes > 0 && b.runTimeMinutes < 70000) {
+      const h = Math.floor(b.runTimeMinutes / 60);
+      const m = b.runTimeMinutes % 60;
       timeRemaining = `${h}:${m.toString().padStart(2, '0')}`;
     }
 
-    const powerWatts = dischargeRate > 0 ? Math.round((dischargeRate / 1000) * 100) / 100 : undefined;
+    // Wattage: prefer instantaneous rate from root/wmi (mW), fall back to Win32_Battery.DischargeRate
+    const rateMw = Math.abs(b.rateMilliwatts) > 0 && Math.abs(b.rateMilliwatts) < 400_000 ? Math.abs(b.rateMilliwatts) : b.winDischargeRate;
+    const powerWatts = rateMw > 0 ? Math.round((rateMw / 1000) * 100) / 100 : undefined;
+
+    // Health = full-charge capacity / design capacity. Cycle count of 0 means "not reported".
+    let maxCapacityPercent: number | undefined;
+    if (b.designMWh > 0 && b.fullChargeMWh > 0) {
+      maxCapacityPercent = Math.min(100, Math.round((b.fullChargeMWh / b.designMWh) * 100));
+    }
+    const cycles = b.cycles > 0 && b.cycles < 100_000 ? b.cycles : undefined;
+
+    let health = 'Good';
+    let condition = 'Normal';
+    if (maxCapacityPercent !== undefined) {
+      if (maxCapacityPercent < 60) { health = 'Poor'; condition = 'Service Recommended'; }
+      else if (maxCapacityPercent < 80) { health = 'Fair'; condition = 'Reduced Capacity'; }
+    }
 
     return {
-      level,
+      level: b.level,
       state,
       timeRemaining,
-      health: 'Good',
+      health,
       powerSource,
       powerWatts,
+      cycles,
+      condition,
+      maxCapacityPercent,
     };
   } catch {
     return null;
@@ -1113,7 +1203,20 @@ export function parseWindowsProcessCsv(
   return procs;
 }
 
+let procListMemo: { ts: number; promise: Promise<ProcessData[]> } | null = null;
+const PROC_MEMO_MS = 1500;
+
 export async function collectWindowsProcesses(limit?: number): Promise<ProcessData[]> {
+  const now0 = Date.now();
+  if (!procListMemo || now0 - procListMemo.ts > PROC_MEMO_MS) {
+    procListMemo = { ts: now0, promise: queryWindowsProcesses() };
+  }
+  const procs = await procListMemo.promise;
+  if (limit && limit > 0) return procs.slice(0, limit);
+  return procs;
+}
+
+async function queryWindowsProcesses(): Promise<ProcessData[]> {
   try {
     // Explicitly query ParentProcessId for process tree view (`pyre --tree`)
     const raw = await runPowerShell(
@@ -1122,10 +1225,7 @@ export async function collectWindowsProcesses(limit?: number): Promise<ProcessDa
     );
     const now = Date.now();
     const totalMem = os.totalmem();
-    const procs = parseWindowsProcessCsv(raw, totalMem, winProcCache, now);
-
-    if (limit && limit > 0) return procs.slice(0, limit);
-    return procs;
+    return parseWindowsProcessCsv(raw, totalMem, winProcCache, now);
   } catch {
     return [];
   }
