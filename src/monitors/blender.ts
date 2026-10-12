@@ -1,13 +1,17 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { run } from './run.js';
 import type { BlenderRenderData } from './types.js';
+import { collectWindowsProcesses } from './platform/windows.js';
 
-const RENDER_LOG_DIR = '/tmp/blender_render_logs';
+const RENDER_LOG_DIR = path.join(os.tmpdir(), 'blender_render_logs');
 
 function blendFileFromArgs(args: string[]): string {
   const nonFlag = args.filter(a => !a.startsWith('-'));
   for (const a of nonFlag) {
     if (a.endsWith('.blend') || a.includes('.blend')) {
-      return a.split('/').pop() || a;
+      return a.split(/[/\\]/).pop() || a;
     }
   }
   return 'unknown.blend';
@@ -25,15 +29,17 @@ function outputPathFromArgs(args: string[]): string {
   const oIdx = args.indexOf('-o');
   if (oIdx !== -1 && args[oIdx + 1]) {
     let p = args[oIdx + 1];
-    if (p.endsWith('/')) p = p.slice(0, -1);
-    return p.split('/').slice(0, -1).join('/') || '/tmp';
+    if (p.endsWith('/') || p.endsWith('\\')) p = p.slice(0, -1);
+    const parts = p.split(/[/\\]/);
+    return parts.slice(0, -1).join('/') || os.tmpdir();
   }
   const fFlag = args.find(a => a.startsWith('-o='));
   if (fFlag) {
     const p = fFlag.slice(3);
-    return p.endsWith('/') ? p.slice(0, -1).split('/').slice(0, -1).join('/') || '/tmp' : p.split('/').slice(0, -1).join('/') || '/tmp';
+    const parts = p.split(/[/\\]/);
+    return parts.slice(0, -1).join('/') || os.tmpdir();
   }
-  return '/tmp';
+  return os.tmpdir();
 }
 
 function frameRangeFromArgs(args: string[]): { start: number; end: number } {
@@ -57,11 +63,17 @@ function frameRangeFromArgs(args: string[]): { start: number; end: number } {
 async function parseRenderLog(blendName: string): Promise<{ framesRendered: number; totalFrames: number; startTime: number; samples?: number } | null> {
   const baseName = blendName.replace(/\.blend$/i, '');
   try {
-    const entries = (await run(`ls -t "${RENDER_LOG_DIR}" 2>/dev/null | grep "^${baseName}_" | head -5`, '')).trim().split('\n').filter(Boolean);
+    if (!fs.existsSync(RENDER_LOG_DIR)) return null;
+    const entries = fs.readdirSync(RENDER_LOG_DIR)
+      .filter(f => f.startsWith(`${baseName}_`))
+      .map(f => ({ name: f, time: fs.statSync(path.join(RENDER_LOG_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time)
+      .slice(0, 5);
+
     for (const entry of entries) {
-      const logPath = `${RENDER_LOG_DIR}/${entry}`;
+      const logPath = path.join(RENDER_LOG_DIR, entry.name);
       try {
-        const content = await run(`cat "${logPath}" 2>/dev/null`, '', 500);
+        const content = fs.readFileSync(logPath, 'utf-8');
         if (!content) continue;
         const lines = content.split('\n');
         const rendered = lines.filter(l => /Fra:(\d+)/i.test(l)).length;
@@ -86,21 +98,39 @@ async function parseRenderLog(blendName: string): Promise<{ framesRendered: numb
 export async function collectBlenderRenders(): Promise<BlenderRenderData[]> {
   const renders: BlenderRenderData[] = [];
   try {
-    const psRaw = await run("ps -eo pid,pcpu,pmem,state,command 2>/dev/null | grep -iE '[b]lender'", '', 2000);
-    if (!psRaw) return renders;
+    interface BlenderProc {
+      pid: number;
+      cpuPct: number;
+      command: string;
+    }
+    const procList: BlenderProc[] = [];
 
-    const lines = psRaw.split('\n');
-    for (const line of lines) {
-      const parts = line.trim().match(/\s*(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(.+)/);
-      if (!parts) continue;
+    if (process.platform === 'win32') {
+      const procs = await collectWindowsProcesses();
+      for (const p of procs) {
+        if (/blender/i.test(p.command)) {
+          procList.push({ pid: p.pid, cpuPct: p.cpu, command: p.command });
+        }
+      }
+    } else {
+      const psRaw = await run("ps -eo pid,pcpu,pmem,state,command 2>/dev/null | grep -iE '[b]lender'", '', 2000);
+      if (psRaw) {
+        const lines = psRaw.split('\n');
+        for (const line of lines) {
+          const parts = line.trim().match(/\s*(\d+)\s+([\d.]+)\s+([\d.]+)\s+(\S+)\s+(.+)/);
+          if (parts) {
+            procList.push({ pid: parseInt(parts[1], 10), cpuPct: parseFloat(parts[2]), command: parts[5] });
+          }
+        }
+      }
+    }
 
-      const pid = parseInt(parts[1], 10);
-      const cpuPct = parseFloat(parts[2]);
-      const command = parts[5];
+    for (const p of procList) {
+      const { pid, cpuPct, command } = p;
       const args = command.split(/\s+/);
 
       const isRender = /-b|--background|-f\s/.test(command) || /render/i.test(command);
-      if (!isRender && !command.includes('blender')) continue;
+      if (!isRender && !command.toLowerCase().includes('blender')) continue;
 
       const blendFile = blendFileFromArgs(args);
       const engine = engineFromArgs(args);

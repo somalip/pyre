@@ -8,7 +8,7 @@
 import net from 'node:net';
 import os from 'node:os';
 import chalk from 'chalk';
-import { run } from './monitors/run.js';
+import { run, runPowerShell } from './monitors/run.js';
 import { collectNetwork } from './monitors/collectors.js';
 
 export interface TopoOptions {
@@ -16,7 +16,7 @@ export interface TopoOptions {
   json?: boolean;
 }
 
-interface LanPeer {
+export interface LanPeer {
   ip: string;
   mac: string;
   interface: string;
@@ -46,21 +46,73 @@ async function probePort(ip: string, port: number, timeoutMs = 400): Promise<boo
   });
 }
 
-async function getDefaultGateway(): Promise<string> {
+export async function getDefaultGateway(): Promise<string> {
+  if (process.platform === 'win32') {
+    try {
+      const raw = await runPowerShell(
+        `(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty NextHop)`,
+        ''
+      );
+      if (raw.trim() && raw.trim() !== '0.0.0.0') return raw.trim();
+    } catch {}
+
+    try {
+      const rawCim = await runPowerShell(
+        `(Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled = TRUE" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty DefaultIPGateway) -join ''`,
+        ''
+      );
+      if (rawCim.trim()) return rawCim.trim();
+    } catch {}
+  }
+
   try {
     const raw = await run("route -n get default 2>/dev/null | grep gateway | awk '{print $2}'", '');
     if (raw.trim()) return raw.trim();
   } catch {}
   try {
-    const raw = await run("netstat -nr | grep default | awk '{print $2}' | head -n1", '');
+    const raw = await run("netstat -nr 2>/dev/null | grep default | awk '{print $2}' | head -n1", '');
     if (raw.trim()) return raw.trim();
   } catch {}
   return '192.168.1.1';
 }
 
-async function getArpNeighbors(gatewayIp: string): Promise<LanPeer[]> {
+export function parseWindowsArpOutput(raw: string, gatewayIp: string): LanPeer[] {
+  const peers: LanPeer[] = [];
+  let currentIface = 'Ethernet';
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    const ifaceMatch = trimmed.match(/Interface:\s*([\d.]+)/i);
+    if (ifaceMatch) {
+      currentIface = ifaceMatch[1];
+      continue;
+    }
+
+    const match = trimmed.match(/^([\d.]+)\s+([0-9a-fA-F-]+)\s+(\w+)/);
+    if (match) {
+      const ip = match[1];
+      const mac = match[2].replace(/-/g, ':');
+      if (ip === '255.255.255.255' || ip.startsWith('224.') || mac.includes('ff:ff:ff')) continue;
+      peers.push({
+        ip,
+        mac,
+        interface: currentIface,
+        isGateway: ip === gatewayIp,
+      });
+    }
+  }
+
+  return peers;
+}
+
+export async function getArpNeighbors(gatewayIp: string): Promise<LanPeer[]> {
   const peers: LanPeer[] = [];
   try {
+    if (process.platform === 'win32') {
+      const raw = await run('arp -a 2>nul', '');
+      return parseWindowsArpOutput(raw, gatewayIp);
+    }
+
     const raw = await run('arp -a -n 2>/dev/null', '');
     const lines = raw.split('\n');
     for (const line of lines) {
@@ -103,20 +155,17 @@ export async function runTopoCommand(opts: TopoOptions = {}): Promise<void> {
     );
   }
 
-  const establishedConns = (localNet.topRemoteHosts || []).slice(0, 6);
-
   if (opts.json) {
     console.log(
       JSON.stringify(
         {
-          localNode: {
+          local: {
             hostname,
             ip: localNet.ip,
             interface: localNet.interface,
+            gateway: gatewayIp,
           },
-          gateway: gatewayIp,
           lanPeers,
-          activeRemoteConnections: establishedConns,
         },
         null,
         2
@@ -125,52 +174,36 @@ export async function runTopoCommand(opts: TopoOptions = {}): Promise<void> {
     return;
   }
 
-  console.log(chalk.bold('\n  🔥 pyre topo — Network Topology Map\n'));
+  console.log(chalk.bold('\n  🗺  pyre topo — Network Topology Map\n'));
+  console.log(chalk.bold('  Local Node:'));
+  console.log(`    Hostname:  ${chalk.cyan(hostname)}`);
+  console.log(`    IP:        ${chalk.green(localNet.ip)}`);
+  console.log(`    Interface: ${localNet.interface}`);
+  console.log(`    Gateway:   ${chalk.yellow(gatewayIp)}`);
+  console.log();
 
-  // Local Host Header Box
-  console.log(`  ${chalk.bgCyan.black.bold(' LOCAL HOST ')} ${chalk.bold(hostname)}`);
-  console.log(`    ├── IP Address:       ${chalk.green.bold(localNet.ip || '127.0.0.1')} (${localNet.interface})`);
-  console.log(`    ├── Active RX / TX:   ↓ ${chalk.cyan(localNet.rxBytes ? `${(localNet.rxBytes / 1e6).toFixed(1)} MB` : '0 MB')}  ↑ ${chalk.blue(localNet.txBytes ? `${(localNet.txBytes / 1e6).toFixed(1)} MB` : '0 MB')}`);
-  console.log('    │');
+  console.log(chalk.bold(`  LAN Neighbors & Nodes (${lanPeers.length} discovered via ARP):`));
+  console.log(chalk.dim('  ' + '─'.repeat(74)));
 
-  // Gateway Node
-  console.log(`    ├── ${chalk.yellow.bold('DEFAULT GATEWAY / ROUTER')}`);
-  console.log(`    │    └── IP: ${chalk.yellow(gatewayIp)}  [Route → WAN / Internet]`);
-  console.log('    │');
-
-  // LAN Neighborhood
-  console.log(`    ├── ${chalk.magenta.bold('LAN NEIGHBORS & PEERS')} (${lanPeers.length} discovered via ARP)`);
   if (lanPeers.length === 0) {
-    console.log(`    │    └── ${chalk.dim('No neighboring ARP entries currently cached.')}`);
-  } else {
-    for (let i = 0; i < lanPeers.length; i++) {
-      const peer = lanPeers[i];
-      const isLast = i === lanPeers.length - 1;
-      const prefix = isLast ? '    │    └──' : '    │    ├──';
-      const gwBadge = peer.isGateway ? chalk.yellow(' [Gateway]') : '';
-      let pyreBadge = '';
-      if (peer.pyreP2P) pyreBadge += chalk.hex('#ff5500').bold(' [🔥 pyre P2P :9876]');
-      if (peer.pyreRest) pyreBadge += chalk.hex('#00ffcc').bold(' [🔥 pyre REST :8080]');
-
-      console.log(`${prefix} ${peer.ip.padEnd(16)} ${chalk.dim(peer.mac)}${gwBadge}${pyreBadge}`);
-    }
+    console.log(chalk.dim('    No active ARP neighbors found in cache.\n'));
+    return;
   }
-  console.log('    │');
 
-  // Active External Remote Sockets
-  console.log(`    └── ${chalk.cyan.bold('TOP ACTIVE REMOTE CONNECTIONS')}`);
-  if (establishedConns.length === 0) {
-    console.log(`         └── ${chalk.dim('No active established sockets detected.')}`);
-  } else {
-    for (let i = 0; i < establishedConns.length; i++) {
-      const conn = establishedConns[i];
-      const isLast = i === establishedConns.length - 1;
-      const prefix = isLast ? '         └──' : '         ├──';
-      const connsBadge = chalk.dim(`(${conn.connectionCount} socket${conn.connectionCount > 1 ? 's' : ''})`);
-      console.log(`${prefix} ${chalk.white(conn.host.padEnd(24))} ${chalk.green('ESTABLISHED')} ${connsBadge}`);
-    }
+  for (const peer of lanPeers) {
+    const isGw = peer.isGateway ? chalk.yellow(' [Default Gateway]') : '';
+    const pyreBadge = peer.pyreP2P ? chalk.green.bold(' 🔥 PYRE PEER') : '';
+    const restBadge = peer.pyreRest ? chalk.blue(' (REST API)') : '';
+
+    console.log(`    • ${chalk.bold(peer.ip.padEnd(16))} ${chalk.dim(peer.mac.padEnd(20))} [${peer.interface}]${isGw}${pyreBadge}${restBadge}`);
   }
 
   console.log();
-  console.log(chalk.dim('  Tip: Run "pyre p2p server" on any node to allow automatic live cluster streaming.\n'));
+  const pyrePeers = lanPeers.filter(p => p.pyreP2P);
+  if (pyrePeers.length > 0) {
+    console.log(chalk.green(`  ✔ Found ${pyrePeers.length} active Pyre node(s) on your LAN!`));
+    console.log(chalk.dim(`  Connect using: pyre p2p connect --p2p-host ${pyrePeers[0].ip}\n`));
+  } else {
+    console.log(chalk.dim('  Tip: Pass --scan to sweep and test pyre ports on discovered LAN neighbors.\n'));
+  }
 }

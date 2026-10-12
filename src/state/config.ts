@@ -110,6 +110,8 @@ export interface PyreConfig {
   optimizeIdleThreshold?: string;
   /** Number of most-recently-used apps `pyre optimize apps` always keeps open */
   optimizeKeepRecent?: number;
+  /** Default launch action when pyre is executed without arguments ('live' | 'menu') */
+  defaultAction?: 'live' | 'menu';
 }
 
 export const DEFAULT_CONFIG: Required<PyreConfig> = {
@@ -178,6 +180,7 @@ export const DEFAULT_CONFIG: Required<PyreConfig> = {
   optimizeProtectedApps: [],
   optimizeIdleThreshold: '2h',
   optimizeKeepRecent: 5,
+  defaultAction: 'live',
 };
 
 export function getConfigDir(): string {

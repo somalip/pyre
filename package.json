@@ -21,7 +21,7 @@
     "build": "tsup src/index.ts --format esm --clean",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node dist/index.js --help && tsx --test src/easy_features.test.ts src/platform.test.ts"
+    "test": "node dist/index.js --help && tsx --test src/easy_features.test.ts src/platform.test.ts src/menu.test.ts"
   },
   "engines": {
     "node": ">=18.0.0"

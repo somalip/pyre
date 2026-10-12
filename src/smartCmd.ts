@@ -1,17 +1,20 @@
 /**
  * pyre smart — S.M.A.R.T. disk health inspector.
  *
- * Uses smartctl (from smartmontools, via brew install smartmontools)
- * for detailed SMART data. Falls back to diskutil info when
- * smartctl is not installed.
+ * Uses smartctl (from smartmontools) for detailed SMART data across macOS, Linux, and Windows.
+ * Falls back to native platform inspectors when smartctl is not installed:
+ *  - macOS: diskutil
+ *  - Windows: Get-PhysicalDisk & Get-StorageReliabilityCounter & Win32_DiskDrive
+ *  - Linux: lsblk & hdparm
  */
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import chalk from 'chalk';
+import { runPowerShell } from './monitors/run.js';
 
 const execFileAsync = promisify(execFile);
 
-interface DiskInfo {
+export interface DiskInfo {
   device: string;
   model: string;
   serialNumber: string;
@@ -33,6 +36,74 @@ async function runCmd(cmd: string, args: string[], timeoutMs = 5000): Promise<st
   } catch {
     return '';
   }
+}
+
+export function parseWindowsPhysicalDiskCsv(csvRaw: string): DiskInfo[] {
+  const lines = csvRaw.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const disks: DiskInfo[] = [];
+
+  for (const line of lines.slice(1)) {
+    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+
+    const deviceId = row.DeviceId || row.DeviceID || '0';
+    const friendlyName = row.FriendlyName || row.Model || 'Physical Disk';
+    const serialNumber = row.SerialNumber || '';
+    const mediaType = row.MediaType || row.InterfaceType || '';
+    const healthStatus = (row.HealthStatus || row.Status || '').toUpperCase();
+    const sizeBytes = parseFloat(row.Size) || 0;
+
+    let health: DiskInfo['health'] = 'Unknown';
+    if (healthStatus.includes('HEALTHY') || healthStatus.includes('OK') || healthStatus.includes('PASSED')) {
+      health = 'PASSED';
+    } else if (healthStatus.includes('UNHEALTHY') || healthStatus.includes('ERROR') || healthStatus.includes('FAILED')) {
+      health = 'FAILED';
+    }
+
+    const capacity = sizeBytes > 0
+      ? sizeBytes >= 1e12 ? `${(sizeBytes / 1e12).toFixed(1)} TB`
+        : sizeBytes >= 1e9 ? `${(sizeBytes / 1e9).toFixed(0)} GB`
+        : `${(sizeBytes / 1e6).toFixed(0)} MB`
+      : undefined;
+
+    disks.push({
+      device: `\\\\.\\PhysicalDrive${deviceId}`,
+      model: friendlyName,
+      serialNumber,
+      health,
+      protocol: mediaType,
+      capacity,
+    });
+  }
+
+  return disks;
+}
+
+export function parseWindowsReliabilityCsv(csvRaw: string): Partial<DiskInfo> {
+  const lines = csvRaw.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 2) return {};
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const values = lines[1].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+  const row: Record<string, string> = {};
+  headers.forEach((h, i) => { row[h] = values[i] || ''; });
+
+  const temp = parseFloat(row.Temperature);
+  const wear = parseFloat(row.Wear);
+  const poh = parseFloat(row.PowerOnHours);
+  const readErrors = parseFloat(row.ReadErrorsTotal);
+  const writeErrors = parseFloat(row.WriteErrorsTotal);
+
+  return {
+    tempC: Number.isFinite(temp) && temp > 0 && temp < 120 ? temp : undefined,
+    percentUsed: Number.isFinite(wear) && wear >= 0 && wear <= 100 ? wear : undefined,
+    powerOnHours: Number.isFinite(poh) && poh >= 0 ? poh : undefined,
+    reallocatedSectors: (Number.isFinite(readErrors) ? readErrors : 0) + (Number.isFinite(writeErrors) ? writeErrors : 0),
+  };
 }
 
 async function getPhysicalDisks(): Promise<string[]> {
@@ -59,9 +130,19 @@ async function getPhysicalDisks(): Promise<string[]> {
     return ['/dev/sda'];
   }
 
-  // 3. Windows fallback
+  // 3. Windows native query
   if (process.platform === 'win32') {
-    return ['/dev/sda', '/dev/csmi0,0'];
+    try {
+      const raw = await runPowerShell(
+        `Get-PhysicalDisk -ErrorAction SilentlyContinue | Select-Object -ExpandProperty DeviceId`,
+        ''
+      );
+      const ids = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      if (ids.length > 0) {
+        return ids.map(id => `\\\\.\\PhysicalDrive${id}`);
+      }
+    } catch {}
+    return ['\\\\.\\PhysicalDrive0'];
   }
 
   // 4. macOS fallback: diskutil
@@ -121,6 +202,60 @@ async function collectSmartctlDisk(device: string): Promise<DiskInfo | null> {
   }
 }
 
+async function collectWindowsDiskFallback(device: string): Promise<DiskInfo | null> {
+  const match = device.match(/PhysicalDrive(\d+)/i);
+  const diskNumber = match ? match[1] : '0';
+
+  try {
+    const rawDisk = await runPowerShell(
+      `Get-PhysicalDisk -DeviceId '${diskNumber}' -ErrorAction SilentlyContinue | Select-Object DeviceId, FriendlyName, SerialNumber, MediaType, HealthStatus, Size | ConvertTo-Csv -NoTypeInformation`,
+      ''
+    );
+    const parsed = parseWindowsPhysicalDiskCsv(rawDisk);
+    if (parsed.length > 0) {
+      const info = parsed[0];
+      info.device = device;
+
+      // Query storage reliability counters for wear, temp, and power on hours
+      try {
+        const rawReliability = await runPowerShell(
+          `Get-StorageReliabilityCounter -Disk (Get-Disk -Number ${diskNumber} -ErrorAction SilentlyContinue) -ErrorAction SilentlyContinue | Select-Object Temperature, Wear, PowerOnHours, ReadErrorsTotal, WriteErrorsTotal | ConvertTo-Csv -NoTypeInformation`,
+          ''
+        );
+        const rel = parseWindowsReliabilityCsv(rawReliability);
+        if (rel.tempC !== undefined) info.tempC = rel.tempC;
+        if (rel.percentUsed !== undefined) info.percentUsed = rel.percentUsed;
+        if (rel.powerOnHours !== undefined) info.powerOnHours = rel.powerOnHours;
+        if (rel.reallocatedSectors !== undefined) info.reallocatedSectors = rel.reallocatedSectors;
+      } catch {}
+
+      return info;
+    }
+  } catch {}
+
+  // Fallback to Win32_DiskDrive
+  try {
+    const rawWmi = await runPowerShell(
+      `Get-CimInstance Win32_DiskDrive -Filter "Index = ${diskNumber}" -ErrorAction SilentlyContinue | Select-Object Model, SerialNumber, Status, Size | ConvertTo-Csv -NoTypeInformation`,
+      ''
+    );
+    const lines = rawWmi.split('\n').filter(l => l.trim());
+    if (lines.length >= 2) {
+      const values = lines[1].split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+      const sizeBytes = parseFloat(values[3]) || 0;
+      return {
+        device,
+        model: values[0] || 'Physical Disk',
+        serialNumber: values[1] || '',
+        health: values[2]?.toUpperCase().includes('OK') ? 'PASSED' : 'Unknown',
+        capacity: sizeBytes >= 1e12 ? `${(sizeBytes / 1e12).toFixed(1)} TB` : `${(sizeBytes / 1e9).toFixed(0)} GB`,
+      };
+    }
+  } catch {}
+
+  return null;
+}
+
 async function collectDiskutilFallback(device: string): Promise<DiskInfo | null> {
   const raw = await runCmd('diskutil', ['info', device]);
   if (!raw) return null;
@@ -156,8 +291,11 @@ export async function runSmartCommand(): Promise<void> {
   const hasSmartctl = smartctlVersion.includes('smartmontools');
 
   if (!hasSmartctl) {
-    console.log(chalk.yellow('  ⚠ smartctl not found. Showing basic disk info.'));
-    console.log(chalk.dim('  For full SMART data: ') + chalk.cyan('brew install smartmontools') + '\n');
+    console.log(chalk.yellow('  ⚠ smartctl not found. Showing native storage health metrics.'));
+    const installHint = process.platform === 'win32'
+      ? 'winget install smartmontools'
+      : (process.platform === 'linux' ? 'sudo apt install smartmontools' : 'brew install smartmontools');
+    console.log(chalk.dim('  For full SMART data: ') + chalk.cyan(installHint) + '\n');
   }
 
   const devices = await getPhysicalDisks();
@@ -169,7 +307,8 @@ export async function runSmartCommand(): Promise<void> {
   for (const device of devices) {
     let info: DiskInfo | null = null;
     if (hasSmartctl) info = await collectSmartctlDisk(device);
-    if (!info) info = await collectDiskutilFallback(device);
+    if (!info && process.platform === 'win32') info = await collectWindowsDiskFallback(device);
+    if (!info && process.platform === 'darwin') info = await collectDiskutilFallback(device);
     if (!info) continue;
 
     console.log(chalk.bold(`  ${info.device}`));
@@ -200,6 +339,6 @@ export async function runSmartCommand(): Promise<void> {
   }
 
   if (!hasSmartctl) {
-    console.log(chalk.dim('  Install smartmontools for full SMART attributes.\n'));
+    console.log(chalk.dim('  Install smartmontools for complete SMART attribute dump.\n'));
   }
 }

@@ -41,6 +41,18 @@ interface SyncManifest {
 function getDefaultSyncDir(): string {
   if (process.env.PYRE_SYNC_DIR) return process.env.PYRE_SYNC_DIR;
 
+  // Windows native OneDrive path
+  if (process.platform === 'win32') {
+    const oneDriveEnv = process.env.OneDrive || process.env.OneDriveConsumer;
+    if (oneDriveEnv && fs.existsSync(oneDriveEnv)) {
+      return path.join(oneDriveEnv, 'PyreSync');
+    }
+    const userOneDrive = path.join(os.homedir(), 'OneDrive');
+    if (fs.existsSync(userOneDrive)) {
+      return path.join(userOneDrive, 'PyreSync');
+    }
+  }
+
   // macOS native iCloud Drive path
   const icloudPath = path.join(os.homedir(), 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'PyreSync');
   if (fs.existsSync(path.dirname(icloudPath))) {

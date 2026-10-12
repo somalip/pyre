@@ -3,9 +3,13 @@
  *
  * Gathers metrics on Windows (win32) using Node.js standard APIs,
  * PowerShell CIM/WMI, Windows Performance Counters, tasklist, and netstat.
+ *
+ * Fully supports Intel, AMD, and NVIDIA processors and graphics cards.
  */
 
 import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs';
 import { run, runPowerShell } from '../run.js';
 import type {
   CpuData,
@@ -21,9 +25,13 @@ import type {
   DisplayInfo,
   PowerData,
   ConnectionStateStats,
+  RemoteHostInfo,
+  NetworkProcess,
 } from '../types.js';
 
 let prevNetSample: { rxBytes: number; txBytes: number; ts: number } | null = null;
+let emaLoadAvg: [number, number, number] = [0, 0, 0];
+let lastLoadTime = 0;
 
 function safeParseFloat(s: string | undefined): number {
   if (!s) return 0;
@@ -37,15 +45,7 @@ function safeParseInt(s: string | undefined, def = 0): number {
   return Number.isFinite(n) ? n : def;
 }
 
-function parsePipeOutput(raw: string): string[][] {
-  return raw
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
-    .map(l => l.split('|').map(s => s.trim()));
-}
-
-async function getCimProperty(className: string, property: string): Promise<string> {
+export async function getCimProperty(className: string, property: string): Promise<string> {
   const raw = await runPowerShell(
     `(Get-CimInstance -ClassName ${className} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ${property}) -join '|'`,
     ''
@@ -53,7 +53,7 @@ async function getCimProperty(className: string, property: string): Promise<stri
   return raw.split('|')[0] || '';
 }
 
-async function getCimRow(className: string): Promise<Record<string, string>> {
+export async function getCimRow(className: string): Promise<Record<string, string>> {
   const raw = await runPowerShell(
     `Get-CimInstance -ClassName ${className} -ErrorAction SilentlyContinue | Select-Object -Property * -ExcludeProperty CIM* | ConvertTo-Csv -NoTypeInformation`,
     ''
@@ -93,6 +93,82 @@ export async function collectWindowsSystem(): Promise<{ hostname: string; os: st
   return { hostname, os: osName, uptime };
 }
 
+// ─── CPU & Architecture ────────────────────────────────────────────────────────
+
+export function parseWindowsCpuBrand(rawName: string, fallback: string): string {
+  if (!rawName) return fallback;
+  return rawName
+    .replace(/\s+/g, ' ')
+    .replace(/,\s*$/, '')
+    .trim() || fallback;
+}
+
+export function detectProcessorVendor(brand: string): 'intel' | 'amd' | 'other' {
+  const b = brand.toLowerCase();
+  if (b.includes('amd') || b.includes('ryzen') || b.includes('threadripper') || b.includes('epyc') || b.includes('athlon')) {
+    return 'amd';
+  }
+  if (b.includes('intel') || b.includes('xeon') || /\bcore\s*(i[3579]|ultra|2)/i.test(brand)) {
+    return 'intel';
+  }
+  return 'other';
+}
+
+export function estimateCpuTdp(brand: string): number {
+  const b = brand.toLowerCase();
+  const isAmd = b.includes('amd') || b.includes('ryzen');
+  const isIntel = b.includes('intel') || b.includes('core');
+
+  if (isAmd) {
+    if (b.includes('threadripper') || b.includes('epyc')) return 280;
+    if (b.includes('ryzen 9') || b.includes('7950') || b.includes('7900') || b.includes('5950') || b.includes('5900') || b.includes('9950') || b.includes('9900')) return 170;
+    if (b.includes('ryzen 7') || b.includes('7700') || b.includes('7800x3d') || b.includes('5800') || b.includes('9700')) return 105;
+    if (b.includes('ryzen 5') || b.includes('7600') || b.includes('5600')) return 65;
+    if (b.includes('u') || b.includes('hs') || b.includes('mobile')) return 28;
+    return 65;
+  }
+
+  if (isIntel) {
+    if (b.includes('xeon')) return 205;
+    if (b.includes('i9') || b.includes('14900') || b.includes('13900') || b.includes('12900')) return 125;
+    if (b.includes('i7') || b.includes('14700') || b.includes('13700') || b.includes('12700')) return 125;
+    if (b.includes('i5')) return 65;
+    if (b.includes('i3')) return 60;
+    if (b.includes('ultra')) return 45;
+    if (b.includes('h') || b.includes('hx')) return 45;
+    if (b.includes('u') || b.includes('p')) return 28;
+    return 65;
+  }
+
+  return 65;
+}
+
+export function updateEmaLoadAvg(currentUsage: number, cores: number): [number, number, number] {
+  const activeLoad = Math.round((currentUsage / 100) * cores * 100) / 100;
+  const now = Date.now();
+  if (lastLoadTime === 0) {
+    lastLoadTime = now;
+    emaLoadAvg = [activeLoad, activeLoad, activeLoad];
+    return emaLoadAvg;
+  }
+
+  const dtSec = Math.max((now - lastLoadTime) / 1000, 0.1);
+  lastLoadTime = now;
+
+  // Exponential moving average constants for 1m, 5m, 15m
+  const exp1 = Math.exp(-dtSec / 60);
+  const exp5 = Math.exp(-dtSec / 300);
+  const exp15 = Math.exp(-dtSec / 900);
+
+  emaLoadAvg = [
+    Math.round((activeLoad * (1 - exp1) + emaLoadAvg[0] * exp1) * 100) / 100,
+    Math.round((activeLoad * (1 - exp5) + emaLoadAvg[1] * exp5) * 100) / 100,
+    Math.round((activeLoad * (1 - exp15) + emaLoadAvg[2] * exp15) * 100) / 100,
+  ];
+
+  return emaLoadAvg;
+}
+
 export async function collectWindowsCpu(prevCpuTimesRef: { current: { total: number; idle: number }[] | null }): Promise<CpuData> {
   const cpus = os.cpus();
   const cores = cpus.length || 1;
@@ -103,7 +179,7 @@ export async function collectWindowsCpu(prevCpuTimesRef: { current: { total: num
 
   try {
     const cpuRow = await getCimRow('Win32_Processor');
-    if (cpuRow.Name) brand = cpuRow.Name.trim();
+    if (cpuRow.Name) brand = parseWindowsCpuBrand(cpuRow.Name, brand);
     if (cpuRow.NumberOfCores) physicalCores = safeParseInt(cpuRow.NumberOfCores, cores);
     if (cpuRow.MaxClockSpeed) frequency = safeParseInt(cpuRow.MaxClockSpeed, frequency);
   } catch {
@@ -132,37 +208,10 @@ export async function collectWindowsCpu(prevCpuTimesRef: { current: { total: num
   }
   prevCpuTimesRef.current = current;
 
-  const activeLoad = Math.round((usage / 100) * cores * 100) / 100;
-  const loadAvg = [activeLoad, activeLoad, activeLoad];
+  const loadAvg = updateEmaLoadAvg(usage, cores);
 
-  let temperature: number | undefined;
-
-  try {
-    const raw = await runPowerShell(
-      `(Get-Counter '\Thermal Zone Information(*)\*' -ErrorAction SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 200 -and $_.CookedValue -lt 400 } | Select-Object -First 1 -ExpandProperty CookedValue`,
-      ''
-    ).catch(() => '');
-    const tempK = parseFloat(raw);
-    if (tempK > 200 && tempK < 400) {
-      temperature = Math.round((tempK - 273.15) * 10) / 10;
-    }
-  } catch {
-    // ignore
-  }
-
-  if (temperature === undefined) {
-    try {
-      const rawWmi = await run('wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature 2>nul', '', 1500);
-      const match = rawWmi.match(/(\d{3,4})/);
-      if (match) {
-        const kelvinTenths = parseInt(match[1], 10);
-        const c = Math.round(((kelvinTenths - 2732) / 10) * 10) / 10;
-        if (c >= 15 && c <= 115) temperature = c;
-      }
-    } catch {
-      // ignore
-    }
-  }
+  // Temperature reading across modern CIM and Perf Counters
+  let temperature = await getWindowsCpuTemperature();
 
   return {
     brand,
@@ -175,6 +224,56 @@ export async function collectWindowsCpu(prevCpuTimesRef: { current: { total: num
     coreUsage,
   };
 }
+
+export async function getWindowsCpuTemperature(): Promise<number | undefined> {
+  // 1. Try LibreHardwareMonitor or OpenHardwareMonitor WMI (widely supported on AMD Ryzen and Intel desktops)
+  try {
+    const lhmRaw = await runPowerShell(
+      `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%CPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+      ''
+    );
+    const lhmVal = safeParseFloat(lhmRaw);
+    if (lhmVal >= 15 && lhmVal <= 115) return Math.round(lhmVal * 10) / 10;
+  } catch {}
+
+  try {
+    const ohmRaw = await runPowerShell(
+      `Get-CimInstance -Namespace root/OpenHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%CPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+      ''
+    );
+    const ohmVal = safeParseFloat(ohmRaw);
+    if (ohmVal >= 15 && ohmVal <= 115) return Math.round(ohmVal * 10) / 10;
+  } catch {}
+
+  // 2. Try PowerShell CIM MSAcpi_ThermalZoneTemperature (modern Windows 10/11 replacement for wmic)
+  try {
+    const cimRaw = await runPowerShell(
+      `(Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty CurrentTemperature)`,
+      ''
+    );
+    const kelvinTenths = safeParseInt(cimRaw);
+    if (kelvinTenths > 2732 && kelvinTenths < 4200) {
+      const c = Math.round(((kelvinTenths - 2732) / 10) * 10) / 10;
+      if (c >= 15 && c <= 115) return c;
+    }
+  } catch {}
+
+  // 3. Try Windows Performance Counter
+  try {
+    const raw = await runPowerShell(
+      `(Get-Counter '\\Thermal Zone Information(*)\\*' -ErrorAction SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 200 -and $_.CookedValue -lt 400 } | Select-Object -First 1 -ExpandProperty CookedValue`,
+      ''
+    );
+    const tempK = safeParseFloat(raw);
+    if (tempK > 200 && tempK < 400) {
+      return Math.round((tempK - 273.15) * 10) / 10;
+    }
+  } catch {}
+
+  return undefined;
+}
+
+// ─── Memory ───────────────────────────────────────────────────────────────────
 
 export async function collectWindowsMemory(): Promise<MemoryData> {
   const total = os.totalmem();
@@ -220,6 +319,8 @@ export async function collectWindowsMemory(): Promise<MemoryData> {
     pressureLevel,
   };
 }
+
+// ─── Disks ─────────────────────────────────────────────────────────────────────
 
 export async function collectWindowsDisk(): Promise<DiskData[]> {
   try {
@@ -278,6 +379,8 @@ function formatBytesStr(bytes: number): string {
   return (bytes / 1024).toFixed(0) + 'K';
 }
 
+// ─── Battery ───────────────────────────────────────────────────────────────────
+
 export async function collectWindowsBattery(): Promise<BatteryData | null> {
   try {
     const raw = await runPowerShell(
@@ -317,67 +420,53 @@ export async function collectWindowsBattery(): Promise<BatteryData | null> {
   }
 }
 
+// ─── Thermal & Power ───────────────────────────────────────────────────────────
+
 export async function collectWindowsThermal(): Promise<ThermalData> {
   const temperatures: Record<string, number | null> = {};
 
-  let tempC: number | undefined;
-
-  try {
-    const raw = await runPowerShell(
-      `(Get-Counter '\Thermal Zone Information(*)\*' -ErrorAction SilentlyContinue).CounterSamples | Where-Object { $_.CookedValue -gt 200 -and $_.CookedValue -lt 400 } | Select-Object -First 1 -ExpandProperty CookedValue`,
-      ''
-    ).catch(() => '');
-    const tempK = parseFloat(raw);
-    if (tempK > 200 && tempK < 400) {
-      tempC = Math.round((tempK - 273.15) * 10) / 10;
-      temperatures['cpu'] = tempC;
-    }
-  } catch {
-    // ignore
+  const cpuTemp = await getWindowsCpuTemperature();
+  if (cpuTemp !== undefined) {
+    temperatures['cpu'] = cpuTemp;
   }
 
-  if (tempC === undefined) {
-    try {
-      const rawWmi = await run('wmic /namespace:\\\\root\\wmi PATH MSAcpi_ThermalZoneTemperature get CurrentTemperature 2>nul', '', 1500);
-      const match = rawWmi.match(/(\d{3,4})/);
-      if (match) {
-        const kelvinTenths = parseInt(match[1], 10);
-        const c = Math.round(((kelvinTenths - 2732) / 10) * 10) / 10;
-        if (c >= 15 && c <= 115) {
-          tempC = c;
-          temperatures['cpu'] = c;
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }
-
+  // GPU temperature across NVIDIA / AMD / Intel
   let gpuTemp: number | undefined;
+
+  // Try nvidia-smi
   try {
-    const gpuRaw = await runPowerShell(
-      `(Get-Counter '\GPU(*)\*' -ErrorAction SilentlyContinue).CounterSamples | Where-Object { $_.CounterName -match 'Temperature' -and $_.CookedValue -gt 0 } | Select-Object -First 1 -ExpandProperty CookedValue`,
-      ''
-    ).catch(() => '');
-    gpuTemp = parseFloat(gpuRaw);
-    if (gpuTemp > 0 && gpuTemp < 150) {
-      temperatures['gpu'] = Math.round(gpuTemp * 10) / 10;
-    }
-  } catch {
-    // ignore
+    const nvRaw = await runNvidiaSmiQuery('temperature.gpu');
+    const t = safeParseFloat(nvRaw);
+    if (t > 0 && t < 125) gpuTemp = t;
+  } catch {}
+
+  // Try LibreHardwareMonitor GPU temperature
+  if (gpuTemp === undefined) {
+    try {
+      const lhmGpu = await runPowerShell(
+        `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%GPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+        ''
+      );
+      const t = safeParseFloat(lhmGpu);
+      if (t > 0 && t < 125) gpuTemp = t;
+    } catch {}
   }
 
-  const cpuTemp = tempC ?? gpuTemp;
+  if (gpuTemp !== undefined) {
+    temperatures['gpu'] = gpuTemp;
+  }
+
+  const primaryTemp = cpuTemp ?? gpuTemp;
   let state = 'Nominal';
   let pressureLevel = 0;
-  if (cpuTemp !== undefined) {
-    if (cpuTemp >= 100) {
+  if (primaryTemp !== undefined) {
+    if (primaryTemp >= 100) {
       state = 'Critical';
       pressureLevel = 3;
-    } else if (cpuTemp >= 90) {
+    } else if (primaryTemp >= 90) {
       state = 'Serious';
       pressureLevel = 2;
-    } else if (cpuTemp >= 80) {
+    } else if (primaryTemp >= 80) {
       state = 'Fair';
       pressureLevel = 1;
     }
@@ -385,7 +474,7 @@ export async function collectWindowsThermal(): Promise<ThermalData> {
 
   return {
     state,
-    detail: cpuTemp !== undefined ? `${state} (${cpuTemp}°C)` : state,
+    detail: primaryTemp !== undefined ? `${state} (${primaryTemp}°C)` : state,
     pressureLevel,
     temperatures: Object.keys(temperatures).length ? temperatures : undefined,
   };
@@ -394,6 +483,7 @@ export async function collectWindowsThermal(): Promise<ThermalData> {
 export async function collectWindowsPower(): Promise<PowerData | null> {
   const power: PowerData = {};
 
+  // 1. Try battery discharge wattage
   try {
     const batRaw = await runPowerShell(
       `$bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue; if ($bat) { "$($bat.DischargeRate)|$($bat.BatteryStatus)" } else { '|0' }`,
@@ -406,36 +496,58 @@ export async function collectWindowsPower(): Promise<PowerData | null> {
     if (dischargeRate > 0 && (statusCode === 1 || statusCode === 2)) {
       power.combinedWatts = Math.round((dischargeRate / 1000) * 100) / 100;
     }
-  } catch {
-    // ignore
+  } catch {}
+
+  // 2. Try LibreHardwareMonitor exact power readings for CPU & GPU
+  try {
+    const lhmCpu = await runPowerShell(
+      `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Power' and Name like '%CPU Package%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+      ''
+    );
+    const cpuP = safeParseFloat(lhmCpu);
+    if (cpuP > 0) power.cpuWatts = Math.round(cpuP * 100) / 100;
+
+    const lhmGpu = await runPowerShell(
+      `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Power' and Name like '%GPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+      ''
+    );
+    const gpuP = safeParseFloat(lhmGpu);
+    if (gpuP > 0) power.gpuWatts = Math.round(gpuP * 100) / 100;
+  } catch {}
+
+  // 3. NVIDIA SMI power draw fallback
+  if (!power.gpuWatts) {
+    try {
+      const nvPower = await runNvidiaSmiQuery('power.draw');
+      const p = safeParseFloat(nvPower);
+      if (p > 0) power.gpuWatts = Math.round(p * 100) / 100;
+    } catch {}
   }
 
-  try {
-    const cpu = os.cpus();
-    const usage = cpu.length > 0 ? Math.round(cpu.reduce((a, c) => a + (c.times.user + c.times.nice + c.times.sys + c.times.irq - c.times.idle) / (c.times.user + c.times.nice + c.times.sys + c.times.idle + c.times.irq), 0) / cpu.length * 100) : 0;
-    const tdpWatts = 65;
-    if (usage > 0) {
-      power.cpuWatts = Math.round((usage / 100) * tdpWatts * 100) / 100;
-    }
-  } catch {
-    // ignore
-  }
+  // 4. CPU usage TDP estimation fallback if direct sensor unavailable
+  if (!power.cpuWatts) {
+    try {
+      const cpu = os.cpus();
+      const brand = cpu[0]?.model || '';
+      const tdpWatts = estimateCpuTdp(brand);
+      const usage = cpu.length > 0
+        ? Math.round(
+            (cpu.reduce(
+              (a, c) =>
+                a +
+                (c.times.user + c.times.nice + c.times.sys + c.times.irq - c.times.idle) /
+                  (c.times.user + c.times.nice + c.times.sys + c.times.idle + c.times.irq),
+              0
+            ) /
+              cpu.length) *
+              100
+          )
+        : 0;
 
-  try {
-    const nvRaw = await run('nvidia-smi --query-gpu=power.draw,utilization.gpu --format=csv,noheader,nounits 2>nul', '').catch(() => '');
-    const nvLines = nvRaw.split('\n').filter(l => l.trim());
-    for (const line of nvLines) {
-      const parts = line.trim().split(',').map(s => s.trim());
-      const pwr = parseFloat(parts[0]);
-      if (pwr > 0) {
-        power.gpuWatts = Math.round(pwr * 100) / 100;
-        if (!power.combinedWatts) power.combinedWatts = power.gpuWatts;
-        else power.combinedWatts = Math.round((power.combinedWatts + power.gpuWatts) * 100) / 100;
-        break;
+      if (usage > 0) {
+        power.cpuWatts = Math.round((usage / 100) * tdpWatts * 100) / 100;
       }
-    }
-  } catch {
-    // ignore
+    } catch {}
   }
 
   if (power.combinedWatts || power.cpuWatts || power.gpuWatts) {
@@ -448,117 +560,240 @@ export async function collectWindowsPower(): Promise<PowerData | null> {
   return null;
 }
 
-async function getNvidiaGpu(): Promise<GpuData | null> {
-  try {
-    const nvRaw = await run('nvidia-smi --query-gpu=gpu_name,memory.total,utilization.gpu,temperature.gpu,power.draw --format=csv,noheader,nounits 2>nul', '');
-    const nvLines = nvRaw.split('\n').filter(l => l.trim());
-    if (nvLines.length > 0) {
-      const parts = nvLines[0].trim().split(',').map(s => s.trim());
-      if (parts.length >= 3) {
-        const model = parts[0];
-        const memory = (parseFloat(parts[1]) || 0) * 1024 * 1024;
-        const utilization = Math.min(100, Math.max(0, Math.round(parseFloat(parts[2]) || 0)));
-        const temperature = parts[3] ? parseFloat(parts[3]) : undefined;
-        const powerDraw = parts[4] ? parseFloat(parts[4]) : undefined;
-        return {
-          model,
-          memory,
-          utilization,
-          temperature: Number.isFinite(temperature as number) ? temperature : undefined,
-          processes: 0,
-          powerDraw: Number.isFinite(powerDraw as number) ? powerDraw : undefined,
-        };
-      }
-    }
-  } catch {
-    // ignore
+// ─── GPU Telemetry Across Intel, AMD, NVIDIA ─────────────────────────────────
+
+async function findNvidiaSmiPath(): Promise<string> {
+  const commonPaths = [
+    'nvidia-smi',
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', 'NVIDIA Corporation', 'NVSMI', 'nvidia-smi.exe'),
+    path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'nvidia-smi.exe'),
+  ];
+  for (const p of commonPaths) {
+    try {
+      const test = await run(`"${p}" -L 2>nul`, '');
+      if (test.includes('GPU 0:')) return p;
+    } catch {}
   }
+  return 'nvidia-smi';
+}
+
+async function runNvidiaSmiQuery(query: string): Promise<string> {
+  const smiPath = await findNvidiaSmiPath();
+  return (await run(`"${smiPath}" --query-gpu=${query} --format=csv,noheader,nounits 2>nul`, '')).trim();
+}
+
+export function parseNvidiaSmiOutput(csv: string): GpuData | null {
+  const lines = csv.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length === 0) return null;
+  const parts = lines[0].split(',').map(s => s.trim());
+  if (parts.length < 3) return null;
+
+  const model = parts[0];
+  const memory = (safeParseFloat(parts[1])) * 1024 * 1024;
+  const utilization = Math.min(100, Math.max(0, Math.round(safeParseFloat(parts[2]))));
+  const temperature = parts[3] ? safeParseFloat(parts[3]) : undefined;
+  const powerDraw = parts[4] ? safeParseFloat(parts[4]) : undefined;
+
+  return {
+    model,
+    memory,
+    utilization,
+    temperature: Number.isFinite(temperature) && (temperature as number) > 0 ? temperature : undefined,
+    processes: 0,
+    powerDraw: Number.isFinite(powerDraw) && (powerDraw as number) > 0 ? powerDraw : undefined,
+  };
+}
+
+export async function getNvidiaGpu(): Promise<GpuData | null> {
+  try {
+    const raw = await runNvidiaSmiQuery('gpu_name,memory.total,utilization.gpu,temperature.gpu,power.draw');
+    const parsed = parseNvidiaSmiOutput(raw);
+    if (parsed) {
+      // Query active compute / graphics process count
+      try {
+        const smiPath = await findNvidiaSmiPath();
+        const procList = await run(`"${smiPath}" --query-compute-apps=pid --format=csv,noheader 2>nul`, '');
+        const pids = procList.split('\n').filter(l => l.trim().length > 0);
+        parsed.processes = pids.length;
+      } catch {}
+      return parsed;
+    }
+  } catch {}
   return null;
 }
 
-async function getWmiGpu(): Promise<GpuData | null> {
+export interface WindowsVideoControllerInfo {
+  name: string;
+  adapterRam: number;
+  driverVersion: string;
+  videoProcessor: string;
+  pnpDeviceId: string;
+}
+
+export function parseWindowsVideoControllers(csvRaw: string): WindowsVideoControllerInfo[] {
+  const lines = csvRaw.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const controllers: WindowsVideoControllerInfo[] = [];
+
+  for (const line of lines.slice(1)) {
+    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+
+    const name = row.Name || row.VideoProcessor || 'Windows Display Adapter';
+    const ram = safeParseInt(row.AdapterRAM, 0);
+    controllers.push({
+      name,
+      adapterRam: ram,
+      driverVersion: row.DriverVersion || '',
+      videoProcessor: row.VideoProcessor || '',
+      pnpDeviceId: row.PNPDeviceID || '',
+    });
+  }
+
+  return controllers;
+}
+
+export function prioritizeGpuControllers(controllers: WindowsVideoControllerInfo[]): WindowsVideoControllerInfo[] {
+  // Sort discrete cards (NVIDIA, AMD Radeon RX, Intel Arc) before integrated adapters (Intel UHD, AMD Radeon(TM) Graphics)
+  return [...controllers].sort((a, b) => {
+    const aName = a.name.toLowerCase();
+    const bName = b.name.toLowerCase();
+    const aIsDiscrete = aName.includes('rtx') || aName.includes('gtx') || aName.includes('geforce') ||
+      aName.includes('radeon rx') || aName.includes('arc');
+    const bIsDiscrete = bName.includes('rtx') || bName.includes('gtx') || bName.includes('geforce') ||
+      bName.includes('radeon rx') || bName.includes('arc');
+    if (aIsDiscrete && !bIsDiscrete) return -1;
+    if (!aIsDiscrete && bIsDiscrete) return 1;
+    return b.adapterRam - a.adapterRam;
+  });
+}
+
+export async function getWindowsGpu64BitVram(): Promise<number> {
+  // Win32_VideoController clamps AdapterRAM to 4GB (UInt32).
+  // Read exact 64-bit VRAM from Registry Display Class hardware information:
   try {
     const raw = await runPowerShell(
-      `Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM, DriverVersion, VideoProcessor | ConvertTo-Csv -NoTypeInformation`,
+      `Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0*' -ErrorAction SilentlyContinue | Where-Object { $_.HardwareInformation.qwMemorySize -gt 0 } | Select-Object -First 1 -ExpandProperty HardwareInformation.qwMemorySize`,
       ''
     );
-    const lines = raw.split('\n').filter(l => l.trim().length > 0);
-    if (lines.length >= 2) {
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-      const values = lines[1].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const row: Record<string, string> = {};
-      headers.forEach((h, i) => { row[h] = values[i] || ''; });
+    const bytes = safeParseInt(raw, 0);
+    if (bytes > 0) return bytes;
+  } catch {}
 
-      const name = row.Name || row.VideoProcessor || 'Windows Display Adapter';
-      const ram = safeParseInt(row.AdapterRAM);
-      return {
-        model: name,
-        memory: ram,
-        utilization: 0,
-        processes: 0,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
+  // Fallback to Performance Counters Dedicated Usage + Free
+  try {
+    const rawDedicated = await runPowerShell(
+      `(Get-Counter '\\GPU Adapter Memory(*)\\Dedicated Usage' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Sum | Select-Object -ExpandProperty Sum`,
+      ''
+    );
+    const bytes = safeParseFloat(rawDedicated);
+    if (bytes > 0) return bytes;
+  } catch {}
+
+  return 0;
 }
 
-async function getPerfCounterGpu(): Promise<GpuData | null> {
+export async function getWindowsGpu3dUtilization(): Promise<{ utilization: number; processCount: number }> {
   try {
     const raw = await runPowerShell(
-      `$engines = Get-Counter '\GPU Engine(*)\*' -ErrorAction SilentlyContinue; if ($engines) { $engines.CounterSamples | Where-Object { $_.CounterName -match 'Utilization Percentage|GPU Time' -and $_.CookedValue -gt 0 } | ForEach-Object { "$($_.InstanceName)|$($_.CounterName)|$($_.CookedValue)" } }`,
-      ''
-    ).catch(() => '');
-    if (!raw) return null;
-
-    const lines = raw.split('\n').filter(l => l.trim());
-    if (lines.length === 0) return null;
-
-    const gpuGroups = new Map<string, { name: string; values: number[] }>();
-    for (const line of lines) {
-      const [instanceName, counterName, valueStr] = line.split('|');
-      const baseName = instanceName.replace(/\s*\(\d+\)\s*$/, '').trim();
-      if (!gpuGroups.has(baseName)) {
-        gpuGroups.set(baseName, { name: baseName, values: [] });
-      }
-      gpuGroups.get(baseName)!.values.push(parseFloat(valueStr) || 0);
-    }
-
-    let bestGpu: { name: string; util: number } | null = null;
-    for (const group of gpuGroups.values()) {
-      const total = group.values.reduce((a, b) => a + b, 0);
-      const util = Math.min(100, Math.round(total));
-      if (!bestGpu || util > bestGpu.util) {
-        bestGpu = { name: group.name, util };
-      }
-    }
-
-    if (bestGpu) {
-      return {
-        model: bestGpu.name,
-        memory: 0,
-        utilization: bestGpu.util,
-        processes: 0,
-      };
-    }
+      `$samples = (Get-Counter '\\GPU Engine(*engtype_3D*)\\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples; if ($samples) { $activePids = $samples | Where-Object { $_.CookedValue -gt 0 } | ForEach-Object { if ($_.InstanceName -match 'pid_(\\d+)') { $matches[1] } } | Select-Object -Unique; $total = ($samples | Measure-Object -Property CookedValue -Sum).Sum; "$total|$($activePids.Count)" } else { '0|0' }`,
+      '0|0'
+    );
+    const [utilStr, procCountStr] = raw.split('|');
+    const util = Math.min(100, Math.max(0, Math.round(safeParseFloat(utilStr))));
+    const processCount = safeParseInt(procCountStr, 0);
+    return { utilization: util, processCount };
   } catch {
-    // ignore
+    return { utilization: 0, processCount: 0 };
   }
-  return null;
 }
 
 export async function collectWindowsGpu(): Promise<GpuData | null> {
+  // 1. NVIDIA via nvidia-smi (first-class support when available)
   const nv = await getNvidiaGpu();
   if (nv) return nv;
 
-  const perf = await getPerfCounterGpu();
-  if (perf) return perf;
+  // 2. AMD / Intel / General Windows GPUs
+  try {
+    const rawControllers = await runPowerShell(
+      `Get-CimInstance Win32_VideoController | Select-Object Name, AdapterRAM, DriverVersion, VideoProcessor, PNPDeviceID | ConvertTo-Csv -NoTypeInformation`,
+      ''
+    );
+    const controllers = parseWindowsVideoControllers(rawControllers);
+    if (controllers.length === 0) return null;
 
-  const wmi = await getWmiGpu();
-  if (wmi) return wmi;
+    const prioritized = prioritizeGpuControllers(controllers);
+    const bestController = prioritized[0];
 
-  return null;
+    // Read 64-bit VRAM (avoids 4GB uint32 clamp on RX 7900, Arc A770, etc.)
+    let vramBytes = await getWindowsGpu64BitVram();
+    if (vramBytes === 0 && bestController.adapterRam > 0) {
+      vramBytes = bestController.adapterRam;
+    }
+
+    // Read real 3D engine utilization and process count
+    const { utilization, processCount } = await getWindowsGpu3dUtilization();
+
+    // Query temperature for AMD / Intel via LibreHardwareMonitor or Windows Thermal
+    let temperature: number | undefined;
+    try {
+      const rawTemp = await runPowerShell(
+        `Get-CimInstance -Namespace root/LibreHardwareMonitor -ClassName Sensor -Filter "SensorType = 'Temperature' and Name like '%GPU%'" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Value`,
+        ''
+      );
+      const t = safeParseFloat(rawTemp);
+      if (t > 0 && t < 125) temperature = t;
+    } catch {}
+
+    return {
+      model: bestController.name,
+      memory: vramBytes,
+      utilization,
+      temperature,
+      processes: processCount,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Network & Socket Monitoring (`pyre netusage`) ─────────────────────────────
+
+export interface WindowsTcpConnection {
+  localPort: number;
+  remoteAddress: string;
+  remotePort: number;
+  state: string;
+  owningPid: number;
+}
+
+export function parseWindowsTcpConnections(csvRaw: string): WindowsTcpConnection[] {
+  const lines = csvRaw.split('\n').filter(l => l.trim().length > 0);
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  const connections: WindowsTcpConnection[] = [];
+
+  for (const line of lines.slice(1)) {
+    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+
+    const localPort = safeParseInt(row.LocalPort, 0);
+    const remoteAddress = row.RemoteAddress || '';
+    const remotePort = safeParseInt(row.RemotePort, 0);
+    const state = row.State || '';
+    const owningPid = safeParseInt(row.OwningProcess, 0);
+
+    if (owningPid > 0) {
+      connections.push({ localPort, remoteAddress, remotePort, state, owningPid });
+    }
+  }
+
+  return connections;
 }
 
 export async function collectWindowsNetwork(): Promise<NetworkData> {
@@ -585,9 +820,7 @@ export async function collectWindowsNetwork(): Promise<NetworkData> {
       ''
     );
     if (raw) iface = raw;
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   try {
     const netstatE = await run('netstat -e 2>nul', '', 1500);
@@ -602,9 +835,7 @@ export async function collectWindowsNetwork(): Promise<NetworkData> {
         txPackets += parseInt(parts[2], 10) || 0;
       }
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   const now = Date.now();
   let rxRate = 0;
@@ -617,6 +848,9 @@ export async function collectWindowsNetwork(): Promise<NetworkData> {
   prevNetSample = { rxBytes, txBytes, ts: now };
 
   const connectionStates = await getWindowsConnectionStates();
+
+  // Populate listening ports and remote hosts
+  const { listeningPorts, topRemoteHosts } = await getWindowsSocketDetails();
 
   return {
     interface: iface,
@@ -633,42 +867,98 @@ export async function collectWindowsNetwork(): Promise<NetworkData> {
       udp: { connections: 0, rxBytes: 0, txBytes: 0 },
     },
     connectionStates,
-    listeningPorts: [],
+    listeningPorts,
     establishedConnections: connectionStates.established,
-    topRemoteHosts: [],
+    topRemoteHosts,
   };
+}
+
+async function getWindowsSocketDetails(): Promise<{ listeningPorts: number[]; topRemoteHosts: RemoteHostInfo[] }> {
+  const listeningPorts: number[] = [];
+  const topRemoteHosts: RemoteHostInfo[] = [];
+
+  try {
+    const raw = await runPowerShell(
+      `$conns = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($conns) { $ports = ($conns | Where-Object { $_.State -eq 'Listen' } | Select-Object -ExpandProperty LocalPort -Unique) -join ','; $hosts = ($conns | Where-Object { $_.State -eq 'Established' -and $_.RemoteAddress -ne '127.0.0.1' -and $_.RemoteAddress -ne '0.0.0.0' } | Group-Object RemoteAddress | Sort-Object Count -Descending | Select-Object -First 10 | ForEach-Object { "$($_.Name):$($_.Count)" }) -join '|'; "$ports#$hosts" } else { '#' }`,
+      '#'
+    );
+    const [portsPart, hostsPart] = raw.split('#');
+    if (portsPart) {
+      portsPart.split(',').forEach(p => {
+        const portNum = safeParseInt(p);
+        if (portNum > 0 && !listeningPorts.includes(portNum)) listeningPorts.push(portNum);
+      });
+    }
+    if (hostsPart) {
+      hostsPart.split('|').forEach(h => {
+        const [ip, countStr] = h.split(':');
+        if (ip) {
+          topRemoteHosts.push({
+            ip,
+            connections: safeParseInt(countStr, 1),
+            activePids: [],
+          });
+        }
+      });
+    }
+  } catch {}
+
+  return { listeningPorts, topRemoteHosts };
 }
 
 async function getWindowsConnectionStates(): Promise<ConnectionStateStats> {
   const stats: ConnectionStateStats = { established: 0, listening: 0, timeWait: 0, closeWait: 0, other: 0 };
   try {
     const raw = await runPowerShell(
-      `Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count`,
-      '0'
+      `$c = Get-NetTCPConnection -ErrorAction SilentlyContinue; if ($c) { $groups = $c | Group-Object State; ($groups | ForEach-Object { "$($_.Name)=$($_.Count)" }) -join '|' } else { '' }`,
+      ''
     );
-    stats.established = safeParseInt(raw, 0);
-
-    const listenRaw = await runPowerShell(
-      `Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count`,
-      '0'
-    );
-    stats.listening = safeParseInt(listenRaw, 0);
-
-    const twRaw = await runPowerShell(
-      `Get-NetTCPConnection -State TimeWait -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count`,
-      '0'
-    );
-    stats.timeWait = safeParseInt(twRaw, 0);
-
-    const cwRaw = await runPowerShell(
-      `Get-NetTCPConnection -State CloseWait -ErrorAction SilentlyContinue | Measure-Object | Select-Object -ExpandProperty Count`,
-      '0'
-    );
-    stats.closeWait = safeParseInt(cwRaw, 0);
-  } catch {
-    // ignore
-  }
+    for (const pair of raw.split('|')) {
+      const [state, countStr] = pair.split('=');
+      const count = safeParseInt(countStr, 0);
+      if (state === 'Established') stats.established = count;
+      else if (state === 'Listen') stats.listening = count;
+      else if (state === 'TimeWait') stats.timeWait = count;
+      else if (state === 'CloseWait') stats.closeWait = count;
+      else if (count > 0) stats.other += count;
+    }
+  } catch {}
   return stats;
+}
+
+export function buildWindowsNetworkProcesses(
+  conns: WindowsTcpConnection[],
+  procMap: Map<number, string>
+): NetworkProcess[] {
+  const agg = new Map<number, NetworkProcess>();
+
+  for (const c of conns) {
+    const pid = c.owningPid;
+    const name = procMap.get(pid) || `pid-${pid}`;
+    let item = agg.get(pid);
+    if (!item) {
+      item = {
+        pid,
+        command: name,
+        rxBytes: 0,
+        txBytes: 0,
+        rxPackets: 0,
+        txPackets: 0,
+        connections: [],
+      };
+      agg.set(pid, item);
+    }
+    if (c.remoteAddress && c.remoteAddress !== '0.0.0.0') {
+      item.connections.push({
+        proto: 'tcp',
+        localAddress: `127.0.0.1:${c.localPort}`,
+        remoteAddress: `${c.remoteAddress}:${c.remotePort}`,
+        state: c.state,
+      });
+    }
+  }
+
+  return Array.from(agg.values()).sort((a, b) => b.connections.length - a.connections.length);
 }
 
 export async function collectWindowsPackets(): Promise<PacketData | null> {
@@ -690,11 +980,34 @@ export async function collectWindowsPackets(): Promise<PacketData | null> {
         txPackets += parseInt(parts[2], 10) || 0;
       }
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 
   const connectionStates = await getWindowsConnectionStates();
+  const { listeningPorts } = await getWindowsSocketDetails();
+
+  // Populate per-process network socket metrics for `pyre netusage` and packet panel
+  let allProcesses: NetworkProcess[] = [];
+  try {
+    const rawConns = await runPowerShell(
+      `Get-NetTCPConnection -State Established,Listen -ErrorAction SilentlyContinue | Select-Object LocalPort, RemoteAddress, RemotePort, State, OwningProcess | ConvertTo-Csv -NoTypeInformation`,
+      ''
+    );
+    const conns = parseWindowsTcpConnections(rawConns);
+
+    // Build PID to process command name mapping
+    const rawProcs = await runPowerShell(
+      `Get-Process -ErrorAction SilentlyContinue | Select-Object Id, ProcessName | ForEach-Object { "$($_.Id)|$($_.ProcessName)" }`,
+      ''
+    );
+    const procMap = new Map<number, string>();
+    for (const line of rawProcs.split('\n')) {
+      const [idStr, name] = line.trim().split('|');
+      const pid = safeParseInt(idStr);
+      if (pid > 0 && name) procMap.set(pid, name);
+    }
+
+    allProcesses = buildWindowsNetworkProcesses(conns, procMap);
+  } catch {}
 
   return {
     totalPackets: rxPackets + txPackets,
@@ -703,73 +1016,91 @@ export async function collectWindowsPackets(): Promise<PacketData | null> {
     rxRate: 0,
     txRate: 0,
     connections: connectionStates.established,
-    topProcesses: [],
+    topProcesses: allProcesses.slice(0, 10),
     interfaces: [{ iface: 'Primary', rxPackets, txPackets, rxBytes, txBytes }],
-    allProcesses: [],
+    allProcesses,
     connectionStates,
-    listeningPorts: [],
+    listeningPorts,
   };
 }
 
+// ─── Process Collection with ParentProcessId (`ppid`) for Tree View ─────────────
+
 const winProcCache = new Map<number, { user: number; kernel: number; ts: number }>();
+
+export function parseWindowsProcessCsv(
+  csvRaw: string,
+  totalMem: number,
+  cache: Map<number, { user: number; kernel: number; ts: number }>,
+  now: number
+): ProcessData[] {
+  const lines = csvRaw.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('"Name"'));
+  const procs: ProcessData[] = [];
+
+  for (const line of lines) {
+    const parts = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+    if (parts.length < 6) continue;
+
+    const name = parts[0];
+    const pid = safeParseInt(parts[1], 0);
+    const ppid = safeParseInt(parts[2], 0);
+    const threads = safeParseInt(parts[3], 0);
+    const memBytes = safeParseInt(parts[4], 0);
+    const userTime = safeParseInt(parts[5], 0);
+    const kernelTime = safeParseInt(parts[6], 0);
+    const commandLine = parts[7] || name;
+
+    if (!pid || pid <= 0) continue;
+
+    const totalTime = userTime + kernelTime;
+    let cpu = 0;
+
+    const prev = cache.get(pid);
+    if (prev) {
+      const dt = now - prev.ts;
+      if (dt > 0) {
+        const timeDelta = totalTime - (prev.user + prev.kernel);
+        if (timeDelta > 0) {
+          const cpuSeconds = timeDelta / 10_000_000;
+          cpu = Math.min(100, Math.round((cpuSeconds / dt) * 10000) / 100);
+        }
+      }
+    }
+    cache.set(pid, { user: userTime, kernel: kernelTime, ts: now });
+
+    const memPct = totalMem > 0 ? Math.round((memBytes / totalMem) * 1000) / 10 : 0;
+    const isGpuOrMl = /gpu|vulkan|cuda|ollama|llama|torch|python|nvidia|amd|radeon|directx|game/i.test(name) ||
+      /python|node|ollama/i.test(commandLine);
+
+    procs.push({
+      pid,
+      ppid,
+      user: 'SYSTEM',
+      cpu,
+      mem: memPct,
+      state: 'R',
+      threads,
+      runtime: 0,
+      command: name,
+      isGpuOrMlAttributed: isGpuOrMl,
+    });
+  }
+
+  procs.sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
+  return procs;
+}
 
 export async function collectWindowsProcesses(limit?: number): Promise<ProcessData[]> {
   try {
+    // Explicitly query ParentProcessId for process tree view (`pyre --tree`)
     const raw = await runPowerShell(
-      `Get-CimInstance Win32_Process | Select-Object Name, ProcessId, ThreadCount, WorkingSetSize, UserModeTime, KernelModeTime | ConvertTo-Csv -NoTypeInformation`,
+      `Get-CimInstance Win32_Process | Select-Object Name, ProcessId, ParentProcessId, ThreadCount, WorkingSetSize, UserModeTime, KernelModeTime, CommandLine | ConvertTo-Csv -NoTypeInformation`,
       ''
     );
-    const lines = raw.split('\n').filter(l => l.trim().length > 0 && !l.startsWith('"Name"'));
     const now = Date.now();
-    const procs: ProcessData[] = [];
     const totalMem = os.totalmem();
+    const procs = parseWindowsProcessCsv(raw, totalMem, winProcCache, now);
 
-    for (const line of lines) {
-      const parts = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
-      if (parts.length < 6) continue;
-      const name = parts[0];
-      const pid = safeParseInt(parts[1], 0);
-      const threads = safeParseInt(parts[2], 0);
-      const memBytes = safeParseInt(parts[3], 0);
-      const userTime = safeParseInt(parts[4], 0);
-      const kernelTime = safeParseInt(parts[5], 0);
-
-      if (!pid || pid <= 0) continue;
-
-      const totalTime = userTime + kernelTime;
-      let cpu = 0;
-
-      const prev = winProcCache.get(pid);
-      if (prev) {
-        const dt = now - prev.ts;
-        if (dt > 0) {
-          const timeDelta = totalTime - (prev.user + prev.kernel);
-          if (timeDelta > 0) {
-            const cpuSeconds = timeDelta / 10_000_000;
-            cpu = Math.min(100, Math.round((cpuSeconds / dt) * 10000) / 100);
-          }
-        }
-      }
-      winProcCache.set(pid, { user: userTime, kernel: kernelTime, ts: now });
-
-      const memPct = totalMem > 0 ? Math.round((memBytes / totalMem) * 1000) / 10 : 0;
-      const isGpuOrMl = /gpu|vulkan|cuda|ollama|llama|torch|python|nvidia|amd|radeon|intel.*graphics/i.test(name);
-
-      procs.push({
-        pid,
-        ppid: 0,
-        user: 'SYSTEM',
-        cpu,
-        mem: memPct,
-        state: 'R',
-        threads,
-        runtime: 0,
-        command: name,
-        isGpuOrMlAttributed: isGpuOrMl,
-      });
-    }
-
-    procs.sort((a, b) => b.cpu - a.cpu || b.mem - a.mem);
     if (limit && limit > 0) return procs.slice(0, limit);
     return procs;
   } catch {
@@ -789,6 +1120,8 @@ export async function collectWindowsTasks(limit = 12): Promise<TaskData[]> {
     command: p.command,
   }));
 }
+
+// ─── Displays ──────────────────────────────────────────────────────────────────
 
 export async function getWindowsDisplayInfo(): Promise<DisplayInfo[]> {
   try {

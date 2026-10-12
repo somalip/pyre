@@ -502,6 +502,7 @@ function render() {
 function footerLine(): string[] {
    const row1: [string, string][] = [
       ['q', 'quit'],
+      ['o', 'tools menu'],
       ['c', 'customize UI'],
       ['←/→', 'tab'],
       ['1-9', 'panels'],
@@ -509,7 +510,6 @@ function footerLine(): string[] {
       ['b', `graph:${state.graphMode}`],
       ['t', state.treeView ? 'flat' : 'tree'],
       ['d', state.detailed ? 'basic' : 'detailed'],
-      ['T', `temp:${state.tempUnit}`],
       ['p', state.paused ? 'resume' : 'pause'],
     ];
    const row2: [string, string][] = [

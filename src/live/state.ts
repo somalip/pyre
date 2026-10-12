@@ -19,9 +19,10 @@ import { type SplashColorScheme, type SplashAnimation } from '../splash.js';
 
 export { type SplashColorScheme, type SplashAnimation };
 
-export const MENU_OPTIONS = ['Resume Dashboard', 'Settings (Customizer)', 'Readme', 'Credits', 'Quit pyre'] as const;
+export const MENU_OPTIONS = ['Resume Dashboard', 'Command Center (All Tools)', 'Settings (Customizer)', 'Readme', 'Credits', 'Quit pyre'] as const;
 
 const PALETTE_COMMANDS = [
+  { id: 'command-center', label: 'Command Center (Browse all tools)', keys: 'o', category: 'Navigation' },
   { id: 'cpu', label: 'Switch to CPU panel', keys: '1', category: 'Navigation' },
   { id: 'mem', label: 'Switch to Memory panel', keys: '2', category: 'Navigation' },
   { id: 'gpu', label: 'Switch to GPU panel', keys: '3', category: 'Navigation' },

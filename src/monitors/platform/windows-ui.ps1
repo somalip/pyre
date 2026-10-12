@@ -1,42 +1,44 @@
 <#
 .SYNOPSIS
-Launches a native Pyre UI window on Windows using WPF WebBrowser control.
+Launches a native standalone Pyre UI window on Windows.
+Prefers Microsoft Edge or Chromium in standalone desktop application mode (--app)
+for modern HTML5/ES6/Chart.js rendering without browser tabs or address bars.
 #>
 param(
     [Parameter(Mandatory=$true)]
     [int]$Port
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'SilentlyContinue'
 
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-Add-Type -AssemblyName PresentationFramework
+$url = "http://localhost:$Port/"
 
-$regPath = "HKCU:\Software\Microsoft\Internet Explorer\Main\FeatureControl\FEATURE_BROWSER_EMULATION"
-if (-not (Test-Path $regPath)) {
-    New-Item -Path $regPath -Force | Out-Null
+# 1. Search for Edge or Chrome executable paths
+$browsers = @(
+    "$env:ProgramFiles (x86)\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+    "$env:LocalAppData\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "$env:ProgramFiles (x86)\Google\Chrome\Application\chrome.exe",
+    "$env:LocalAppData\Google\Chrome\Application\chrome.exe",
+    "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe"
+)
+
+$targetBrowser = $null
+foreach ($b in $browsers) {
+    if (Test-Path $b) {
+        $targetBrowser = $b
+        break
+    }
 }
-$scriptName = [System.IO.Path]::GetFileName($PSCommandPath)
-Set-ItemProperty -Path $regPath -Name $scriptName -Value 11001 -Type DWord -ErrorAction SilentlyContinue
 
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "Pyre Live Dashboard"
-$form.Width = 1200
-$form.Height = 800
-$form.StartPosition = "CenterScreen"
-$form.MinimumSize = New-Object System.Drawing.Size(860, 600)
-$form.BackColor = [System.Drawing.Color]::FromArgb(10, 10, 15)
-$form.ForeColor = [System.Drawing.Color]::FromArgb(245, 245, 247)
+if ($targetBrowser) {
+    # Launch in standalone application window mode (frameless app window)
+    $args = "--app=$url --window-size=1200,800"
+    $proc = Start-Process -FilePath $targetBrowser -ArgumentList $args -PassThru -Wait
+    exit 0
+}
 
-$browser = New-Object System.Windows.Forms.WebBrowser
-$browser.Dock = "Fill"
-$browser.ScriptErrorsSuppressed = $true
-$browser.Navigate("http://localhost:$Port/")
-$form.Controls.Add($browser)
-
-$form.Add_Shown({
-    $form.Activate()
-})
-
-$form.ShowDialog()
+# 2. Fallback: Launch default system browser
+Start-Process $url
+exit 0

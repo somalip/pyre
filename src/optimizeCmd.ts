@@ -1080,9 +1080,137 @@ const USAGE = `
     --force                Terminate apps that don't quit within 10s
 `;
 
+async function runWindowsDns(): Promise<void> {
+  console.log(chalk.bold('\n  pyre optimize dns — Flush DNS Resolver Cache\n'));
+  try {
+    const { execSync } = await import('node:child_process');
+    execSync('ipconfig /flushdns', { stdio: 'inherit' });
+    console.log(chalk.green('\n  ✔ Windows DNS Resolver Cache flushed successfully.\n'));
+  } catch (err: any) {
+    console.log(chalk.red(`\n  ✖ Failed to flush DNS cache: ${err.message}\n`));
+  }
+}
+
+async function runWindowsTrash(opts: OptimizeOptions): Promise<void> {
+  console.log(chalk.bold('\n  pyre optimize trash — Windows Recycle Bin\n'));
+  if (opts.empty || opts.yes) {
+    try {
+      const { runPowerShell } = await import('./monitors/run.js');
+      await runPowerShell('Clear-RecycleBin -Force -ErrorAction SilentlyContinue', '');
+      console.log(chalk.green('  ✔ Emptied Recycle Bin.\n'));
+    } catch (err: any) {
+      console.log(chalk.red(`  ✖ Could not empty Recycle Bin: ${err.message}\n`));
+    }
+  } else {
+    console.log(chalk.cyan('  Pass --empty or -y to empty the Recycle Bin.\n'));
+  }
+}
+
+async function runWindowsCaches(opts: OptimizeOptions): Promise<void> {
+  console.log(chalk.bold('\n  pyre optimize caches — Windows Temporary Files\n'));
+  const tempDir = os.tmpdir();
+  let totalBytes = 0;
+  let fileCount = 0;
+  try {
+    if (fs.existsSync(tempDir)) {
+      const files = fs.readdirSync(tempDir);
+      for (const f of files) {
+        try {
+          const stat = fs.statSync(path.join(tempDir, f));
+          if (stat.isFile()) {
+            totalBytes += stat.size;
+            fileCount++;
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  const mb = Math.round((totalBytes / (1024 * 1024)) * 10) / 10;
+  console.log(`  Temporary files: ${chalk.bold(String(fileCount))} files (${chalk.yellow(`${mb} MB`)}) in ${chalk.dim(tempDir)}`);
+
+  if (opts.clean || opts.yes) {
+    let deleted = 0;
+    try {
+      const files = fs.readdirSync(tempDir);
+      for (const f of files) {
+        try {
+          const full = path.join(tempDir, f);
+          const stat = fs.statSync(full);
+          if (stat.isFile()) {
+            fs.unlinkSync(full);
+            deleted++;
+          }
+        } catch {}
+      }
+    } catch {}
+    console.log(chalk.green(`  ✔ Cleaned ${deleted} temporary cache files.\n`));
+  } else {
+    console.log(chalk.dim('  Run with --clean or -y to remove temporary cache files.\n'));
+  }
+}
+
+async function runWindowsStartup(): Promise<void> {
+  console.log(chalk.bold('\n  pyre optimize startup — Windows Startup Applications\n'));
+  try {
+    const { runPowerShell } = await import('./monitors/run.js');
+    const raw = await runPowerShell(
+      `$hkcu = Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -ErrorAction SilentlyContinue; $hklm = Get-ItemProperty 'HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -ErrorAction SilentlyContinue; if ($hkcu) { $hkcu.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' } | ForEach-Object { "User|$($_.Name)|$($_.Value)" } }; if ($hklm) { $hklm.PSObject.Properties | Where-Object { $_.Name -notmatch '^PS' } | ForEach-Object { "System|$($_.Name)|$($_.Value)" } }`,
+      ''
+    );
+    const lines = raw.split('\n').filter(l => l.trim().length > 0);
+    if (lines.length === 0) {
+      console.log(chalk.dim('  No registry startup entries found.\n'));
+      return;
+    }
+    for (const l of lines) {
+      const [scope, name, val] = l.split('|');
+      console.log(`  • ${chalk.bold(name)} [${chalk.cyan(scope)}]`);
+      console.log(`    ${chalk.dim(val)}`);
+    }
+    console.log();
+  } catch {
+    console.log(chalk.dim('  Could not query startup entries.\n'));
+  }
+}
+
 export async function runOptimizeCommand(sub: string | undefined, args: string[], opts: OptimizeOptions): Promise<void> {
+  if (process.platform === 'win32') {
+    switch (sub) {
+      case 'dns':
+        return runWindowsDns();
+      case 'caches':
+      case 'cache':
+        return runWindowsCaches(opts);
+      case 'trash':
+        return runWindowsTrash(opts);
+      case 'startup':
+        return runWindowsStartup();
+      case 'protect':
+        return runProtect(true, args);
+      case 'unprotect':
+        return runProtect(false, args);
+      case 'help':
+        console.log(USAGE);
+        return;
+      case undefined:
+      case 'report':
+        console.log(chalk.bold('\n  pyre optimize — Windows Housekeeping\n'));
+        console.log('  Available subcommands on Windows:');
+        console.log(`    ${chalk.cyan('pyre optimize dns')}      Flush DNS Resolver Cache`);
+        console.log(`    ${chalk.cyan('pyre optimize caches')}   Scan and clean temporary files (%TEMP%)`);
+        console.log(`    ${chalk.cyan('pyre optimize trash')}    Inspect and empty Recycle Bin`);
+        console.log(`    ${chalk.cyan('pyre optimize startup')}  Inspect Windows startup items\n`);
+        return;
+      default:
+        console.log(chalk.yellow(`  Subcommand "${sub}" requires macOS WindowServer APIs.`));
+        console.log('  On Windows, use: dns, caches, trash, startup, protect, unprotect.\n');
+        return;
+    }
+  }
+
   if (process.platform !== 'darwin') {
-    console.log(chalk.yellow('  pyre optimize is only available on macOS.'));
+    console.log(chalk.yellow('  pyre optimize is only available on macOS and Windows.'));
     return;
   }
   switch (sub) {

@@ -109,10 +109,15 @@ program
     .option('--force', 'Terminate apps that do not quit gracefully (optimize apps)')
     .option('--clean', 'Delete measured caches after confirmation (optimize caches)')
     .option('--empty', 'Empty the Trash after confirmation (optimize trash)')
-    .option('--auto-quit <duration>', 'Let the optimize tracker automatically quit apps idle this long');
+    .option('--auto-quit <duration>', 'Let the optimize tracker automatically quit apps idle this long')
+    .option('-m, --menu', 'Launch interactive TUI command center & tools navigator')
+    .option('-i, --interactive', 'Alias for --menu');
 
 program.addHelpText('after', `
+  💡 Tip: Can't remember all commands? Run 'pyre menu' to browse and run all tools interactively!
+
  Commands:
+   menu, tui, launcher            Interactive TUI command center & tools navigator
    live                           Interactive live dashboard
    check                          One-line plain-English health summary
    pipe                           Continuous newline-delimited JSON stream for scripting
@@ -234,6 +239,22 @@ async function main() {
   await runSetupWizardIfNeeded(!opts.wizard);
 
   const cmd = program.args[0];
+
+  if (cmd === 'menu' || cmd === 'tui' || cmd === 'launcher' || cmd === 'interactive' || opts.menu || opts.interactive) {
+    const { runMenu } = await import('./menu/index.js');
+    await runMenu({
+      theme: opts.theme || config.theme,
+    });
+    return;
+  }
+
+  if (!cmd && config.defaultAction === 'menu' && !isExportMode() && !opts.once && process.stdout.isTTY) {
+    const { runMenu } = await import('./menu/index.js');
+    await runMenu({
+      theme: opts.theme || config.theme,
+    });
+    return;
+  }
 
   if (cmd === 'check') {
     const { runCheckCommand } = await import('./checkCmd.js');
@@ -650,9 +671,13 @@ async function main() {
   if (opts.alertPushoverToken) config.pushoverToken = opts.alertPushoverToken;
   if (opts.alertPushoverUser) config.pushoverUser = opts.alertPushoverUser;
   if (opts.alertNtfy) config.ntfyUrl = opts.alertNtfy;
-  const tempUnit = opts.tempUnit === 'f' ? 'f' : 'c';
+  if (cmd && cmd !== 'live' && cmd !== 'p2p') {
+    console.error(chalk.red(`\n  ✖ Unknown command: '${cmd}'`));
+    console.log(chalk.yellow(`  💡 Tip: Can't remember a command? Run 'pyre menu' to browse and run all tools interactively!\n`));
+    process.exit(1);
+  }
 
-  if (cmd === 'live' || (!isExportMode() && !opts.once && cmd !== 'p2p')) {
+  if (cmd === 'live' || (!cmd && !isExportMode() && !opts.once)) {
     if (!process.stdout.isTTY && cmd !== 'live') {
       await runWebCommand();
       return;
@@ -955,6 +980,25 @@ async function runInfoCommand(): Promise<void> {
     } else {
       lines.push(`    • Status: ${tmStatus.running ? chalk.yellow(`Backup in progress (${tmStatus.percent || 0}%)`) : chalk.green('Idle')}`);
       lines.push(`    • Latest Backup: ${tmStatus.latestBackup}`);
+    }
+  }
+
+  if (process.platform === 'win32') {
+    lines.push('');
+    lines.push(chalk.cyan.bold('  ⏱ System Restore & Recovery:'));
+    try {
+      const { runPowerShell } = await import('./monitors/run.js');
+      const srRaw = await runPowerShell(
+        `(Get-CimInstance -Namespace root/default -ClassName SystemRestore -ErrorAction SilentlyContinue | Select-Object -Last 1 -ExpandProperty Description) -join ''`,
+        ''
+      );
+      if (srRaw.trim()) {
+        lines.push(`    • Latest Restore Point: ${chalk.green(srRaw.trim())}`);
+      } else {
+        lines.push('    • System Restore active (no custom checkpoints)');
+      }
+    } catch {
+      lines.push('    • System Restore available');
     }
   }
 
@@ -1755,10 +1799,10 @@ async function runBenchCommand(benchCmd: string): Promise<void> {
   let powerSamplesCount = 0;
 
   const child = process.platform === 'win32'
-    ? spawn('cmd.exe', ['/c', benchCmd], { stdio: 'inherit' })
+    ? spawn('cmd.exe', ['/c', benchCmd])
     : spawn('sh', ['-c', benchCmd]);
-  child.stdout.on('data', d => process.stdout.write(d));
-  child.stderr.on('data', d => process.stdout.write(d));
+  if (child.stdout) child.stdout.on('data', d => process.stdout.write(d));
+  if (child.stderr) child.stderr.on('data', d => process.stdout.write(d));
 
   const interval = parseFloat(opts.interval) || 2;
   const handle = setInterval(async () => {

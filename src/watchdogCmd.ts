@@ -17,6 +17,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { collectAll } from './monitors/collectors.js';
 import { sendAlert } from './alertChannels.js';
@@ -157,8 +158,13 @@ export async function runWatchdogCommand(opts: WatchdogOptions = {}): Promise<vo
 
           if (rule.action === 'kill' && targetPid) {
             try {
-              process.kill(targetPid, 'SIGTERM');
-              console.log(chalk.green(`    ✔ Killed PID ${targetPid} with SIGTERM`));
+              if (process.platform === 'win32') {
+                execSync(`taskkill /F /PID ${targetPid} /T`, { stdio: 'pipe' });
+                console.log(chalk.green(`    ✔ Killed PID ${targetPid} with taskkill /F /T`));
+              } else {
+                process.kill(targetPid, 'SIGTERM');
+                console.log(chalk.green(`    ✔ Killed PID ${targetPid} with SIGTERM`));
+              }
             } catch (err: any) {
               console.log(chalk.red(`    ✖ Failed to kill PID ${targetPid}: ${err.message}`));
             }

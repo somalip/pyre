@@ -7,6 +7,7 @@
  * Imported by `index.ts` as the public API of the live module.
  */
 import readline from 'node:readline';
+import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { collectAll, StatsData } from '../monitors/index.js';
 import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
@@ -218,6 +219,9 @@ function isEscKey(key: readline.Key, str?: string): boolean {
           case 'Resume Dashboard':
             state.inputMode = null;
             break;
+          case 'Command Center (All Tools)':
+            openCommandCenter();
+            return;
           case 'Settings (Customizer)':
             state.inputMode = 'customizer';
             state.customizerIndex = 0;
@@ -437,20 +441,31 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
      return;
    }
 
-   const isProtected = pid === 1 || pid === process.pid || pid === process.ppid;
+   const isProtected = pid === 1 || pid === 0 || pid === 4 || pid === process.pid || pid === process.ppid;
    if (isProtected && confirmKillPid !== pid) {
      confirmKillPid = pid;
-     const name = pid === 1 ? 'launchd (system init)' : (pid === process.pid ? 'pyre itself' : 'parent process');
+     const name = (pid === 0 || pid === 4) ? 'Windows System Kernel' : (pid === 1 ? 'init/launchd' : (pid === process.pid ? 'pyre itself' : 'parent process'));
      setStatus(`⚠️ PROTECTED PID ${pid} (${name})! Re-enter PID ${pid} to confirm termination.`, 8000);
      return;
    }
 
    confirmKillPid = null;
+
+   if (process.platform === 'win32') {
+     try {
+       execSync(`taskkill /F /PID ${pid} /T`, { stdio: 'pipe' });
+       setStatus(`Terminated PID ${pid} (taskkill /F /T)`);
+       return;
+     } catch (err: any) {
+       // fallback to process.kill
+     }
+   }
+
    try {
      process.kill(pid, signal as NodeJS.Signals);
      setStatus(`Sent ${signal} to PID ${pid}`);
    } catch (err: any) {
-     setStatus(`Failed to send ${signal} to ${pid}: ${err.message}`);
+     setStatus(`Failed to terminate PID ${pid}: ${err.message}`);
    }
   }
 
@@ -574,6 +589,51 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     } catch {
       // skip bad tick
     }
+  }
+
+  async function openCommandCenter() {
+    state.paused = true;
+    if (state.intervalHandle) {
+      clearInterval(state.intervalHandle);
+      state.intervalHandle = null;
+    }
+    if (state.uiIntervalHandle) {
+      clearInterval(state.uiIntervalHandle);
+      state.uiIntervalHandle = null;
+    }
+    if (state.keypressHandler) {
+      process.stdin.removeListener('keypress', state.keypressHandler);
+    }
+    process.stdout.removeListener('resize', onResize);
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.stdout.write('\x1b[?1000l\x1b[?25h\x1b[?1049l\x1b[2J\x1b[H');
+
+    const { runMenu } = await import('../menu/index.js');
+    await runMenu({
+      theme: state.currentTheme,
+      onExit: () => {},
+    });
+
+    process.stdout.write('\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H');
+    if (state.mouseEnabled) {
+      process.stdout.write('\x1b[?1000h');
+    }
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    process.stdin.resume();
+    if (state.keypressHandler) {
+      process.stdin.on('keypress', state.keypressHandler);
+    }
+    process.stdout.on('resize', onResize);
+    state.paused = false;
+    state.inputMode = null;
+    restartTicker();
+    if (state.uiIntervalHandle) clearInterval(state.uiIntervalHandle);
+    state.uiIntervalHandle = setInterval(() => {
+      if (state.running && !state.paused) render();
+    }, 250);
+    render();
   }
 
  /**
@@ -766,6 +826,10 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         case 'right':
           cycleTab(1);
           break;
+        case 'o':
+        case 'O':
+          openCommandCenter();
+          return;
         case 'c':
           state.inputMode = 'customizer';
           state.customizerIndex = 0;
@@ -1047,6 +1111,9 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
 
     // Execute the command
     switch (cmd.id) {
+      case 'command-center':
+        openCommandCenter();
+        break;
       case 'cpu': case 'mem': case 'gpu': case 'power': case 'battery':
       case 'thermal': case 'network': case 'packets': case 'tasks': case 'disk':
       case 'process': case 'containers': case 'p2p': case 'anomalies': case 'blender':

@@ -1,0 +1,638 @@
+/**
+ * Command registry and categorization for Pyre's TUI Command Center.
+ */
+import type { CategoryInfo, CommandDefinition, CommandCategory } from './types.js';
+
+export const CATEGORIES: CategoryInfo[] = [
+  { id: 'all', name: 'All Tools', icon: '⚡', badge: 'ALL' },
+  { id: 'health', name: 'Health & Diagnostics', icon: '🩺', badge: 'HEALTH' },
+  { id: 'dashboards', name: 'Dashboards & Live', icon: '📊', badge: 'LIVE' },
+  { id: 'performance', name: 'Performance & Benchmarks', icon: '🚀', badge: 'PERF' },
+  { id: 'maintenance', name: 'System & Maintenance', icon: '🧹', badge: 'SYS' },
+  { id: 'network', name: 'Network & Remote', icon: '🌐', badge: 'NET' },
+  { id: 'config', name: 'Config & Utilities', icon: '⚙️', badge: 'CFG' },
+];
+
+export const ALL_COMMANDS: CommandDefinition[] = [
+  // --- Dashboards & Live ---
+  {
+    id: 'live',
+    name: 'Live Dashboard',
+    cli: 'pyre live',
+    category: 'dashboards',
+    badge: 'LIVE',
+    description: 'Interactive full-screen terminal dashboard with real-time graphs and telemetry',
+    detailedHelp: 'Launches Pyre\'s signature full-terminal dashboard. Displays live sparklines for CPU/GPU/memory/network, Apple Silicon cluster telemetry, process tree, custom themes, and continuous CSV logging.',
+    tags: ['dashboard', 'live', 'monitor', 'graph', 'realtime', 'cpu', 'memory', 'top', 'htop'],
+    interactive: true,
+    flags: [
+      { flag: '--interval <sec>', desc: 'Refresh interval (default: 2s)' },
+      { flag: '--theme <name>', desc: 'Color theme (dracula, cyberpunk, nord, gruvbox)' },
+      { flag: '--detailed', desc: 'Include powermetrics per-core sensors' },
+      { flag: '--log', desc: 'Start continuous CSV logging immediately' },
+      { flag: '--tree', desc: 'Show process hierarchy tree view' },
+    ],
+    examples: ['pyre live', 'pyre live --interval 1 --theme dracula', 'pyre live --detailed'],
+  },
+  {
+    id: 'ui',
+    name: 'Activity Monitor UI Window',
+    cli: 'pyre ui',
+    category: 'dashboards',
+    badge: 'GUI',
+    description: 'Launch native desktop window with real-time charts and process inspector',
+    detailedHelp: 'Opens Pyre\'s native graphical desktop dashboard. Provides click-to-inspect process tree, live charts, dark mode, and compact widget mode.',
+    tags: ['gui', 'window', 'native', 'desktop', 'activity monitor', 'widget'],
+    interactive: true,
+    flags: [
+      { flag: '--compact', desc: 'Launch in minimalist compact widget mode' },
+      { flag: '--ontop', desc: 'Keep window always on top of other apps' },
+    ],
+    examples: ['pyre ui', 'pyre ui --compact', 'pyre ui --ontop'],
+  },
+  {
+    id: 'web',
+    name: 'Web Dashboard Server',
+    cli: 'pyre web',
+    category: 'dashboards',
+    badge: 'WEB',
+    description: 'Serve an auto-refreshing live web portal with SSE streams and REST endpoints',
+    detailedHelp: 'Starts a high-performance web dashboard accessible from your browser or mobile device on the same local network. Includes charts, process manager, and remote settings.',
+    tags: ['web', 'browser', 'server', 'http', 'sse', 'mobile', 'lan'],
+    interactive: true,
+    flags: [
+      { flag: '--port <port>', desc: 'HTTP port number (default: 3000)' },
+      { flag: '--lan', desc: 'Expose to Wi-Fi / local network' },
+      { flag: '--no-lan', desc: 'Bind to localhost only' },
+      { flag: '--install', desc: 'Install as background launchd / system service' },
+    ],
+    examples: ['pyre web', 'pyre web --port 8080 --lan'],
+  },
+  {
+    id: 'pipe',
+    name: 'JSON Stream Pipe',
+    cli: 'pyre pipe',
+    category: 'dashboards',
+    badge: 'PIPE',
+    description: 'Continuous newline-delimited JSON stream for scripting and automation',
+    detailedHelp: 'Emits a steady NDJSON (newline-delimited JSON) stream of system metrics to stdout. Ideal for piping into jq, Logstash, Vector, or custom scripts.',
+    tags: ['pipe', 'json', 'ndjson', 'stream', 'stdout', 'scripting'],
+    flags: [
+      { flag: '--interval <sec>', desc: 'Sampling interval (default: 1s)' },
+      { flag: '--detailed', desc: 'Include full sensor readings' },
+    ],
+    examples: ['pyre pipe | jq .cpu', 'pyre pipe --interval 5'],
+  },
+  {
+    id: 'replay',
+    name: 'Session Log Replay',
+    cli: 'pyre replay',
+    category: 'dashboards',
+    badge: 'REPLAY',
+    description: 'Play back a historical CSV log file inside the interactive TUI',
+    detailedHelp: 'Replays previously recorded Pyre CSV sessions with controllable speed multiplier, play/pause controls, and time seeking.',
+    tags: ['replay', 'log', 'csv', 'playback', 'history'],
+    interactive: true,
+    requiresArgs: {
+      prompt: 'Enter path to Pyre CSV log file:',
+      placeholder: './pyre-exports/pyre-log-....csv',
+      defaultVal: './pyre-exports',
+    },
+    flags: [
+      { flag: '--speed <n>', desc: 'Playback speed multiplier (e.g. 2, 0.5)' },
+      { flag: '--plain', desc: 'Plain text output without ANSI colors' },
+    ],
+    examples: ['pyre replay session.csv', 'pyre replay session.csv --speed 2'],
+  },
+  {
+    id: 'fleet',
+    name: 'Fleet Monitor',
+    cli: 'pyre fleet',
+    category: 'dashboards',
+    badge: 'FLEET',
+    description: 'Multi-host live dashboard monitoring multiple servers simultaneously',
+    detailedHelp: 'Combines telemetry streams from multiple machines over SSH or P2P into a unified multi-node dashboard.',
+    tags: ['fleet', 'cluster', 'multi-host', 'servers', 'ssh', 'remote'],
+    interactive: true,
+    requiresArgs: {
+      prompt: 'Enter host list (space-separated, e.g. user@host1 user@host2):',
+      placeholder: 'user@server1.local user@server2.local',
+      defaultVal: 'localhost',
+    },
+    examples: ['pyre fleet server1 server2 server3'],
+  },
+  {
+    id: 'ssh',
+    name: 'SSH Remote Stream',
+    cli: 'pyre ssh',
+    category: 'dashboards',
+    badge: 'SSH',
+    description: 'Stream live stats from a remote host securely over SSH',
+    detailedHelp: 'Connects to a remote server via SSH, runs Pyre on the remote machine (or streams lightweight metrics), and visualizes it locally.',
+    tags: ['ssh', 'remote', 'stream', 'server', 'linux'],
+    interactive: true,
+    requiresArgs: {
+      prompt: 'Enter SSH remote host (e.g. user@hostname):',
+      placeholder: 'user@myserver.com',
+    },
+    examples: ['pyre ssh user@myserver.com'],
+  },
+
+  // --- Health & Diagnostics ---
+  {
+    id: 'check',
+    name: 'System Health Check',
+    cli: 'pyre check',
+    category: 'health',
+    badge: 'CHECK',
+    description: 'One-line plain-English instant health and thermal check',
+    detailedHelp: 'Performs an instant health audit of CPU load, memory pressure, thermals, battery, and storage. Returns green/yellow/red status with plain-English summary.',
+    tags: ['health', 'check', 'status', 'quick', 'summary', 'temperature', 'alert'],
+    flags: [
+      { flag: '--detailed', desc: 'Include full sensor table in output' },
+      { flag: '--exit-code', desc: 'Exit with non-zero status code if warnings/alerts are active (for CI/CD)' },
+    ],
+    examples: ['pyre check', 'pyre check --detailed', 'pyre check --exit-code'],
+  },
+  {
+    id: 'doctor',
+    name: 'Doctor Diagnostics',
+    cli: 'pyre doctor',
+    category: 'health',
+    badge: 'DIAG',
+    description: 'Comprehensive system diagnostic audit (SIP, sensors, permissions, battery)',
+    detailedHelp: 'Audits hardware sensors, sudo powermetrics permissions, Apple Silicon SMC accessibility, System Integrity Protection (SIP), thermal pressure, and disk health.',
+    tags: ['doctor', 'diagnostics', 'audit', 'permissions', 'sip', 'sensors', 'troubleshoot'],
+    flags: [
+      { flag: '--plain', desc: 'Output in plain accessible text' },
+    ],
+    examples: ['pyre doctor', 'pyre doctor --plain'],
+  },
+  {
+    id: 'smart',
+    name: 'S.M.A.R.T. Disk Health',
+    cli: 'pyre smart',
+    category: 'health',
+    badge: 'DISK',
+    description: 'Read S.M.A.R.T. telemetry, SSD wear levels, and drive health indicators',
+    detailedHelp: 'Queries physical drives via smartctl/NVMe telemetry. Reports remaining spare capacity, drive temperatures, wear percentage, read/write error counts, and failure warnings.',
+    tags: ['smart', 'disk', 'ssd', 'nvme', 'health', 'storage', 'hardware', 'drive'],
+    examples: ['pyre smart'],
+  },
+  {
+    id: 'anomalies',
+    name: 'Anomaly Detection',
+    cli: 'pyre anomalies',
+    category: 'health',
+    badge: 'ANOMALY',
+    description: 'Detect z-score statistical resource spikes and unexpected system behaviors',
+    detailedHelp: 'Analyzes historical metric logs using statistical z-score models. Identifies runaway background processes, memory leaks, thermal throttles, and abnormal network bursts.',
+    tags: ['anomalies', 'zscore', 'spikes', 'leaks', 'statistical', 'digest', 'history'],
+    flags: [
+      { flag: '--since <range>', desc: 'Time range to analyze (default: 7d, e.g. 1d, 3d, 14d)' },
+      { flag: '--export-dir <dir>', desc: 'Directory containing historical log files' },
+    ],
+    examples: ['pyre anomalies', 'pyre anomalies --since 1d', 'pyre anomalies --since 7d'],
+  },
+  {
+    id: 'explain',
+    name: 'AI Anomaly Explanation',
+    cli: 'pyre explain',
+    category: 'health',
+    badge: 'AI',
+    description: 'Plain-English AI diagnosis and remedy recommendations for detected anomalies',
+    detailedHelp: 'Feeds detected performance anomalies into a local or cloud LLM (builtin zero-setup rules engine, Ollama, or OpenAI). Explains causes in plain English with concrete fix suggestions.',
+    tags: ['ai', 'explain', 'llm', 'ollama', 'openai', 'diagnose', 'remedy'],
+    flags: [
+      { flag: '--llm-backend <bkg>', desc: 'Backend: builtin (zero-setup), ollama, or openai' },
+      { flag: '--llm-model <model>', desc: 'Model name (e.g. llama3.2, gpt-4o-mini)' },
+      { flag: '--api-key <key>', desc: 'OpenAI API key (or set OPENAI_API_KEY env)' },
+      { flag: '--since <range>', desc: 'Time range for anomaly digestion (default: 7d)' },
+    ],
+    examples: ['pyre explain', 'pyre explain --llm-backend ollama --llm-model llama3.2'],
+  },
+  {
+    id: 'alert-test',
+    name: 'Test Alert Notification',
+    cli: 'pyre alert test',
+    category: 'health',
+    badge: 'ALERT',
+    description: 'Send test notifications to Slack, Discord, Pushover, and ntfy.sh',
+    detailedHelp: 'Dispatches a test notification through all configured webhook and push notification channels to verify that alert webhooks are functioning properly.',
+    tags: ['alert', 'notification', 'slack', 'discord', 'pushover', 'ntfy', 'test', 'webhook'],
+    flags: [
+      { flag: '--alert-slack <url>', desc: 'Test a Slack webhook URL' },
+      { flag: '--alert-discord <url>', desc: 'Test a Discord webhook URL' },
+      { flag: '--alert-ntfy <url>', desc: 'Test an ntfy.sh topic URL' },
+    ],
+    examples: ['pyre alert test'],
+  },
+
+  // --- Performance & Benchmarks ---
+  {
+    id: 'benchmark',
+    name: 'CPU Benchmark',
+    cli: 'pyre benchmark',
+    category: 'performance',
+    badge: 'BENCH',
+    description: 'Run standard 1-minute CPU benchmark calculating digits of PI',
+    detailedHelp: 'Executes a multi-threaded compute benchmark calculating digits of Pi. Measures floating-point and integer performance, thermal climb, power wattage, and gives a standardized score.',
+    tags: ['benchmark', 'cpu', 'pi', 'performance', 'speed', 'score', 'stress'],
+    examples: ['pyre benchmark'],
+  },
+  {
+    id: 'bench',
+    name: 'Command Execution Benchmark',
+    cli: 'pyre bench',
+    category: 'performance',
+    badge: 'BENCH',
+    description: 'Profile execution time, CPU, memory, power draw, and real kWh cost of any command',
+    detailedHelp: 'Wraps any shell command and monitors its full lifecycle: execution time, peak memory, average CPU, total joules consumed, and estimated electrical cost in dollars/kWh.',
+    tags: ['bench', 'profile', 'energy', 'power', 'kwh', 'cost', 'command', 'exec'],
+    requiresArgs: {
+      prompt: 'Enter shell command to benchmark (e.g. npm test):',
+      placeholder: 'npm test',
+      defaultVal: 'ls -la',
+    },
+    examples: ['pyre bench "npm run build"', 'pyre bench "cargo build --release"'],
+  },
+  {
+    id: 'stress',
+    name: 'System Stress Test',
+    cli: 'pyre stress',
+    category: 'performance',
+    badge: 'LOAD',
+    description: 'Synthetic multi-threaded CPU load generator to test cooling and stability',
+    detailedHelp: 'Spawns worker threads to saturate all CPU cores. Ideal for testing cooling efficiency, fan curves, thermal throttling thresholds, and power supply stability.',
+    tags: ['stress', 'load', 'burnin', 'thermal', 'cooling', 'fans', 'throttle'],
+    flags: [
+      { flag: '-d, --duration <sec>', desc: 'Duration in seconds (default: 30s)' },
+      { flag: '--cores <n>', desc: 'Number of worker threads (default: all cores)' },
+    ],
+    examples: ['pyre stress --duration 10', 'pyre stress --duration 60 --cores 8'],
+  },
+  {
+    id: 'profile-proc',
+    name: 'Process Call-Tree Profiler',
+    cli: 'pyre profile-proc',
+    category: 'performance',
+    badge: 'PROF',
+    description: 'CPU call-tree profiler and hot function sampler for any running PID',
+    detailedHelp: 'Attaches to a running process and takes stack trace samples to pinpoint CPU hotspots, spin-locks, and slow function call chains.',
+    tags: ['profile-proc', 'profiler', 'sampling', 'calltree', 'hotspots', 'stacktrace', 'pid'],
+    requiresArgs: {
+      prompt: 'Enter PID to profile:',
+      placeholder: '1234',
+    },
+    flags: [
+      { flag: '-d, --duration <sec>', desc: 'Sampling duration in seconds (default: 5s)' },
+      { flag: '--raw', desc: 'Output unparsed profiler raw text' },
+    ],
+    examples: ['pyre profile-proc 1234', 'pyre profile-proc 1234 --duration 10'],
+  },
+
+  // --- System & Maintenance ---
+  {
+    id: 'optimize',
+    name: 'Mac & System Optimizer',
+    cli: 'pyre optimize',
+    category: 'maintenance',
+    badge: 'CLEAN',
+    description: 'Mac optimizer: quit idle apps, purge memory, clean caches, empty trash',
+    detailedHelp: 'Intelligently manages system resources: discovers foreground apps idle for hours and gracefully terminates them, flushes inactive memory caches, cleans build artifacts, and purges DNS caches.',
+    tags: ['optimize', 'clean', 'idle', 'memory', 'caches', 'trash', 'purge', 'mac'],
+    flags: [
+      { flag: 'apps', desc: 'Quit long-idle background applications' },
+      { flag: 'memory', desc: 'Purge inactive memory pages' },
+      { flag: 'caches', desc: 'Clean system & user application cache files' },
+      { flag: 'trash', desc: 'Safely empty user Trash' },
+      { flag: 'dns', desc: 'Flush local DNS resolver cache' },
+      { flag: '--idle <dur>', desc: 'Idle time threshold (e.g. 30m, 2h)' },
+      { flag: '-y, --yes', desc: 'Skip interactive confirmation prompt' },
+    ],
+    examples: ['pyre optimize apps', 'pyre optimize memory', 'pyre optimize caches', 'pyre optimize dns'],
+  },
+  {
+    id: 'brew',
+    name: 'Package Manager Health',
+    cli: 'pyre brew',
+    category: 'maintenance',
+    badge: 'PKGS',
+    description: 'Package manager health panel (Homebrew, apt, pacman, winget)',
+    detailedHelp: 'Checks outdated packages, broken symlinks, orphaned dependencies, disk footprint of installed packages, and cache usage for Homebrew, apt, pacman, or winget.',
+    tags: ['brew', 'homebrew', 'apt', 'packages', 'outdated', 'clean', 'disk', 'winget'],
+    examples: ['pyre brew'],
+  },
+  {
+    id: 'extensions',
+    name: 'System Extensions & Drivers',
+    cli: 'pyre extensions',
+    category: 'maintenance',
+    badge: 'DRVR',
+    description: 'Inspect active macOS system extensions, network filters, and endpoint drivers',
+    detailedHelp: 'Scans driver extensions, network filter extensions, and endpoint security agents (CrowdStrike, SentinelOne, Little Snitch, VPNs) for performance impacts.',
+    tags: ['extensions', 'drivers', 'kext', 'security', 'antivirus', 'filter', 'macos'],
+    examples: ['pyre extensions'],
+  },
+  {
+    id: 'watchdog',
+    name: 'Autonomous Watchdog Daemon',
+    cli: 'pyre watchdog',
+    category: 'maintenance',
+    badge: 'DAEMON',
+    description: 'Autonomous background daemon enforcing memory limits and auto-killing rogues',
+    detailedHelp: 'Runs a background rule engine that watches for run-away processes exceeding CPU or memory limits, dispatches alert notifications, and optionally terminates offenders.',
+    tags: ['watchdog', 'daemon', 'rules', 'kill', 'limits', 'autonomous', 'protect'],
+    flags: [
+      { flag: '--watchdog-config <file>', desc: 'Path to custom rules JSON' },
+      { flag: '--dry-run', desc: 'Simulate rules without executing kills' },
+      { flag: '--interval <sec>', desc: 'Polling interval in seconds' },
+    ],
+    examples: ['pyre watchdog --dry-run', 'pyre watchdog'],
+  },
+  {
+    id: 'build',
+    name: 'Compiler & Build Tracker',
+    cli: 'pyre build',
+    category: 'maintenance',
+    badge: 'BUILD',
+    description: 'Track active build systems (Xcode, cargo, clang, rustc, webpack, go)',
+    detailedHelp: 'Detects active build processes across the system, monitors parallel compiler thread usage, CPU load, and estimated build completion.',
+    tags: ['build', 'compile', 'xcode', 'cargo', 'clang', 'rustc', 'webpack', 'ninja'],
+    flags: [
+      { flag: '--json', desc: 'Output build data as JSON' },
+    ],
+    examples: ['pyre build'],
+  },
+  {
+    id: 'update',
+    name: 'Check for Updates',
+    cli: 'pyre update',
+    category: 'maintenance',
+    badge: 'UPD',
+    description: 'Check for Pyre CLI updates from npm and GitHub releases',
+    detailedHelp: 'Queries the registry to compare the running version with the latest release, showing change highlights and one-line upgrade commands.',
+    tags: ['update', 'upgrade', 'version', 'npm', 'new'],
+    examples: ['pyre update'],
+  },
+
+  // --- Network & Remote ---
+  {
+    id: 'netusage',
+    name: 'Application Network Usage',
+    cli: 'pyre netusage',
+    category: 'network',
+    badge: 'NET',
+    description: 'Real-time per-application network bandwidth and socket connection breakdown',
+    detailedHelp: 'Attributes active network throughput to individual running applications and processes. Shows upload/download rates, open sockets, and remote IP addresses.',
+    tags: ['netusage', 'network', 'bandwidth', 'sockets', 'rx', 'tx', 'apps', 'connections'],
+    flags: [
+      { flag: '--top <n>', desc: 'Number of top processes to show (default: 15)' },
+      { flag: '--sort <rx|tx|total>', desc: 'Sort by download, upload, or total' },
+      { flag: '--json', desc: 'Output in structured JSON' },
+    ],
+    examples: ['pyre netusage', 'pyre netusage --top 10 --sort rx'],
+  },
+  {
+    id: 'topo',
+    name: 'Network Topology & Peer Discovery',
+    cli: 'pyre topo',
+    category: 'network',
+    badge: 'TOPO',
+    description: 'Map local network neighbors, gateways, and discover Pyre P2P peers',
+    detailedHelp: 'Scans the local subnet for active devices, routers, access points, and peer Pyre instances broadcasting live metrics.',
+    tags: ['topo', 'topology', 'lan', 'arp', 'discovery', 'mesh', 'peers', 'scanner'],
+    flags: [
+      { flag: '--scan', desc: 'Perform active network sweep on LAN neighbors' },
+      { flag: '--json', desc: 'Output topology as JSON' },
+    ],
+    examples: ['pyre topo', 'pyre topo --scan'],
+  },
+  {
+    id: 'p2p',
+    name: 'P2P Mesh Streaming',
+    cli: 'pyre p2p',
+    category: 'network',
+    badge: 'P2P',
+    description: 'Encrypted peer-to-peer real-time metrics streaming between two systems over TCP/TLS',
+    detailedHelp: 'Enables real-time system monitoring over local networks without requiring cloud relays. One machine runs `server` while the second connects as `client`.',
+    tags: ['p2p', 'mesh', 'tcp', 'tls', 'stream', 'remote', 'peer'],
+    flags: [
+      { flag: 'server', desc: 'Start streaming server on this machine' },
+      { flag: 'connect', desc: 'Connect to remote server instance' },
+      { flag: '--p2p-port <port>', desc: 'Port number (default: 9876)' },
+      { flag: '--p2p-password <pwd>', desc: 'Shared authentication password' },
+      { flag: '--p2p-tls', desc: 'Enable TLS encryption' },
+    ],
+    examples: ['pyre server', 'pyre p2p server --p2p-password secret', 'pyre p2p connect --p2p-host 192.168.1.10 --p2p-password secret'],
+  },
+  {
+    id: 'server',
+    name: 'P2P Quick Setup Helper',
+    cli: 'pyre server',
+    category: 'network',
+    badge: 'P2P',
+    description: 'Generate copy-paste ready commands for P2P server and client connection',
+    detailedHelp: 'Detects the local IP address, generates a cryptographically secure random session password, and prints exact commands to run on both machines.',
+    tags: ['server', 'p2p', 'helper', 'quickstart', 'connect'],
+    examples: ['pyre server'],
+  },
+  {
+    id: 'serve',
+    name: 'REST API Server',
+    cli: 'pyre serve',
+    category: 'network',
+    badge: 'API',
+    description: 'Lightweight structured JSON REST API server for external scrapers',
+    detailedHelp: 'Runs a headless HTTP daemon providing JSON endpoints (`/api/stats`, `/api/health`, `/api/processes`) for custom integrations, Grafana, or monitoring tools.',
+    tags: ['serve', 'rest', 'api', 'http', 'json', 'endpoints'],
+    flags: [
+      { flag: '--port <port>', desc: 'Port number (default: 8080)' },
+      { flag: '--api-key <key>', desc: 'Require Bearer API key authentication' },
+      { flag: '--detailed', desc: 'Include full sensor readings in API responses' },
+    ],
+    examples: ['pyre serve --port 8080'],
+  },
+  {
+    id: 'prometheus',
+    name: 'Prometheus Exporter',
+    cli: 'pyre prometheus',
+    category: 'network',
+    badge: 'PROM',
+    description: 'Start standard Prometheus metrics exporter on localhost:9090',
+    detailedHelp: 'Exposes Pyre metrics at `/metrics` formatted for Prometheus, Grafana, Datadog, and OpenTelemetry collectors.',
+    tags: ['prometheus', 'grafana', 'metrics', 'exporter', 'opentelemetry'],
+    flags: [
+      { flag: '--prometheus-port <port>', desc: 'Port number (default: 9090)' },
+      { flag: '--interval <sec>', desc: 'Scrape collection interval (default: 15s)' },
+    ],
+    examples: ['pyre prometheus', 'pyre prometheus --prometheus-port 9100'],
+  },
+
+  // --- Configuration & Utilities ---
+  {
+    id: 'info',
+    name: 'Hardware Summary',
+    cli: 'pyre info',
+    category: 'config',
+    badge: 'INFO',
+    description: 'Concise summary of CPU architecture, memory, GPU, and OS build',
+    detailedHelp: 'Prints a clean overview of processor brand, core configuration (Performance vs Efficiency cores), RAM speed, GPU adapter, and kernel release.',
+    tags: ['info', 'hardware', 'specs', 'system', 'cpu', 'ram', 'gpu', 'os'],
+    examples: ['pyre info'],
+  },
+  {
+    id: 'history',
+    name: 'Historical Resource Trends',
+    cli: 'pyre history',
+    category: 'config',
+    badge: 'HIST',
+    description: 'Graph historical resource trends from recorded CSV logs',
+    detailedHelp: 'Parses logged CSV telemetry files and displays multi-day terminal trend graphs for CPU, memory, and thermal levels.',
+    tags: ['history', 'trends', 'csv', 'graph', 'days', 'analytics'],
+    flags: [
+      { flag: '--days <n>', desc: 'Number of days to analyze (default: 7)' },
+    ],
+    examples: ['pyre history', 'pyre history --days 14'],
+  },
+  {
+    id: 'diff',
+    name: 'Snapshot Side-by-Side Diff',
+    cli: 'pyre diff',
+    category: 'config',
+    badge: 'DIFF',
+    description: 'Compare two saved snapshot JSON files side-by-side',
+    detailedHelp: 'Highlights system state changes between two points in time (e.g. before and after running a build or benchmark): process differences, memory shifts, and disk deltas.',
+    tags: ['diff', 'compare', 'snapshots', 'deltas', 'json'],
+    requiresArgs: {
+      prompt: 'Enter two snapshot JSON file paths (file1 file2):',
+      placeholder: 'snap1.json snap2.json',
+    },
+    examples: ['pyre diff snap1.json snap2.json'],
+  },
+  {
+    id: 'config',
+    name: 'Persistent Configuration',
+    cli: 'pyre config',
+    category: 'config',
+    badge: 'CFG',
+    description: 'View or reset persistent ~/.config/pyre/config.json settings',
+    detailedHelp: 'Displays all stored user preferences: active theme, refresh rates, alert thresholds, webhook URLs, default launch mode, and panel visibility.',
+    tags: ['config', 'settings', 'defaults', 'preferences', 'reset', 'json'],
+    flags: [
+      { flag: 'show', desc: 'Display current config JSON' },
+      { flag: 'reset', desc: 'Reset all settings to factory defaults' },
+    ],
+    examples: ['pyre config show', 'pyre config reset'],
+  },
+  {
+    id: 'profile',
+    name: 'Config Profiles',
+    cli: 'pyre profile',
+    category: 'config',
+    badge: 'PROF',
+    description: 'Save, load, and manage atomic configuration profiles',
+    detailedHelp: 'Switch effortlessly between specialized monitoring setups (e.g. "gaming", "server", "coding", "minimal") by saving and loading named profiles.',
+    tags: ['profile', 'presets', 'save', 'load', 'switch', 'themes'],
+    flags: [
+      { flag: 'list', desc: 'List all saved profiles' },
+      { flag: 'save <name>', desc: 'Save current state as a new profile' },
+      { flag: 'load <name>', desc: 'Activate an existing profile' },
+    ],
+    examples: ['pyre profile list', 'pyre profile save coding', 'pyre profile load coding'],
+  },
+  {
+    id: 'sync',
+    name: 'Cloud Profile Sync',
+    cli: 'pyre sync',
+    category: 'config',
+    badge: 'SYNC',
+    description: 'Synchronize config profiles across multiple Macs via iCloud/Drive/Firebase',
+    detailedHelp: 'Synchronizes your custom themes, bookmarks, and alert rules across multiple workstations using iCloud Drive, Dropbox, or Firebase Firestore.',
+    tags: ['sync', 'cloud', 'icloud', 'drive', 'firebase', 'workstations'],
+    flags: [
+      { flag: 'status', desc: 'Check synchronization state' },
+      { flag: 'push', desc: 'Upload local configuration to cloud' },
+      { flag: 'pull', desc: 'Download configuration from cloud' },
+      { flag: '--sync-dir <dir>', desc: 'Custom cloud folder path' },
+    ],
+    examples: ['pyre sync status', 'pyre sync push', 'pyre sync pull'],
+  },
+  {
+    id: 'blender',
+    name: 'Blender Render Tracker',
+    cli: 'pyre blender',
+    category: 'config',
+    badge: '3D',
+    description: 'Track active Blender 3D render jobs, frame progress, and engines',
+    detailedHelp: 'Auto-detects active Blender render instances, displaying current frame number, total frames, rendering engine (Cycles/Eevee), and elapsed time.',
+    tags: ['blender', 'render', '3d', 'cycles', 'eevee', 'frames', 'gpu'],
+    examples: ['pyre blender'],
+  },
+  {
+    id: 'xbar',
+    name: 'Menu Bar Plugin Generator',
+    cli: 'pyre xbar',
+    category: 'config',
+    badge: 'MENU',
+    description: 'Generate an xbar / SwiftBar macOS menu bar plugin script',
+    detailedHelp: 'Creates a lightweight script that lives in your macOS menu bar, showing glanceable live CPU/memory stats and thermal warnings.',
+    tags: ['xbar', 'swiftbar', 'menubar', 'macos', 'plugin', 'tray'],
+    examples: ['pyre xbar'],
+  },
+  {
+    id: 'completions',
+    name: 'Shell Auto-Completions',
+    cli: 'pyre completions',
+    category: 'config',
+    badge: 'SHELL',
+    description: 'Generate shell auto-completion scripts (zsh, bash, fish, PowerShell)',
+    detailedHelp: 'Outputs full tab-completion scripts for your favorite shell, enabling instant command and flag autocomplete.',
+    tags: ['completions', 'shell', 'zsh', 'bash', 'fish', 'powershell', 'autocomplete'],
+    requiresArgs: {
+      prompt: 'Select shell (zsh, bash, fish, powershell):',
+      placeholder: 'zsh',
+      defaultVal: 'zsh',
+    },
+    examples: ['pyre completions zsh', 'pyre completions fish', 'pyre completions bash'],
+  },
+];
+
+/**
+ * Filter and sort commands according to category and search query.
+ */
+export function filterCommands(commands: CommandDefinition[], category: CommandCategory, query: string): CommandDefinition[] {
+  let list = commands;
+
+  if (category !== 'all') {
+    list = list.filter((c) => c.category === category);
+  }
+
+  const q = query.trim().toLowerCase();
+  if (!q) {
+    return list;
+  }
+
+  // Exact ID / CLI match highest priority, then startsWith, then tags, then description
+  return list
+    .map((cmd) => {
+      let score = 0;
+      const id = cmd.id.toLowerCase();
+      const cli = cmd.cli.toLowerCase();
+      const name = cmd.name.toLowerCase();
+      const desc = cmd.description.toLowerCase();
+
+      if (id === q || cli === q) score += 100;
+      else if (id.startsWith(q) || cli.startsWith(q)) score += 50;
+      else if (name.toLowerCase().includes(q)) score += 30;
+      else if (cmd.tags.some((t) => t.toLowerCase() === q)) score += 40;
+      else if (cmd.tags.some((t) => t.toLowerCase().includes(q))) score += 20;
+      else if (desc.includes(q)) score += 10;
+      else if (cmd.detailedHelp.toLowerCase().includes(q)) score += 5;
+
+      return { cmd, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.cmd);
+}

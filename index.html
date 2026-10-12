@@ -36,6 +36,8 @@ nav .buy:hover{background:#d2d2d7;color:#000}
 .btn{display:inline-block;font:inherit;font-size:15px;font-weight:500;padding:10px 20px;border-radius:980px;border:0;cursor:pointer;background:#fff;color:#000;transition:background .2s,transform .5s var(--spring),box-shadow .5s var(--spring)}
 .btn:hover{background:#d2d2d7;color:#000;text-decoration:none;transform:translateY(-1px) scale(1.04);box-shadow:0 10px 36px rgba(255,255,255,.2)}
 .btn:active{transform:scale(.96)}
+.btn-sec{background:rgba(255,255,255,.1);color:#fff;border:1px solid var(--border)}
+.btn-sec:hover{background:rgba(255,255,255,.18);color:#fff;box-shadow:0 10px 36px rgba(255,255,255,.08)}
 .link{font-size:16px;background:none;border:0;cursor:pointer;color:#fff;font-family:inherit}
 .link:hover{text-decoration:underline}
 
@@ -79,6 +81,25 @@ h2{font-size:clamp(28px,4.5vw,44px);line-height:1.08;letter-spacing:-.02em;font-
 .caps>div:hover::before{opacity:1}
 .caps h3{font-size:18px;letter-spacing:-.01em;font-weight:600;color:#fff}
 .caps p{margin-top:6px;font-size:15px;line-height:1.35;color:var(--mute)}
+
+/* Full Featureset */
+.fset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px;margin-top:56px;text-align:left}
+.fcard{position:relative;isolation:isolate;overflow:hidden;background:rgba(20,20,22,.65);border:1px solid var(--border);border-radius:20px;padding:32px 28px;display:flex;flex-direction:column;justify-content:space-between;transition:border-color .4s var(--out),transform .4s var(--spring),box-shadow .4s var(--out);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)}
+.fcard::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;opacity:0;transition:opacity .5s var(--out);background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.07),transparent 70%)}
+.fcard:hover{border-color:rgba(255,255,255,.24);transform:translateY(-3px);box-shadow:0 20px 48px rgba(0,0,0,.6)}
+.fcard:hover::before{opacity:1}
+.fcard-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.fcard-icon{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font-size:18px;color:#fff}
+.fcard-pill{font:500 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:5px 9px;border-radius:980px;background:rgba(255,255,255,.07);color:#d2d2d7;border:1px solid var(--border)}
+.fcard h3{font-size:22px;line-height:1.2;font-weight:600;letter-spacing:-.02em;color:#fff;margin-bottom:8px}
+.fcard .fdesc{font-size:14px;line-height:1.45;color:var(--mute);margin-bottom:20px}
+.flist{list-style:none;margin:0 0 24px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.4;color:#d2d2d7}
+.flist li{position:relative;padding-left:18px}
+.flist li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:#888}
+.flist strong{color:#fff;font-weight:500}
+.fcard-foot{padding-top:16px;border-top:1px solid rgba(255,255,255,.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.fcmd{font:12px/1 var(--mono);background:rgba(255,255,255,.06);color:#f5f5f7;padding:5px 10px;border-radius:6px;border:1px solid var(--border)}
+.ftag{font-size:12px;color:#86868b}
 
 /* Table */
 .tbl{overflow-x:auto;margin-top:48px}
@@ -188,6 +209,7 @@ dialog[open]::backdrop{opacity:1}
 @media(max-width:820px){
   section{padding:64px 22px}
   .caps{grid-template-columns:1fr;gap:28px}
+  .fset-grid{grid-template-columns:1fr;gap:20px}
   nav .hide{display:none}
   .tabs{display:none}
   .show-grid{display:block;margin-top:32px}
@@ -213,6 +235,9 @@ dialog[open]::backdrop{opacity:1}
 <nav aria-label="Primary">
  <div class="in">
   <a class="logo" href="#">Pyre</a>
+  <a href="#features">Views</a>
+  <a href="#featureset">Features</a>
+  <a href="#compare">Compare</a>
   <a href="#" id="nav-docs">Docs</a>
   <a class="buy" href="#install">Install</a>
  </div>
@@ -222,9 +247,10 @@ dialog[open]::backdrop{opacity:1}
  <div class="orb o1"></div><div class="orb o2"></div>
  <div class="wrap">
   <h1>Pyre</h1>
-  <p class="lede">System monitoring for your Mac.</p>
+  <p class="lede">High-precision system telemetry &amp; optimizer for your Mac.</p>
   <div class="ctas">
    <a class="btn" href="#install">Install</a>
+   <a class="btn btn-sec" href="#featureset">Explore Features</a>
    <button class="link" id="hero-docs">Docs</button>
   </div>
    <div class="pi-stage" id="piStage" role="img" aria-label="Pyre app icon">
@@ -245,13 +271,14 @@ dialog[open]::backdrop{opacity:1}
 <section class="gray" id="features">
  <div class="wrap">
   <div class="center">
-   <h2>Four views.</h2>
-   <p class="lede">Hardware-level detail, no configuration needed.</p>
+   <h2>Five interactive views.</h2>
+   <p class="lede">Hardware-level detail, active optimization, no configuration needed.</p>
    <div class="tabs" role="tablist">
     <button class="tab on" data-i="0">Silicon</button>
     <button class="tab" data-i="1">Thermals</button>
     <button class="tab" data-i="2">Network</button>
     <button class="tab" data-i="3">Power</button>
+    <button class="tab" data-i="4">Optimizer</button>
    </div>
   </div>
   <div class="show-grid">
@@ -260,28 +287,167 @@ dialog[open]::backdrop{opacity:1}
     <div class="step" data-cmd="$ pyre check"><h3>Thermals</h3><p>SMC temperatures, fan speeds, throttling status.</p><code>$ pyre check</code><div class="win m" data-slot="Thermals view · 1600 × 1000"></div></div>
     <div class="step" data-cmd="$ pyre netusage"><h3>Network</h3><p>Per-connection forensics with socket-level detail.</p><code>$ pyre netusage</code><div class="win m" data-slot="Network view · 1600 × 1000"></div></div>
     <div class="step" data-cmd="$ pyre bench &quot;npm test&quot;"><h3>Power</h3><p>Battery health, cycle count, and per-process energy.</p><code>$ pyre bench &quot;npm test&quot;</code><div class="win m" data-slot="Power view · 1600 × 1000"></div></div>
+    <div class="step" data-cmd="$ pyre optimize"><h3>Optimizer</h3><p>Quit forgotten apps, purge inactive RAM, clean 13 GB+ caches, and audit startup items.</p><code>$ pyre optimize</code><div class="win m" data-slot="Optimizer view · 1600 × 1000"></div></div>
    </div>
    <div class="stack">
     <div class="win on" data-slot="Silicon view · 1600 × 1000"></div>
     <div class="win" data-slot="Thermals view · 1600 × 1000"></div>
     <div class="win" data-slot="Network view · 1600 × 1000"></div>
     <div class="win" data-slot="Power view · 1600 × 1000"></div>
+    <div class="win" data-slot="Optimizer view · 1600 × 1000"></div>
     <div class="chip" id="chip">$ pyre live</div>
    </div>
   </div>
  </div>
 </section>
 
-<section class="dark">
+<section class="dark" id="featureset">
  <div class="wrap center">
-  <h2>Built for how you work.</h2>
-  <div class="caps">
-   <div><h3>Live dashboard</h3><p>Full-screen terminal with sparklines and keyboard shortcuts.</p></div>
-   <div><h3>Web portal</h3><p>Browser dashboard with live updates.</p></div>
-   <div><h3>Fleet view</h3><p>Monitor several hosts over SSH.</p></div>
-   <div><h3>Anomaly detection</h3><p>Statistical analysis flags runaway processes.</p></div>
-   <div><h3>Energy profiling</h3><p>Measure command cost in joules and kWh.</p></div>
-   <div><h3>Private streaming</h3><p>TLS encrypted streaming, no middleman.</p></div>
+  <h2>Complete featureset.</h2>
+  <p class="lede">Every capability engineered for macOS, Linux, and Windows — from low-level silicon metrics to active automation and memory optimization.</p>
+  
+  <div class="fset-grid">
+   <!-- Pillar 1: Mac System Optimizer -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+      <span class="fcard-pill">Active Maintenance</span>
+     </div>
+     <h3>macOS System Optimizer</h3>
+     <p class="fdesc">Intelligent memory and disk reclamation tailored for macOS workflows.</p>
+     <ul class="flist">
+      <li><strong>Idle App Reaper:</strong> Ranks GUI apps by activation order via <code>lsappinfo</code> and safely quits inactive windows.</li>
+      <li><strong>Background Tracker:</strong> Native launchd agent (<code>pyre optimize track</code>) recording precise frontmost app usage.</li>
+      <li><strong>Safe ⌘Q Termination:</strong> Graceful AppleScript quit gives apps a chance to prompt for unsaved documents.</li>
+      <li><strong>Inactive RAM Purge:</strong> Evaluates memory pressure, swap, compressed pages, and flushes cache via <code>sudo purge</code>.</li>
+      <li><strong>Developer Cache Cleaner:</strong> Safely measures and cleans Xcode DerivedData, Homebrew, npm, Yarn, pnpm, and pip caches.</li>
+      <li><strong>Startup &amp; DNS Audit:</strong> Flags broken or orphaned LaunchAgent plists and flushes the macOS DNS resolver cache.</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre optimize</code>
+     <span class="ftag">macOS Sonoma &amp; Sequoia</span>
+    </div>
+   </article>
+
+   <!-- Pillar 2: Apple Silicon Telemetry -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></div>
+      <span class="fcard-pill">Hardware Probes</span>
+     </div>
+     <h3>Apple Silicon &amp; Sensors</h3>
+     <p class="fdesc">Microsecond-accurate hardware telemetry directly from Apple Silicon counters.</p>
+     <ul class="flist">
+      <li><strong>P/E Cluster Telemetry:</strong> Performance and Efficiency core frequencies, thread load, and per-core mini bars.</li>
+      <li><strong>GPU &amp; Neural Engine:</strong> Real-time Metal core utilization, VRAM allocation, and Apple Neural Engine (ANE) power draw.</li>
+      <li><strong>Real-Time Wattage:</strong> Live power draw in watts via IOReport and Powermetrics across CPU, GPU, and memory.</li>
+      <li><strong>SMC Thermals &amp; Fans:</strong> Die junction temps, thermal throttling alerts, and independent dual fan RPM telemetry.</li>
+      <li><strong>Smart Battery Forensics:</strong> Rolling discharge heuristics forecasting true runtime, cycle count, and wear degradation.</li>
+      <li><strong>S.M.A.R.T. Disk Health:</strong> NVMe wear level %, temperature, reallocated sectors, and total lifetime terabytes written.</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre live / pyre smart</code>
+     <span class="ftag">M1 &bull; M2 &bull; M3 &bull; M4</span>
+    </div>
+   </article>
+
+   <!-- Pillar 3: Terminal UI & Navigation -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+      <span class="fcard-pill">Interactive TUI</span>
+     </div>
+     <h3>Interactive Terminal UI</h3>
+     <p class="fdesc">Full-screen terminal dashboard with responsive layout and instant keyboard shortcuts.</p>
+     <ul class="flist">
+      <li><strong>6 Built-In Themes:</strong> Default, Dracula, Cyberpunk, Monochrome, Nord, and Gruvbox, plus custom JSON color maps.</li>
+      <li><strong>Search-As-You-Type:</strong> Fuzzy process filter (<code>/</code>) with instant sorting by CPU, RSS, PID, user, or state.</li>
+      <li><strong>Process Hierarchy Tree:</strong> Instant tree-view toggle (<code>t</code>) visualising process parentage and worker threads.</li>
+      <li><strong>Signal Dispatch:</strong> Send SIGTERM, SIGKILL, SIGSTOP, or SIGHUP directly to rogue processes (<code>k</code> / <code>S</code>).</li>
+      <li><strong>Sparklines &amp; Histograms:</strong> Rolling 60-second charts with dynamic zoom levels (<code>[</code> / <code>]</code>).</li>
+      <li><strong>Bookmarks &amp; Palette:</strong> Session bookmarks (<code>Shift+M</code>) and quick-action command palette (<code>:</code>).</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre live --theme dracula</code>
+     <span class="ftag">Zero Latency &bull; Mouse Support</span>
+    </div>
+   </article>
+
+   <!-- Pillar 4: Autonomous Watchdog -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+      <span class="fcard-pill">Rules &amp; Remediation</span>
+     </div>
+     <h3>Autonomous Watchdog</h3>
+     <p class="fdesc">Persistent daemon evaluating threshold rules and automatically mitigating rogue processes.</p>
+     <ul class="flist">
+      <li><strong>Runaway Mitigation:</strong> Configurable rules (e.g. CPU &gt; 90% for 30s) automatically renice or kill runaway processes.</li>
+      <li><strong>Multi-Channel Webhooks:</strong> Broadcast alerts to Slack, Discord, Pushover, or self-hosted ntfy.sh topics.</li>
+      <li><strong>Thermal Protection:</strong> Protects Mac hardware by triggering cooldown notifications or actions before thermal throttle.</li>
+      <li><strong>Native Service Integration:</strong> Install as an autonomous background LaunchAgent (macOS) or systemd unit (Linux).</li>
+      <li><strong>Audit Trail:</strong> Complete forensic logs of triggered rules, killed PIDs, and resource states over time.</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre watchdog</code>
+     <span class="ftag">Autonomous Daemon</span>
+    </div>
+   </article>
+
+   <!-- Pillar 5: Network Forensics & Mesh -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+      <span class="fcard-pill">Sockets &amp; Networking</span>
+     </div>
+     <h3>Network Forensics &amp; Mesh</h3>
+     <p class="fdesc">Deep socket inspections, per-process bandwidth metering, and encrypted peer streaming.</p>
+     <ul class="flist">
+      <li><strong>Per-Process Bandwidth:</strong> Real-time upload and download speeds per app using macOS <code>nettop</code> forensics.</li>
+      <li><strong>Encrypted P2P Streaming:</strong> Stream live stats across machines over TCP with TLS and HMAC-SHA256 signing.</li>
+      <li><strong>Multi-Host Fleet View:</strong> Aggregate tens of remote servers over SSH or P2P into an auto-tiled overview (<code>pyre fleet</code>).</li>
+      <li><strong>Topology Auto-Discovery:</strong> Network topology mapper with active neighbor ARP/ping discovery (<code>pyre topo</code>).</li>
+      <li><strong>DNS Query Inspector:</strong> Monitor DNS resolution cache and flush poisoned records on demand.</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre netusage / pyre p2p</code>
+     <span class="ftag">TLS &bull; HMAC &bull; SSH</span>
+    </div>
+   </article>
+
+   <!-- Pillar 6: AI Insights, Profiling & Integrations -->
+   <article class="fcard">
+    <div>
+     <div class="fcard-head">
+      <div class="fcard-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg></div>
+      <span class="fcard-pill">Intelligence &amp; APIs</span>
+     </div>
+     <h3>AI Insights &amp; Integrations</h3>
+     <p class="fdesc">Machine-learning anomaly detection, CPU call-tree sampling, and open ecosystem exports.</p>
+     <ul class="flist">
+      <li><strong>Z-Score Anomaly Digest:</strong> Statistical standard deviation analysis flags abnormal resource spikes over time.</li>
+      <li><strong>Plain-English AI Explanations:</strong> Diagnose system spikes using local Ollama models or OpenAI (<code>pyre explain</code>).</li>
+      <li><strong>Call-Tree CPU Profiler:</strong> Sample running processes via <code>sample</code>/<code>spindump</code> to locate hot functions (<code>pyre profile-proc</code>).</li>
+      <li><strong>Active Build &amp; Render Trackers:</strong> Real-time compiler tracking (<code>pyre build</code>) and Blender 3D render job monitor.</li>
+      <li><strong>Prometheus &amp; REST Server:</strong> Built-in Prometheus <code>/metrics</code> endpoint and lightweight JSON REST API server.</li>
+      <li><strong>Historical CSV Replay:</strong> Log sessions continuously to CSV and play them back visually in the interactive TUI.</li>
+     </ul>
+    </div>
+    <div class="fcard-foot">
+     <code class="fcmd">pyre explain / pyre prometheus</code>
+     <span class="ftag">Ollama &bull; OpenAI &bull; Prometheus</span>
+    </div>
+   </article>
   </div>
  </div>
 </section>
@@ -302,6 +468,8 @@ dialog[open]::backdrop{opacity:1}
      <tr><td>Socket forensics</td><td class="p">✓</td><td>Partial</td><td>—</td><td>—</td><td>—</td><td>—</td><td>Partial</td></tr>
      <tr><td>Anomaly detection</td><td class="p">Z-score</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
      <tr><td>Energy profiler</td><td class="p">kWh, joules</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+     <tr><td>macOS System Optimizer</td><td class="p">✓ (Apps, Caches, RAM)</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+     <tr><td>Autonomous Watchdog &amp; Alerts</td><td class="p">✓ (Webhooks + Daemon)</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
      <tr><td>Export formats</td><td class="p">JSON, CSV, HTML, MD</td><td>—</td><td>—</td><td>—</td><td>—</td><td>—</td><td>InfluxDB, CSV</td></tr>
     </tbody>
    </table>
@@ -363,6 +531,15 @@ dialog[open]::backdrop{opacity:1}
     <tr><td>pyre server</td><td>Print commands for starting P2P server/client with generated password</td></tr>
     <tr><td>pyre sync &lt;push|pull|status&gt;</td><td>Synchronize config profiles across machines</td></tr>
     <tr><td>pyre xbar</td><td>Generate an xbar / SwiftBar menu bar plugin script</td></tr>
+    <tr><td>pyre optimize</td><td>macOS system optimizer overview &amp; recommendations</td></tr>
+    <tr><td>pyre optimize apps</td><td>Find &amp; gracefully quit idle GUI apps (--idle, --keep, --dry-run)</td></tr>
+    <tr><td>pyre optimize track</td><td>Background activity tracker daemon (--install / --uninstall / --auto-quit)</td></tr>
+    <tr><td>pyre optimize memory</td><td>Evaluate memory pressure, swap, compressor &amp; run sudo purge</td></tr>
+    <tr><td>pyre optimize caches</td><td>Measure &amp; clean developer/app caches (--clean, skips active apps)</td></tr>
+    <tr><td>pyre optimize trash</td><td>Calculate Trash size and safely empty it (--empty)</td></tr>
+    <tr><td>pyre optimize startup</td><td>Audit Login Items &amp; LaunchAgents, flagging broken leftover plists</td></tr>
+    <tr><td>pyre optimize dns</td><td>Flush macOS DNS resolver cache (dscacheutil &amp; mDNSResponder)</td></tr>
+    <tr><td>pyre optimize protect &lt;app&gt;</td><td>Add or remove applications from the protected whitelist</td></tr>
     <tr><td>pyre --json</td><td>Export as JSON (also --csv, --tsv, --html, --md)</td></tr>
    </tbody>
   </table>
@@ -460,6 +637,23 @@ const uiSlots={
 │ <span class="t-acc">SMART RUNTIME FORECAST:</span>                                                  │
 │ Light Load:    8h 15m  (~0.8%/h)  Current Load:  4h 32m  (~1.5%/h)           │
 │ Heavy Load:    2h 05m  (~3.2%/h)  Advice: Battery level is healthy.           │
+<span class="sep">└──────────────────────────────────────────────────────────────────────────────┘</span></div>`,
+
+'Optimizer view · 1600 × 1000':`<div class="term-content"><span class="c"> PYRE</span> macbook · up 2d 3h
+<span class="sep">─────────────────────────────────────────────────────────────────────────────</span>
+[O] OPTIMIZE · macOS System Optimizer
+
+<span class="sep">┌─ System Optimizer ───────────────────────────────────────────────────────────┐</span>
+│ <span class="t-acc">APPS:</span>  25 open · Tracker: <span class="t-ok">active</span> (LaunchAgent) · 4 idle (~820 MB RAM)           │
+│       Signal (#7 · 2h 45m idle)   Spotify (#8 · 3h 10m idle)                │
+│       Claude (#11 · 4h 05m idle)  Anytype (#15 · 5h 20m idle)               │
+│ <span class="t-acc">MEMORY:</span> Pressure: <span class="t-ok">Normal (62% free)</span>   Swap: 512 MB / 15.0 GB   Comp: 2.1 GB  │
+│         Run <span class="hi">sudo purge</span> to flush inactive memory cache                        │
+│ <span class="t-acc">CACHES:</span> 13.2 GB total reclaimable                                             │
+│         Xcode DerivedData: 4.8 GB   npm _cacache: 5.2 GB   pnpm: 1.3 GB     │
+│         8 running apps' caches safely preserved                             │
+│ <span class="t-acc">STARTUP:</span> 18 launch items · <span class="t-warn">2 broken leftover plists flagged</span>                 │
+│ <span class="t-acc">ACTIONS:</span> <span class="hi">pyre optimize apps</span> (quit idle) · <span class="hi">pyre optimize caches --clean</span>       │
 <span class="sep">└──────────────────────────────────────────────────────────────────────────────┘</span></div>`
 };
 document.querySelectorAll('[data-slot]').forEach(el=>{
@@ -468,7 +662,7 @@ document.querySelectorAll('[data-slot]').forEach(el=>{
 
 // Scroll reveal
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12,rootMargin:'0px 0px -6% 0px'});
-document.querySelectorAll('section:not(.hero) :is(h2,.lede,.caps>div,.tbl,.cmd,.note)').forEach(el=>{
+document.querySelectorAll('section:not(.hero) :is(h2,.lede,.caps>div,.fcard,.tbl,.cmd,.note)').forEach(el=>{
   el.classList.add('rv');
   el.style.setProperty('--d',Math.min([...el.parentElement.children].indexOf(el),5)*80+'ms');
   io.observe(el);
@@ -512,8 +706,8 @@ const featObserver=new IntersectionObserver(es=>{
 if(featSec)featObserver.observe(featSec);
 setStep(0);
 
-// Capability cards: spotlight follows the pointer
-document.querySelectorAll('.caps>div').forEach(c=>c.addEventListener('pointermove',e=>{
+// Capability & featureset cards: spotlight follows the pointer
+document.querySelectorAll('.caps>div, .fcard').forEach(c=>c.addEventListener('pointermove',e=>{
   const r=c.getBoundingClientRect();
   c.style.setProperty('--mx',(e.clientX-r.left)+'px');
   c.style.setProperty('--my',(e.clientY-r.top)+'px');

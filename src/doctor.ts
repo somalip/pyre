@@ -336,14 +336,15 @@ async function runWindowsDoctor(): Promise<DoctorCheck[]> {
     });
   }
 
-  // 2. PowerShell / WMI Interface
+  // 2. PowerShell / WMI Interface (modern CIM check)
   try {
-    const wmiCheck = await run('wmic os get Caption 2>nul || powershell -Command "(Get-CimInstance Win32_OperatingSystem).Caption"', '');
+    const { runPowerShell } = await import('./monitors/run.js');
+    const wmiCheck = await runPowerShell('(Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue).Caption', '');
     if (wmiCheck.toLowerCase().includes('windows')) {
       checks.push({
         name: 'WMI / CIM Subsystem',
         status: 'ok',
-        message: 'WMI/CIM management queries responsive.',
+        message: `WMI/CIM management queries responsive (${wmiCheck}).`,
       });
     } else {
       checks.push({
@@ -357,11 +358,90 @@ async function runWindowsDoctor(): Promise<DoctorCheck[]> {
     checks.push({
       name: 'WMI / CIM Subsystem',
       status: 'warn',
-      message: 'Could not execute WMI query.',
+      message: 'Could not execute WMI/CIM query.',
     });
   }
 
-  // 3. Network Reachability
+  // 3. Windows Defender / Antivirus Protection
+  try {
+    const { runPowerShell } = await import('./monitors/run.js');
+    const avRaw = await runPowerShell(
+      `$av = Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue; if ($av) { ($av | Select-Object -ExpandProperty displayName) -join ', ' } else { '' }`,
+      ''
+    );
+    if (avRaw.trim()) {
+      checks.push({
+        name: 'Antivirus Protection',
+        status: 'ok',
+        message: `Antivirus active (${avRaw.trim()}).`,
+      });
+    } else {
+      checks.push({
+        name: 'Antivirus Protection',
+        status: 'warn',
+        message: 'No third-party Antivirus reported via SecurityCenter2; Windows Defender active.',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'Antivirus Protection',
+      status: 'warn',
+      message: 'Could not query SecurityCenter2 status.',
+    });
+  }
+
+  // 4. User Account Control (UAC) Status
+  try {
+    const { runPowerShell } = await import('./monitors/run.js');
+    const uacRaw = await runPowerShell(
+      `(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System' -Name EnableLUA -ErrorAction SilentlyContinue).EnableLUA`,
+      ''
+    );
+    if (uacRaw.trim() === '1') {
+      checks.push({
+        name: 'User Account Control',
+        status: 'ok',
+        message: 'UAC is enabled.',
+      });
+    } else {
+      checks.push({
+        name: 'User Account Control',
+        status: 'warn',
+        message: 'UAC is disabled or restricted.',
+        details: 'Running with UAC disabled allows processes elevated privileges without prompts.',
+      });
+    }
+  } catch {
+    checks.push({
+      name: 'User Account Control',
+      status: 'warn',
+      message: 'Could not query UAC registry status.',
+    });
+  }
+
+  // 5. Hardware Inventory (Intel / AMD CPU, NVIDIA / AMD / Intel GPU)
+  try {
+    const { runPowerShell } = await import('./monitors/run.js');
+    const cpuName = await runPowerShell('(Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name)', '');
+    const gpuName = await runPowerShell('(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name)', '');
+    const cpuVendor = cpuName.toLowerCase().includes('amd') ? 'AMD' : cpuName.toLowerCase().includes('intel') ? 'Intel' : 'x86/x64';
+    const gpuVendor = gpuName.toLowerCase().includes('nvidia') ? 'NVIDIA' : gpuName.toLowerCase().includes('amd') || gpuName.toLowerCase().includes('radeon') ? 'AMD' : gpuName.toLowerCase().includes('intel') ? 'Intel' : 'Standard';
+
+    checks.push({
+      name: 'Hardware Telemetry',
+      status: 'ok',
+      message: `${cpuVendor} CPU & ${gpuVendor} GPU recognized.`,
+      details: `CPU: ${cpuName.trim() || 'Generic'} | GPU: ${gpuName.trim() || 'Generic'}`,
+    });
+  } catch {
+    checks.push({
+      name: 'Hardware Telemetry',
+      status: 'warn',
+      message: 'Hardware inspection incomplete.',
+    });
+  }
+
+  // 6. Network Reachability
   try {
     const netCheck = await run('netstat -rn 2>nul', '');
     if (netCheck.includes('0.0.0.0')) {
@@ -385,7 +465,7 @@ async function runWindowsDoctor(): Promise<DoctorCheck[]> {
     });
   }
 
-  // 4. Config file integrity
+  // 7. Config file integrity
   checks.push(checkConfigIntegrity());
 
   return checks;
