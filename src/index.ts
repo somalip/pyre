@@ -52,7 +52,7 @@ program
     .option('--export-dir <dir>', 'Directory used for live-mode snapshot exports and logs', config.exportDir)
     .option('--log', 'Start continuous CSV logging immediately when live mode starts')
     .option('--tree', 'Show process tree view instead of flat list')
-    .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', config.sortMode)
+    .option('--sort <key>', 'Sort processes by: cpu, mem, pid, user, command, state, threads, runtime', 'cpu')
     .option('--packets', 'Include packet monitor panel in output')
     .option('--limit <n>', 'Max number of processes to include in --once/--json/--csv/--tsv snapshots (0 = all)', '10')
     .option('--alert-cpu <pct>', 'CPU usage alert threshold (default: 90)', String(config.cpuAlertPct))
@@ -116,10 +116,24 @@ program
     .option('--budget-mem <bytes>', 'Maximum allowable peak memory for pyre run (e.g. 500MB, 2GB)')
     .option('--budget-time <sec>', 'Maximum allowable duration for pyre run in seconds')
     .option('--nice <val>', 'Nice value for pyre inspect --nice (-20 to 19)')
-    .option('--format <format>', 'Output format for statusline (tmux, starship, json, pango, plain)');
+    .option('--format <format>', 'Output format for statusline (tmux, starship, json, pango, plain)')
+    .option('--min-battery <pct>', 'Minimum battery percentage cutoff for pyre awake (default: 15)', '15')
+    .option('--max-temp <c>', 'Maximum CPU temperature cutoff for pyre awake in Celsius (default: 85)', '85')
+    .option('--until-done <cmd>', 'Command to run during pyre awake; releases lock when finished')
+    .option('--while-network <rate>', 'Network rate threshold to keep pyre awake (e.g. 500KB/s)')
+    .option('--inactive-days <days>', 'Minimum days since last modification for pyre sweep (default: 0)')
+    .option('--exclude-dirty', 'Exclude projects with uncommitted git modifications in pyre sweep')
+    .option('--targets <targets>', 'Comma-separated target folder names for pyre sweep')
+    .option('--export-pf', 'Export macOS Packet Filter firewall rules for pyre net-audit')
+    .option('--export-hosts', 'Export hosts blocklist for pyre net-audit')
+    .option('--webhook <url>', 'Home Assistant webhook URL for pyre ha')
+    .option('--suspend', 'Suspend throttled processes with SIGSTOP during pyre focus on')
+    .option('-r, --reverse', 'Reverse process sort order (ascending instead of descending)')
+    .option('--kill-port <port>', 'Terminate process listening on the specified port number (for pyre ports)')
+    .option('--samples <n>', 'Number of samples to collect (for pyre pipe / pyre leaks)');
 
 program.addHelpText('after', `
-  💡 Tip: Can't remember all commands? Run 'pyre menu' to browse and run all tools interactively!
+  Tip: Can't remember all commands? Run 'pyre menu' to browse and run all tools interactively!
 
  Commands:
    menu, tui, launcher            Interactive TUI command center & tools navigator
@@ -130,6 +144,10 @@ program.addHelpText('after', `
    statusline                     Headless terminal statusline string (tmux, starship, neovim)
    inspect <pid>                  Process deep-dive inspector (lsof, sockets, nice)
    containers                     Container and micro-VM telemetry (Docker, Podman, OrbStack)
+   ports [filter]                 Listening port, socket & local dev server manager (--kill-port <port>)
+   gpu                            Deep GPU, Unified Memory, ANE & AI/LLM quantization fit inspector
+   leaks [filter]                 Real-time process memory leak & monotonic growth rate detector
+   zombies                        Zombie (Z), stuck I/O (U/D), spinlock & stale dev orphan hunter (--clean)
    live                           Interactive live dashboard
    check                          One-line plain-English health summary
    pipe                           Continuous newline-delimited JSON stream for scripting
@@ -169,9 +187,92 @@ program.addHelpText('after', `
    sync <push|pull|status>        Synchronize config profiles across Macs via iCloud/Drive
    optimize [apps|track|memory|caches|trash|startup|dns]
                                   Mac optimizer: quit idle apps, free memory, clean caches
+   sleep-audit                    Standby & sleep battery drain diagnostics
+   sweep [path]                   Developer & project build cruft sweeper (node_modules, target, etc.)
+   awake                          Guardrailed keep-awake utility with thermal and battery failsafes
+   net-audit                      Outbound network and privacy flow inspector (cleartext HTTP, sockets)
+   focus [on|off|status]          Turbo / Focus performance shield (QoS and background process tamer)
+   ha [config|publish]            Home Assistant MQTT auto-discovery and telemetry bridge
  `);
 
-program.parse(process.argv);
+// Map of known subcommands so users can invoke them as flags (e.g. pyre --live, pyre --ui, pyre --check)
+const KNOWN_SUBCOMMANDS = new Set([
+  'menu', 'tui', 'launcher', 'interactive',
+  'playbook', 'flight', 'run', 'bench-git', 'statusline',
+  'inspect', 'containers', 'ports', 'gpu', 'leaks', 'zombies',
+  'live', 'check', 'pipe', 'stress', 'ui', 'launch',
+  'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies',
+  'doctor', 'extensions', 'brew', 'update', 'profile', 'config',
+  'history', 'diff', 'info', 'completions', 'xbar', 'p2p', 'server',
+  'blender', 'prometheus', 'smart', 'replay', 'explain', 'alert',
+  'netusage', 'serve', 'profile-proc', 'watchdog', 'build', 'topo',
+  'sync', 'optimize', 'sleep-audit', 'sweep', 'awake', 'net-audit',
+  'focus', 'ha'
+]);
+
+export function normalizeArgv(argv: string[], options: Array<{ long?: string; short?: string; required?: boolean; optional?: boolean }>): string[] {
+  const result: string[] = argv.slice(0, 2);
+  const optionsWithArg = new Set<string>();
+  for (const opt of options) {
+    if (opt.required || opt.optional) {
+      if (opt.long) optionsWithArg.add(opt.long);
+      if (opt.short) optionsWithArg.add(opt.short);
+    }
+  }
+
+  let foundSubcommand = false;
+  let skipNext = false;
+
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+    if (skipNext) {
+      result.push(arg);
+      skipNext = false;
+      continue;
+    }
+    if (arg === '--') {
+      result.push(...argv.slice(i));
+      break;
+    }
+    if (optionsWithArg.has(arg)) {
+      result.push(arg);
+      skipNext = true;
+      continue;
+    }
+    if (arg.startsWith('--') && arg.includes('=')) {
+      result.push(arg);
+      continue;
+    }
+    if (!foundSubcommand && arg.startsWith('--')) {
+      const flagName = arg.slice(2);
+      if (KNOWN_SUBCOMMANDS.has(flagName)) {
+        result.push(flagName);
+        foundSubcommand = true;
+        continue;
+      }
+    } else if (!arg.startsWith('-')) {
+      foundSubcommand = true;
+    }
+    result.push(arg);
+  }
+  return result;
+}
+
+let isMain = false;
+try {
+  if (process.argv[1]) {
+    const entryPath = fs.realpathSync(process.argv[1]);
+    const modulePath = fs.realpathSync(fileURLToPath(import.meta.url));
+    const isTestRunnerFile = entryPath.endsWith('.test.ts') || entryPath.endsWith('.test.js');
+    isMain = (entryPath === modulePath || entryPath.endsWith(path.sep + 'pyre')) && !isTestRunnerFile;
+  }
+} catch {
+  isMain = false;
+}
+
+if (isMain) {
+  program.parse(normalizeArgv(process.argv, program.options as any));
+}
 
 const opts = program.opts();
 
@@ -602,6 +703,127 @@ async function main() {
     return;
   }
 
+  if (cmd === 'sleep-audit') {
+    const { runSleepAuditCommand } = await import('./sleepAuditCmd.js');
+    await runSleepAuditCommand({
+      since: opts.since,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'sweep') {
+    const { runSweepCommand } = await import('./sweepCmd.js');
+    const targetPath = program.args[1];
+    const targets = opts.targets ? opts.targets.split(',').map((s: string) => s.trim()) : undefined;
+    const inactiveDays = opts.inactiveDays ? parseFloat(opts.inactiveDays) : undefined;
+    await runSweepCommand({
+      path: targetPath,
+      targets,
+      inactiveDays,
+      excludeDirty: !!opts.excludeDirty,
+      clean: !!opts.clean,
+      yes: !!opts.yes,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'awake') {
+    const { runAwakeCommand, parseByteRate } = await import('./awakeCmd.js');
+    const targetPid = opts.pid ? parseInt(opts.pid, 10) : undefined;
+    const minBattery = opts.minBattery ? parseInt(opts.minBattery, 10) : undefined;
+    const maxTemp = opts.maxTemp ? parseFloat(opts.maxTemp) : undefined;
+    const whileNetwork = opts.whileNetwork ? parseByteRate(opts.whileNetwork) : undefined;
+    await runAwakeCommand({
+      duration: opts.duration,
+      untilDone: opts.untilDone,
+      pid: targetPid,
+      whileNetwork,
+      minBattery,
+      maxTemp,
+    });
+    return;
+  }
+
+  if (cmd === 'net-audit') {
+    const { runNetAuditCommand } = await import('./netAuditCmd.js');
+    const topCount = opts.top ? parseInt(opts.top, 10) : undefined;
+    await runNetAuditCommand({
+      top: topCount,
+      json: !!opts.json,
+      exportPf: !!opts.exportPf,
+      exportHosts: !!opts.exportHosts,
+    });
+    return;
+  }
+
+  if (cmd === 'focus') {
+    const sub = program.args[1] || 'status';
+    const { runFocusCommand } = await import('./focusCmd.js');
+    await runFocusCommand(sub, {
+      suspend: !!opts.suspend,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'ha') {
+    const sub = program.args[1] || 'config';
+    const { runHaCommand } = await import('./haCmd.js');
+    await runHaCommand(sub, {
+      webhook: opts.webhook,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'ports') {
+    const { runPortsCommand } = await import('./portsCmd.js');
+    const killPort = opts.killPort
+      ? parseInt(opts.killPort, 10)
+      : (program.args[1] === 'kill' && program.args[2] ? parseInt(program.args[2], 10) : undefined);
+    const filterArg = !killPort && program.args[1] !== 'kill' ? program.args[1] : undefined;
+    await runPortsCommand({
+      killPort,
+      filter: filterArg,
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'gpu') {
+    const { runGpuCommand } = await import('./gpuCmd.js');
+    await runGpuCommand({
+      detailed: !!opts.detailed,
+      json: !!opts.json,
+      top: opts.top ? parseInt(opts.top, 10) : undefined,
+    });
+    return;
+  }
+
+  if (cmd === 'leaks') {
+    const { runLeaksCommand } = await import('./leaksCmd.js');
+    await runLeaksCommand({
+      samples: opts.samples ? parseInt(opts.samples, 10) : undefined,
+      intervalSec: opts.interval ? parseFloat(opts.interval) : 1,
+      top: opts.top ? parseInt(opts.top, 10) : undefined,
+      filter: program.args[1],
+      json: !!opts.json,
+    });
+    return;
+  }
+
+  if (cmd === 'zombies') {
+    const { runZombiesCommand } = await import('./zombiesCmd.js');
+    await runZombiesCommand({
+      clean: !!opts.clean,
+      dryRun: !!opts.dryRun,
+      json: !!opts.json,
+    });
+    return;
+  }
+
   if (cmd === 'profile') {
     const sub = program.args[1];
     const name = program.args[2];
@@ -774,7 +996,7 @@ async function main() {
   if (opts.alertNtfy) config.ntfyUrl = opts.alertNtfy;
   if (cmd && cmd !== 'live' && cmd !== 'p2p') {
     console.error(chalk.red(`\n  ✖ Unknown command: '${cmd}'`));
-    console.log(chalk.yellow(`  💡 Tip: Can't remember a command? Run 'pyre menu' to browse and run all tools interactively!\n`));
+    console.log(chalk.yellow(`  Tip: Can't remember a command? Run 'pyre menu' to browse and run all tools interactively!\n`));
     process.exit(1);
   }
 
@@ -834,7 +1056,7 @@ async function main() {
   else if (opts.md) output = formatMarkdown(data);
   else if (opts.csv) output = formatCsv(data);
   else if (opts.tsv) output = formatTsv(data);
-  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, treeView: opts.tree ?? config.treeView, minimal: !!opts.minimal, visible: { packets: opts.packets ? true : undefined }, tempUnit });
+  else output = formatTable(data, { width: process.stdout.columns || 80, sortBy: opts.sort, sortReverse: !!opts.reverse, treeView: opts.tree ?? config.treeView, minimal: !!opts.minimal, visible: { packets: opts.packets ? true : undefined }, tempUnit });
 
   console.log(output);
 
@@ -844,10 +1066,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(chalk.red(`Error: ${err.message}`));
-  process.exit(1);
-});
+if (isMain) {
+  main().catch((err) => {
+    console.error(chalk.red(`Error: ${err.message}`));
+    process.exit(1);
+  });
+}
 
 async function runP2PServer(): Promise<void> {
   const host = opts.p2pHost || '0.0.0.0';

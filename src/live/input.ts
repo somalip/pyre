@@ -10,7 +10,7 @@ import readline from 'node:readline';
 import { execSync } from 'node:child_process';
 import chalk from 'chalk';
 import { collectAll, StatsData } from '../monitors/index.js';
-import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW } from '../formatters/index.js';
+import { THEMES, type ThemeName, type VisibleItems, getTabHitboxes, TAB_BAR_ROW, sortProcesses } from '../formatters/index.js';
 import { state, setStatus, getToggleKey, type SplashColorScheme, type SplashAnimation, MENU_OPTIONS } from './state.js';
 import { exportSnapshot, startLogging, stopLogging, toggleLogging, writeLogRow } from './export.js';
 import { render, footerLine, checkAlerts, invalidateTableCache, invalidateFrame } from './render.js';
@@ -137,6 +137,10 @@ function isEscKey(key: readline.Key, str?: string): boolean {
        if (selected === 'Theme') {
          const nextIdx = (themesList.indexOf(state.currentTheme) + 1) % themesList.length;
          state.currentTheme = themesList[nextIdx];
+       } else if (selected === '3D Sprite') {
+         const modes: (typeof state.sprite3dMode)[] = ['ignis', 'torus', 'tesseract', 'reactor', 'prism'];
+         state.sprite3dMode = modes[(modes.indexOf(state.sprite3dMode) + 1) % modes.length];
+         setStatus(`3D Hologram Sprite: ${state.sprite3dMode.toUpperCase()}`);
        } else if (selected === 'Graph Mode') {
          state.graphMode = state.graphMode === 'spark' ? 'bar' : 'spark';
         } else if (selected === 'Splash Screen') {
@@ -405,6 +409,9 @@ function isEscKey(key: readline.Key, str?: string): boolean {
        const pidStr = state.inputBuffer.trim();
        state.targetPid = pidStr;
        killProcess(pidStr, state.selectedSignal);
+     } else if (state.inputMode === 'renice') {
+       const niceStr = state.inputBuffer.trim();
+       reniceProcess(state.targetPid, niceStr);
      }
      state.inputMode = null;
      state.inputBuffer = '';
@@ -432,6 +439,37 @@ function isEscKey(key: readline.Key, str?: string): boolean {
    }
  }
 
+function getSelectedProcess() {
+  if (!state.lastData?.processes?.length) return null;
+  let procs = sortProcesses(state.lastData.processes, state.sortMode, state.sortReverse);
+  if (state.processFilter) {
+    const lc = state.processFilter.toLowerCase();
+    procs = procs.filter(p => p.command.toLowerCase().includes(lc) || (p.user || '').toLowerCase().includes(lc) || String(p.pid).includes(lc));
+  }
+  if (procs.length === 0) return null;
+  const idx = Math.max(0, Math.min(state.processSelectionIndex, procs.length - 1));
+  return procs[idx] ?? null;
+}
+
+function reniceProcess(pidStr: string, niceStr: string) {
+  const pid = parseInt(pidStr, 10);
+  const niceVal = parseInt(niceStr, 10);
+  if (!pid || pid <= 0) {
+    setStatus(`Invalid PID for renice: ${pidStr}`);
+    return;
+  }
+  if (Number.isNaN(niceVal) || niceVal < -20 || niceVal > 19) {
+    setStatus(`Invalid nice priority "${niceStr}" (must be -20 to 19)`);
+    return;
+  }
+  try {
+    execSync(`renice -n ${niceVal} -p ${pid}`, { stdio: 'pipe' });
+    setStatus(`Reniced PID ${pid} to priority ${niceVal}`);
+  } catch (err: any) {
+    setStatus(`Renice failed for PID ${pid}: ${err.message?.split('\n')[0] || 'permission denied'}`);
+  }
+}
+
 let confirmKillPid: number | null = null;
 
 function killProcess(pidStr: string, signal: string = 'SIGTERM') {
@@ -445,7 +483,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    if (isProtected && confirmKillPid !== pid) {
      confirmKillPid = pid;
      const name = (pid === 0 || pid === 4) ? 'Windows System Kernel' : (pid === 1 ? 'init/launchd' : (pid === process.pid ? 'pyre itself' : 'parent process'));
-     setStatus(`⚠️ PROTECTED PID ${pid} (${name})! Re-enter PID ${pid} to confirm termination.`, 8000);
+     setStatus(`[PROTECTED] PID ${pid} (${name})! Re-enter PID ${pid} to confirm termination.`, 8000);
      return;
    }
 
@@ -533,10 +571,28 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
    state.intervalHandle = setInterval(tick, state.interval * 1000);
  }
 
+  function recordTrackedPidSample(data: StatsData) {
+    if (!state.trackedPid) {
+      state.trackedPidHistory = { pid: null, cpu: [], mem: [] };
+      return;
+    }
+    if (state.trackedPidHistory.pid !== state.trackedPid) {
+      state.trackedPidHistory = { pid: state.trackedPid, cpu: [], mem: [] };
+    }
+    const tp = data.processes.find(p => p.pid === state.trackedPid);
+    if (tp) {
+      state.trackedPidHistory.cpu.push(tp.cpu);
+      state.trackedPidHistory.mem.push(tp.mem);
+      if (state.trackedPidHistory.cpu.length > 30) state.trackedPidHistory.cpu.shift();
+      if (state.trackedPidHistory.mem.length > 30) state.trackedPidHistory.mem.shift();
+    }
+  }
+
   async function doWarmup() {
     try {
       const data = await collectAll({ detailed: state.detailed });
       state.lastData = data;
+      recordTrackedPidSample(data);
       invalidateTableCache();
 
       const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
@@ -566,6 +622,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
     try {
       const data = await collectAll({ detailed: state.detailed });
       state.lastData = data;
+      recordTrackedPidSample(data);
       invalidateTableCache();
 
       const temp = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die ?? null;
@@ -696,8 +753,11 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
 
     if (state.uiIntervalHandle) clearInterval(state.uiIntervalHandle);
     state.uiIntervalHandle = setInterval(() => {
-      if (state.running && !state.paused) render();
-    }, 250);
+      if (state.running && !state.paused) {
+        state.animFrame = (state.animFrame + 1) % 3600;
+        render();
+      }
+    }, 180);
 
     state.keypressHandler = (str: string, key: readline.Key) => {
       if (!key) return;
@@ -803,6 +863,20 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
            render();
            return;
          }
+         case 'L': {
+           pushPanelHistory('ports');
+           state.activePanel = state.activePanel === 'ports' ? 'grid' : 'ports';
+           setStatus(state.activePanel === 'grid' ? 'Grid view' : 'Listening Ports panel');
+           render();
+           return;
+         }
+         case 'I': {
+           state.sortReverse = !state.sortReverse;
+           setStatus(`Sort order: ${state.sortReverse ? 'ascending ▲' : 'descending ▼'} (${state.sortMode})`);
+           invalidateTableCache();
+           render();
+           return;
+         }
       }
 
       switch (key.name) {
@@ -866,6 +940,15 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
            setStatus(`Graph mode: ${state.graphMode}`);
            render();
            break;
+         case 'y':
+         case 'Y': {
+           const modes: (typeof state.sprite3dMode)[] = ['ignis', 'torus', 'tesseract', 'reactor', 'prism'];
+           state.sprite3dMode = modes[(modes.indexOf(state.sprite3dMode) + 1) % modes.length];
+           setStatus(`3D Hologram Sprite: ${state.sprite3dMode.toUpperCase()} (press y to cycle)`);
+           invalidateTableCache();
+           render();
+           break;
+         }
          case 'd':
            state.detailed = !state.detailed;
            setStatus(`Detailed sensor mode: ${state.detailed ? 'on' : 'off'}`);
@@ -880,19 +963,44 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
            const sortCycle: SortMode[] = ['cpu', 'mem', 'pid', 'user', 'command', 'state', 'threads', 'runtime'];
            const curIdx = sortCycle.indexOf(state.sortMode);
            state.sortMode = sortCycle[(curIdx + 1) % sortCycle.length];
-           setStatus(`Sorting by ${state.sortMode}`);
+           setStatus(`Sorting by ${state.sortMode} (${state.sortReverse ? '▲' : '▼'})`);
+           invalidateTableCache();
            render();
            break;
-         case 'k':
+         case 'v':
+           state.sortReverse = !state.sortReverse;
+           setStatus(`Sort order: ${state.sortReverse ? 'ascending ▲' : 'descending ▼'} (${state.sortMode})`);
+           invalidateTableCache();
+           render();
+           break;
+         case 'k': {
+           const sel = getSelectedProcess();
            state.inputMode = 'kill';
-           state.inputBuffer = '';
+           state.inputBuffer = sel ? String(sel.pid) : '';
            render();
            break;
-         case 'S':
+         }
+         case 'S': {
+           const sel = getSelectedProcess();
+           if (sel) state.targetPid = String(sel.pid);
            state.inputMode = 'signal';
            state.inputBuffer = 'SIGTERM';
            render();
            break;
+         }
+         case 'n': {
+           const sel = getSelectedProcess();
+           if (!sel) {
+             setStatus('Select a process first to renice');
+             render();
+             break;
+           }
+           state.targetPid = String(sel.pid);
+           state.inputMode = 'renice';
+           state.inputBuffer = '0';
+           render();
+           break;
+         }
          case 't':
            state.treeView = !state.treeView;
            setStatus(state.treeView ? 'Tree view enabled' : 'Flat view enabled');
@@ -953,17 +1061,47 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
              render();
            }
            break;
+         case 'pageup':
+           if (state.lastData?.processes?.length) {
+             state.trackedPid = null;
+             state.processSelectionIndex = Math.max(0, state.processSelectionIndex - 10);
+             render();
+           }
+           break;
+         case 'pagedown':
+           if (state.lastData?.processes?.length) {
+             state.trackedPid = null;
+             const count = state.lastData.processes.length;
+             state.processSelectionIndex = Math.min(count - 1, state.processSelectionIndex + 10);
+             render();
+           }
+           break;
+         case 'home':
+           if (state.lastData?.processes?.length) {
+             state.trackedPid = null;
+             state.processSelectionIndex = 0;
+             render();
+           }
+           break;
+         case 'end':
+           if (state.lastData?.processes?.length) {
+             state.trackedPid = null;
+             state.processSelectionIndex = Math.max(0, state.lastData.processes.length - 1);
+             render();
+           }
+           break;
          case 'space':
          case ' ':
            if (state.lastData?.processes?.length && state.processSelectionIndex >= 0) {
-             const sorted = state.lastData.processes;
-             const proc = sorted[state.processSelectionIndex];
+             const proc = getSelectedProcess();
              if (proc) {
                if (state.trackedPid === proc.pid) {
                  state.trackedPid = null;
+                 state.trackedPidHistory = { pid: null, cpu: [], mem: [] };
                  setStatus(`Stopped following PID ${proc.pid}`);
                } else {
                  state.trackedPid = proc.pid;
+                 state.trackedPidHistory = { pid: proc.pid, cpu: [proc.cpu], mem: [proc.mem] };
                  setStatus(`Following PID ${proc.pid} (${proc.command})`);
                }
                render();
@@ -984,11 +1122,11 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
              state.inspectingProcess = null;
              render();
            } else if (state.lastData?.processes?.length && state.processSelectionIndex >= 0) {
-             const sorted = state.lastData.processes;
-             const proc = sorted[state.processSelectionIndex];
+             const proc = getSelectedProcess();
              if (proc) {
                state.inspectingProcess = proc;
                state.trackedPid = proc.pid;
+               state.trackedPidHistory = { pid: proc.pid, cpu: [proc.cpu], mem: [proc.mem] };
                setStatus(`Inspecting & following PID ${proc.pid}`);
                render();
              }
@@ -1007,6 +1145,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
              render();
            } else if (state.trackedPid !== null) {
              state.trackedPid = null;
+             state.trackedPidHistory = { pid: null, cpu: [], mem: [] };
              setStatus('Stopped following process');
              render();
            } else if (state.activePanel !== 'grid') {
@@ -1045,7 +1184,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
   }
 
   function tabKeyToId(str: string): ActivePanel | null {
-    const map: Record<string, ActivePanel> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', '9': 'tasks', '0': 'disk', 'p': 'process', 'C': 'containers', 'r': 'p2p', 'A': 'anomalies', 'B': 'blender' };
+    const map: Record<string, ActivePanel> = { '1': 'cpu', '2': 'mem', '3': 'gpu', '4': 'power', '5': 'battery', '6': 'thermal', '7': 'network', '8': 'packets', 'L': 'ports', '9': 'tasks', '0': 'disk', 'p': 'process', 'C': 'containers', 'r': 'p2p', 'A': 'anomalies', 'B': 'blender' };
     return map[str] ?? null;
   }
 
@@ -1115,7 +1254,7 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         openCommandCenter();
         break;
       case 'cpu': case 'mem': case 'gpu': case 'power': case 'battery':
-      case 'thermal': case 'network': case 'packets': case 'tasks': case 'disk':
+      case 'thermal': case 'network': case 'packets': case 'ports': case 'tasks': case 'disk':
       case 'process': case 'containers': case 'p2p': case 'anomalies': case 'blender':
         state.activePanel = state.activePanel === cmd.id ? 'grid' : cmd.id as any;
         setStatus(state.activePanel === 'grid' ? 'Grid view' : `Panel: ${cmd.id.toUpperCase()}`);
@@ -1132,6 +1271,12 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         state.graphMode = state.graphMode === 'spark' ? 'bar' : 'spark';
         setStatus(`Graph mode: ${state.graphMode}`);
         break;
+      case 'sprite3d-cycle': {
+        const modes: (typeof state.sprite3dMode)[] = ['ignis', 'torus', 'tesseract', 'reactor', 'prism'];
+        state.sprite3dMode = modes[(modes.indexOf(state.sprite3dMode) + 1) % modes.length];
+        setStatus(`3D Hologram Sprite: ${state.sprite3dMode.toUpperCase()}`);
+        break;
+      }
       case 'pause':
         state.paused = !state.paused;
         setStatus(state.paused ? 'Paused' : 'Resumed');
@@ -1159,16 +1304,37 @@ function killProcess(pidStr: string, signal: string = 'SIGTERM') {
         state.sortMode = sortCycle[(sortCycle.indexOf(state.sortMode) + 1) % sortCycle.length];
         setStatus(`Sorting by ${state.sortMode}`);
         break;
-      case 'kill':
+      case 'sort-reverse':
+        state.sortReverse = !state.sortReverse;
+        setStatus(`Sort order: ${state.sortReverse ? 'ascending ▲' : 'descending ▼'} (${state.sortMode})`);
+        break;
+      case 'kill': {
+        const sel = getSelectedProcess();
         state.inputMode = 'kill';
-        state.inputBuffer = '';
+        state.inputBuffer = sel ? String(sel.pid) : '';
         render();
         return;
-      case 'signal':
+      }
+      case 'signal': {
+        const sel = getSelectedProcess();
+        if (sel) state.targetPid = String(sel.pid);
         state.inputMode = 'signal';
         state.inputBuffer = 'SIGTERM';
         render();
         return;
+      }
+      case 'renice': {
+        const sel = getSelectedProcess();
+        if (sel) {
+          state.targetPid = String(sel.pid);
+          state.inputMode = 'renice';
+          state.inputBuffer = '0';
+        } else {
+          setStatus('Select a process first to renice');
+        }
+        render();
+        return;
+      }
       case 'export':
         exportSnapshot();
         render();

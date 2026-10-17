@@ -2,7 +2,7 @@
  * TUI Renderer for Pyre's Command Center & Tool Navigator.
  */
 import chalk from 'chalk';
-import { THEMES, type ThemeName, panel, fitVisible, visLen } from '../formatters/index.js';
+import { THEMES, type ThemeName, panel, fitVisible, visLen, stampOverlay, styleSelectedRow, render3DSprite, SPRITE_3D_MODES } from '../formatters/index.js';
 import type { MenuState, CommandDefinition } from './types.js';
 import { CATEGORIES } from './commands.js';
 
@@ -17,24 +17,23 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
   const lines: string[] = [];
 
   // --- 1. Header Banner ---
-  const title = ` 🔥 pyre — Command Center & Tools Navigator `;
-  const headerLeft = accent(chalk.bold(title));
-  const headerRight = chalk.dim(`[?] Help  [q] Quit  `);
-  const topBarInner = headerLeft + '─'.repeat(Math.max(0, width - visLen(title) - visLen(headerRight) - 2)) + headerRight;
-  lines.push(border('╭') + topBarInner + border('╮'));
+  const headerLeft = border('─[ ') + chalk.hex('#ff3b00').bold('◢▓◤ ') + accent(chalk.bold('PYRE 3D ')) + chalk.hex('#f1f5f9').bold('Command Center') + chalk.hex('#64748b')(' · 38 Tools') + border(' ]─');
+  const headerRight = chalk.hex('#94a3b8')('[?] Help  [q] Quit ') + border('─');
+  const topBarInner = headerLeft + border('─'.repeat(Math.max(0, width - visLen(headerLeft) - visLen(headerRight) - 2))) + headerRight;
+  lines.push(border('╭') + fitVisible(topBarInner, width - 2) + border('╮'));
 
-  const subtitle = ' Browse, search and execute all 38 pyre commands without memorization';
-  lines.push(border('│') + fitVisible(chalk.dim(subtitle), width - 2) + border('│'));
+  const subtitle = ' ◈ 3D Interactive Tool Deck — Browse, search, inspect, and launch all 38 Pyre CLI subcommands';
+  lines.push(border('│') + fitVisible(chalk.hex('#94a3b8')(subtitle), width - 2) + border('│'));
 
   // --- 2. Search Bar & Status ---
   let searchInput = state.searchQuery;
   if (state.inputMode === 'search') {
     searchInput += chalk.bgWhite.black(' ');
   }
-  const searchPrompt = ` 🔍 Search: `;
+  const searchPrompt = chalk.hex('#94a3b8')(' / Search: ');
   const searchContent = searchPrompt + (state.searchQuery ? chalk.bold.yellow(searchInput) : chalk.dim('Type command, keyword or description... (e.g. doctor, clean, smart)'));
-  const matchCount = chalk.dim(`(${filteredCommands.length}/${38} tools) `);
-  const searchBar = fitVisible(searchContent, width - visLen(matchCount) - 2) + matchCount;
+  const matchCount = chalk.hex('#64748b')(`(${filteredCommands.length}/38 tools) `);
+  const searchBar = fitVisible(searchContent, Math.max(10, width - visLen(matchCount) - 2)) + matchCount;
   lines.push(border('├') + border('─'.repeat(width - 2)) + border('┤'));
   lines.push(border('│') + fitVisible(searchBar, width - 2) + border('│'));
 
@@ -42,18 +41,23 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
   const catTabs = CATEGORIES.map((cat) => {
     const isSelected = cat.id === state.category;
     if (isSelected) {
-      return chalk.bgHex('#ff6a39').black(` ${cat.icon} ${cat.name} `);
+      return chalk.bgHex('#ff5500').black.bold(` ${cat.icon} ${cat.name} `);
     }
-    return chalk.dim(` ${cat.icon} ${cat.name} `);
-  }).join(chalk.dim('│'));
+    return chalk.hex('#64748b')(` ${cat.icon} `) + chalk.hex('#94a3b8')(`${cat.name} `);
+  }).join(chalk.hex('#3b4252')('·'));
   lines.push(border('│') + fitVisible(' ' + catTabs, width - 2) + border('│'));
-  lines.push(border('├') + border('─'.repeat(width - 2)) + border('┤'));
 
   // --- 4. Main Body (Dual Pane or Single Pane) ---
   const bodyHeight = Math.max(8, height - 9); // Total rows available for list/inspector
-  const isDualPane = width >= 80;
-  const listWidth = isDualPane ? Math.min(46, Math.floor(width * 0.42)) : width - 2;
+  const isDualPane = width >= 76;
+  const listWidth = isDualPane ? Math.min(46, Math.floor(width * 0.44)) : width - 2;
   const inspectorWidth = width - 2 - listWidth - (isDualPane ? 1 : 0);
+
+  if (isDualPane) {
+    lines.push(border('├') + border('─'.repeat(listWidth)) + border('┬') + border('─'.repeat(inspectorWidth)) + border('┤'));
+  } else {
+    lines.push(border('├') + border('─'.repeat(width - 2)) + border('┤'));
+  }
 
   // Left: Command list rows
   const listLines: string[] = [];
@@ -77,14 +81,16 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
       const cmd = filteredCommands[i];
       const isCur = i === selectedIdx;
       const badgeText = `[${cmd.badge}]`;
+      const cliMax = Math.max(10, listWidth - badgeText.length - 5);
+      const cliTrunc = cmd.cli.length > cliMax ? cmd.cli.slice(0, cliMax - 1) + '…' : cmd.cli.padEnd(cliMax);
 
       if (isCur) {
-        const rowText = ` ▶ ${cmd.cli} ${badgeText}`;
-        listLines.push(chalk.bgHex('#ff6a39').black(fitVisible(rowText, listWidth)));
+        const rowText = `${chalk.hex('#ff6b35').bold(' ❯ ')}${chalk.bold.white(cliTrunc)} ${chalk.hex('#fdba74')(badgeText)} `;
+        listLines.push(styleSelectedRow(rowText, listWidth));
       } else {
-        const badgeStyled = chalk.dim(badgeText);
-        const cliStyled = chalk.bold(cmd.cli);
-        const rowText = `   ${cliStyled} ${badgeStyled}`;
+        const badgeStyled = chalk.hex('#64748b')(badgeText);
+        const cliStyled = chalk.bold.hex('#e2e8f0')(cliTrunc);
+        const rowText = `   ${cliStyled} ${badgeStyled} `;
         listLines.push(fitVisible(rowText, listWidth));
       }
     }
@@ -99,30 +105,30 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
   const curCmd = filteredCommands[selectedIdx];
 
   if (curCmd && isDualPane) {
-    inspectorLines.push(accent(chalk.bold(` ${curCmd.name} `)) + chalk.dim(`[${curCmd.badge}]`));
-    inspectorLines.push(chalk.dim(` Syntax: `) + highlight(chalk.bold(curCmd.cli)));
-    inspectorLines.push(chalk.dim('─'.repeat(inspectorWidth - 2)));
-    
+    inspectorLines.push(' ' + accent(chalk.bold(curCmd.name)) + '  ' + chalk.bgHex('#1e293b').hex('#94a3b8')(` ${curCmd.badge} `));
+    inspectorLines.push(chalk.hex('#64748b')(' Syntax: ') + highlight(chalk.bold(curCmd.cli)));
+    inspectorLines.push(' ' + chalk.hex('#334155')('─'.repeat(Math.max(4, inspectorWidth - 2))));
+
     // Description & Help
-    inspectorLines.push(fitVisible(` ${curCmd.description}`, inspectorWidth - 2));
+    inspectorLines.push(fitVisible(` ${chalk.hex('#f1f5f9')(curCmd.description)}`, inspectorWidth - 1));
     inspectorLines.push('');
-    inspectorLines.push(fitVisible(` ${curCmd.detailedHelp}`, inspectorWidth - 2));
+    inspectorLines.push(fitVisible(` ${chalk.hex('#94a3b8')(curCmd.detailedHelp)}`, inspectorWidth - 1));
     inspectorLines.push('');
 
     // Flags section if present
     if (curCmd.flags && curCmd.flags.length > 0) {
-      inspectorLines.push(chalk.bold.dim(' Options & Flags:'));
+      inspectorLines.push(chalk.bold.hex('#94a3b8')(' Options & Flags:'));
       for (const f of curCmd.flags.slice(0, 4)) {
-        const flagLabel = chalk.yellow(`  ${f.flag}`);
-        const flagDesc = chalk.dim(` - ${f.desc}`);
-        inspectorLines.push(fitVisible(`${flagLabel}${flagDesc}`, inspectorWidth - 2));
+        const flagLabel = chalk.yellow(`  ${f.flag.padEnd(18)}`);
+        const flagDesc = chalk.hex('#94a3b8')(` ${f.desc}`);
+        inspectorLines.push(fitVisible(`${flagLabel}${flagDesc}`, inspectorWidth - 1));
       }
       inspectorLines.push('');
     }
 
     // Example section if present
     if (curCmd.examples && curCmd.examples.length > 0) {
-      inspectorLines.push(chalk.bold.dim(' Examples:'));
+      inspectorLines.push(chalk.bold.hex('#94a3b8')(' Examples:'));
       for (const ex of curCmd.examples.slice(0, 2)) {
         inspectorLines.push(chalk.cyan(`  $ ${ex}`));
       }
@@ -130,11 +136,32 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
     }
 
     // Quick action prompt
-    inspectorLines.push(chalk.dim('─'.repeat(inspectorWidth - 2)));
+    inspectorLines.push(' ' + chalk.hex('#334155')('─'.repeat(Math.max(4, inspectorWidth - 2))));
     const runPrompt = curCmd.requiresArgs
-      ? chalk.yellow(' [Enter] Enter arguments & Run   [c] Copy   [e] Edit Flags')
+      ? chalk.yellow(' [Enter] Configure Args & Run   [c] Copy   [e] Edit Flags')
       : chalk.green(' [Enter] Execute Command   [c] Copy   [e] Edit Flags');
-    inspectorLines.push(fitVisible(runPrompt, inspectorWidth - 2));
+    inspectorLines.push(fitVisible(runPrompt, inspectorWidth - 1));
+
+    // If there are at least 6 spare rows at the bottom of the inspector, render a 3D Hologram for the selected tool!
+    if (bodyHeight - inspectorLines.length >= 6 && inspectorWidth >= 32) {
+      while (inspectorLines.length < bodyHeight - 6) {
+        inspectorLines.push(' '.repeat(inspectorWidth));
+      }
+      const spriteMode = SPRITE_3D_MODES[selectedIdx % SPRITE_3D_MODES.length];
+      const spriteRows = render3DSprite(spriteMode, 18, 6, 12 + selectedIdx * 3, { cpuUsage: 35 + (selectedIdx * 11) % 50, memUsage: 45 });
+      const infoW = Math.max(10, inspectorWidth - 21);
+      const infoRows = [
+        chalk.hex('#38bdf8').bold(`◈ 3D HOLO: ${spriteMode.toUpperCase()}`),
+        chalk.hex('#94a3b8')(`Tool #${selectedIdx + 1} · ${curCmd.category.toUpperCase()}`),
+        chalk.hex('#64748b')(`Tags: ${curCmd.tags.slice(0, 3).join(', ')}`),
+        chalk.hex('#cbd5e1')(`CLI:  ${curCmd.cli}`),
+        chalk.hex('#10b981')(`Mode: ${curCmd.requiresArgs ? 'Interactive Args' : 'Instant Launch'}`),
+        chalk.hex('#64748b')(`Press Enter to launch`),
+      ];
+      for (let s = 0; s < 6; s++) {
+        inspectorLines.push(fitVisible(` ${spriteRows[s]}  ${fitVisible(infoRows[s] || '', infoW)}`, inspectorWidth));
+      }
+    }
   }
 
   while (inspectorLines.length < bodyHeight) {
@@ -153,20 +180,24 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
   }
 
   // --- 5. Footer Shortcuts ---
-  lines.push(border('├') + border('─'.repeat(width - 2)) + border('┤'));
+  if (isDualPane) {
+    lines.push(border('├') + border('─'.repeat(listWidth)) + border('┴') + border('─'.repeat(inspectorWidth)) + border('┤'));
+  } else {
+    lines.push(border('├') + border('─'.repeat(width - 2)) + border('┤'));
+  }
   const statusMsg = state.statusMessage ? chalk.yellow(` ${state.statusMessage} `) : '';
   const shortcuts = ` [↑/↓] Select  [Enter] Run  [Tab] Category  [/] Search  [e] Edit  [?] Help  [q] Quit`;
-  const footerRow = fitVisible(shortcuts, width - visLen(statusMsg) - 2) + statusMsg;
+  const footerRow = fitVisible(shortcuts, Math.max(10, width - visLen(statusMsg) - 2)) + statusMsg;
   lines.push(border('│') + fitVisible(footerRow, width - 2) + border('│'));
   lines.push(border('╰') + border('─'.repeat(width - 2)) + border('╯'));
 
   // --- 6. Modal Overlays (if active) ---
   if (state.inputMode === 'prompt-args' && state.activeCommand) {
-    overlayPromptModal(lines, width, height, state.activeCommand, state.argPromptValue, accent, border);
+    overlayPromptModal(lines, width, state.activeCommand, state.argPromptValue, accent, border);
   } else if (state.inputMode === 'edit-cmd' && state.activeCommand) {
-    overlayEditCmdModal(lines, width, height, state.activeCommand, state.argPromptValue, accent, border);
+    overlayEditCmdModal(lines, width, state.activeCommand, state.argPromptValue, accent, border);
   } else if (state.inputMode === 'help') {
-    overlayHelpModal(lines, width, height, accent, border);
+    overlayHelpModal(lines, width, accent, border);
   }
 
   return lines.join('\r\n');
@@ -176,7 +207,6 @@ export function renderMenuScreen(state: MenuState, filteredCommands: CommandDefi
 function overlayPromptModal(
   lines: string[],
   width: number,
-  height: number,
   cmd: CommandDefinition,
   val: string,
   accent: (s: string) => string,
@@ -195,14 +225,13 @@ function overlayPromptModal(
   ];
 
   const box = panel(` Execute: ${cmd.name} `, modalLines, modalW, accent, border, modalLines.length);
-  stampOverlay(lines, box, width, height);
+  stampOverlay(lines, box, width);
 }
 
 /** Render centered modal for customizing command line */
 function overlayEditCmdModal(
   lines: string[],
   width: number,
-  height: number,
   cmd: CommandDefinition,
   val: string,
   accent: (s: string) => string,
@@ -219,14 +248,13 @@ function overlayEditCmdModal(
   ];
 
   const box = panel(` Edit & Run `, modalLines, modalW, accent, border, modalLines.length);
-  stampOverlay(lines, box, width, height);
+  stampOverlay(lines, box, width);
 }
 
 /** Render help overlay */
 function overlayHelpModal(
   lines: string[],
   width: number,
-  height: number,
   accent: (s: string) => string,
   border: (s: string) => string
 ) {
@@ -250,23 +278,5 @@ function overlayHelpModal(
   ];
 
   const box = panel(' Help & Shortcuts ', modalLines, modalW, accent, border, modalLines.length);
-  stampOverlay(lines, box, width, height);
-}
-
-/** Stamp a box array in the center of the terminal lines */
-function stampOverlay(screenLines: string[], box: string[], width: number, height: number) {
-  const boxH = box.length;
-  const startRow = Math.max(0, Math.floor((screenLines.length - boxH) / 2));
-  const boxW = visLen(box[0] || '');
-  const startCol = Math.max(0, Math.floor((width - boxW) / 2));
-
-  for (let r = 0; r < boxH; r++) {
-    const targetRow = startRow + r;
-    if (targetRow < screenLines.length) {
-      const orig = screenLines[targetRow];
-      const left = orig.slice(0, startCol);
-      const right = orig.slice(startCol + boxW);
-      screenLines[targetRow] = fitVisible(left, startCol) + box[r] + fitVisible(right, Math.max(0, width - startCol - boxW));
-    }
-  }
+  stampOverlay(lines, box, width);
 }

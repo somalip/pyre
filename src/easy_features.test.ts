@@ -79,6 +79,13 @@ describe('Cross-Platform Support', () => {
     assert.ok(Array.isArray(data.disk));
     assert.ok(typeof data.network.interface === 'string');
   });
+
+  it('should run synthetic stress test workers without crashing', async () => {
+    const { runStressCommand } = await import('./stressCmd.js');
+    const start = Date.now();
+    await runStressCommand({ durationSec: 0.1, cores: 2 });
+    assert.ok(Date.now() - start >= 80);
+  });
 });
 
 describe('Web and UI Security (LAN exposure & flags)', () => {

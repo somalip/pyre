@@ -255,4 +255,12 @@ describe('Cross-Platform Service & Package Management', () => {
     const extensions = await getSystemExtensions();
     assert.ok(Array.isArray(extensions));
   });
+
+  it('should sanitize 2>nul redirects and never create a nul file on disk', async () => {
+    const { run } = await import('./monitors/run.js');
+    const fs = await import('node:fs');
+    await run('command_that_does_not_exist_xyz 2>nul', '');
+    assert.strictEqual(fs.existsSync('nul'), false, "A file named 'nul' should not be created on disk");
+  });
 });
+

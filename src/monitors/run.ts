@@ -22,9 +22,16 @@ async function run(cmd: string, fallback: string = '', timeout = 3000): Promise<
       sanitizedCmd = sanitizedCmd.replace(/2>\s*\/dev\/null/g, '2>nul');
       // On Windows cmd.exe, remove Unix-style /dev/null
       sanitizedCmd = sanitizedCmd.replace(/\/dev\/null/g, 'nul');
+    } else {
+      // On Unix shells, prevent creating a literal file named 'nul'
+      sanitizedCmd = sanitizedCmd.replace(/2>\s*nul\b/g, '2>/dev/null');
+      sanitizedCmd = sanitizedCmd.replace(/>\s*nul\b/g, '>/dev/null');
     }
     return (await execAsync(sanitizedCmd, { encoding: 'utf8', timeout, windowsHide: true })).stdout.trim();
-  } catch {
+  } catch (err: any) {
+    if (err && typeof err.stdout === 'string' && err.stdout.trim().length > 0) {
+      return err.stdout.trim();
+    }
     return fallback;
   }
 }

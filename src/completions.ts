@@ -23,9 +23,18 @@ _pyre() {
         'config:Show or reset configuration options'
         'p2p:P2P streaming server or client'
         'ssh:Stream metrics over SSH'
-        'bench:Benchmark command while logging system stats'
         'completions:Generate shell completion scripts'
         'optimize:Mac optimizer (quit idle apps, memory, caches, trash, startup, dns)'
+        'sleep-audit:Standby & sleep battery drain diagnostics'
+        'sweep:Developer & project build cruft sweeper (node_modules, target, etc.)'
+        'awake:Guardrailed keep-awake utility with thermal and battery failsafes'
+        'net-audit:Outbound network and privacy flow inspector (cleartext HTTP, sockets)'
+        'focus:Turbo / Focus performance shield (QoS and background process tamer)'
+        'ha:Home Assistant MQTT auto-discovery and telemetry bridge'
+        'ports:Listening port, socket and local dev server manager'
+        'gpu:Deep GPU, Unified Memory, ANE and AI/LLM workload inspector'
+        'leaks:Real-time process memory leak and monotonic growth detector'
+        'zombies:Zombie, stuck I/O, spinlock and stale dev orphan hunter'
     )
 
     _arguments -s \\
@@ -43,6 +52,7 @@ _pyre() {
         '--log[Start continuous CSV logging]' \\
         '--tree[Show process tree view]' \\
         '--sort[Sort processes by]:key:(cpu mem pid user command state threads runtime)' \\
+        '(-r --reverse)'{-r,--reverse}'[Reverse process sort order]' \\
         '--packets[Include packet monitor panel]' \\
         '--limit[Max processes to include]:count:' \\
         '--alert-cpu[CPU alert threshold pct]:pct:' \\
@@ -69,8 +79,8 @@ _pyre_completions() {
     COMPREPLY=()
     cur="\${COMP_WORDS[COMP_CWORD]}"
     prev="\${COMP_WORDS[COMP_CWORD-1]}"
-    commands="menu tui launcher playbook flight run bench-git statusline inspect containers live info doctor web ui launch config p2p ssh bench completions optimize"
-    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --packets --limit --alert-cpu --alert-temp --temp-unit --idle --keep --yes --force --clean --empty --dry-run --auto-quit -m --menu -i --interactive --budget-cpu --budget-mem --budget-time --markdown --nice --format"
+    commands="menu tui launcher playbook flight run bench-git statusline inspect containers ports gpu leaks zombies live info doctor web ui launch config p2p ssh bench completions optimize sleep-audit sweep awake net-audit focus ha"
+    opts="--json --html --md --csv --tsv --detailed --theme --interval --once --out --export-dir --log --tree --sort --reverse -r --kill-port --samples --packets --limit --alert-cpu --alert-temp --temp-unit --idle --keep --yes --force --clean --empty --dry-run --auto-quit -m --menu -i --interactive --budget-cpu --budget-mem --budget-time --markdown --nice --format --min-battery --max-temp --until-done --while-network --inactive-days --exclude-dirty --targets --export-pf --export-hosts --webhook --suspend"
 
     case "${prev}" in
         --theme)
@@ -109,6 +119,14 @@ _pyre_completions() {
             COMPREPLY=( $(compgen -W "tmux starship json pango plain" -- ${cur}) )
             return 0
             ;;
+        focus)
+            COMPREPLY=( $(compgen -W "on off status" -- ${cur}) )
+            return 0
+            ;;
+        ha)
+            COMPREPLY=( $(compgen -W "config publish discovery state" -- ${cur}) )
+            return 0
+            ;;
     esac
 
     if [[ ${cur} == -* ]] ; then
@@ -136,6 +154,10 @@ complete -c pyre -n "__fish_use_subcommand" -a bench-git -d "Cross-branch git pe
 complete -c pyre -n "__fish_use_subcommand" -a statusline -d "Headless terminal statusline string"
 complete -c pyre -n "__fish_use_subcommand" -a inspect -d "Process deep-dive inspector"
 complete -c pyre -n "__fish_use_subcommand" -a containers -d "Container and micro-VM telemetry"
+complete -c pyre -n "__fish_use_subcommand" -a ports -d "Listening port, socket and local dev server manager"
+complete -c pyre -n "__fish_use_subcommand" -a gpu -d "Deep GPU, Unified Memory, ANE and AI/LLM workload inspector"
+complete -c pyre -n "__fish_use_subcommand" -a leaks -d "Real-time process memory leak detector"
+complete -c pyre -n "__fish_use_subcommand" -a zombies -d "Zombie, stuck I/O, spinlock and stale dev orphan hunter"
 complete -c pyre -n "__fish_use_subcommand" -a live -d "Start interactive live monitoring dashboard"
 complete -c pyre -n "__fish_use_subcommand" -a info -d "Display static system overview"
 complete -c pyre -n "__fish_use_subcommand" -a doctor -d "Run system diagnostics"
@@ -146,7 +168,15 @@ complete -c pyre -n "__fish_use_subcommand" -a config -d "Show or reset configur
 complete -c pyre -n "__fish_use_subcommand" -a p2p -d "P2P streaming mode"
 complete -c pyre -n "__fish_use_subcommand" -a completions -d "Generate shell completions"
 complete -c pyre -n "__fish_use_subcommand" -a optimize -d "Mac optimizer: quit idle apps, clean caches"
+complete -c pyre -n "__fish_use_subcommand" -a sleep-audit -d "Standby & sleep battery drain diagnostics"
+complete -c pyre -n "__fish_use_subcommand" -a sweep -d "Developer & project build cruft sweeper"
+complete -c pyre -n "__fish_use_subcommand" -a awake -d "Guardrailed keep-awake utility"
+complete -c pyre -n "__fish_use_subcommand" -a net-audit -d "Outbound network and privacy flow inspector"
+complete -c pyre -n "__fish_use_subcommand" -a focus -d "Turbo / Focus performance shield"
+complete -c pyre -n "__fish_use_subcommand" -a ha -d "Home Assistant MQTT auto-discovery"
 complete -c pyre -n "__fish_seen_subcommand_from optimize" -a "apps track memory caches trash startup dns protect unprotect help"
+complete -c pyre -n "__fish_seen_subcommand_from focus" -a "on off status"
+complete -c pyre -n "__fish_seen_subcommand_from ha" -a "config publish discovery state"
 
 complete -c pyre -l json -s j -d "Output snapshot as JSON"
 complete -c pyre -l html -d "Output snapshot as HTML"
@@ -156,6 +186,7 @@ complete -c pyre -l tsv -s t -d "Output snapshot as TSV"
 complete -c pyre -l detailed -d "Include detailed system info and sensor readings"
 complete -c pyre -l theme -x -a "default dracula cyberpunk monochrome nord gruvbox" -d "Set color theme"
 complete -c pyre -l sort -x -a "cpu mem pid user command state threads runtime" -d "Sort processes by key"
+complete -c pyre -l reverse -s r -d "Reverse process sort order"
 complete -c pyre -l temp-unit -x -a "c f" -d "Temperature unit"
 `;
 }
@@ -164,8 +195,8 @@ export function generatePowerShellCompletions(): string {
   return `# PowerShell completion for pyre
 Register-ArgumentCompleter -Native -CommandName pyre -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
-    $commands = @('menu', 'tui', 'launcher', 'playbook', 'flight', 'run', 'bench-git', 'statusline', 'inspect', 'containers', 'live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain', 'optimize')
-    $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
+    $commands = @('menu', 'tui', 'launcher', 'playbook', 'flight', 'run', 'bench-git', 'statusline', 'inspect', 'containers', 'ports', 'gpu', 'leaks', 'zombies', 'live', 'check', 'pipe', 'stress', 'ui', 'launch', 'web', 'ssh', 'fleet', 'bench', 'benchmark', 'anomalies', 'doctor', 'extensions', 'brew', 'update', 'profile', 'config', 'history', 'diff', 'info', 'completions', 'p2p', 'blender', 'prometheus', 'smart', 'replay', 'explain', 'optimize', 'sleep-audit', 'sweep', 'awake', 'net-audit', 'focus', 'ha')
+    $options = @('--json', '--html', '--md', '--csv', '--tsv', '--detailed', '--theme', '--interval', '--once', '--out', '--export-dir', '--log', '--tree', '--sort', '--reverse', '--kill-port', '--samples', '--packets', '--limit', '--alert-cpu', '--alert-temp', '--temp-unit', '--plain', '--help', '--version')
 
     $elements = $commandAst.CommandElements
     if ($elements.Count -le 2) {

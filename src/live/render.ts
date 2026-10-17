@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import chalk from 'chalk';
-import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible, visLen } from '../formatters/index.js';
+import { formatTable, formatGraphs, gridColumns, THEMES, type ThemeName, panel, fitVisible, visLen, styleSelectedRow, stampOverlay, render3DSprite, SPRITE_3D_MODES } from '../formatters/index.js';
 import { detectAnomalies } from '../anomalies.js';
 import { state, setStatus, SIGNAL_OPTIONS, getToggleKey, MENU_OPTIONS } from './state.js';
 import type { StatsData } from '../monitors/index.js';
@@ -52,20 +52,27 @@ let _cachedGraphsParams = '';
 function tableCacheParams(): string {
    const limit = processRowBudget();
    return [
+     state.termWidth,
+     state.termHeight,
      state.sortMode,
+     state.sortReverse ? 'asc' : 'desc',
      state.processFilter || '',
      state.processSelectionIndex,
      state.trackedPid || '',
+     state.trackedPidHistory.cpu.length,
      state.inspectingProcess ? state.inspectingProcess.pid : '',
      limit,
      state.currentTheme,
      state.activePanel,
      state.treeView ? '1' : '0',
+     state.showGraphs ? '1' : '0',
      state.history.version,
      JSON.stringify(state.visiblePanels),
      JSON.stringify(state.panelLayout),
      state.aiModel,
      state.graphZoomLevel,
+     state.animFrame,
+     state.sprite3dMode,
      JSON.stringify(state.panelHistory.slice(-5)),
      JSON.stringify(state.bookmarks.map(b => b.name)),
    ].join('|');
@@ -80,18 +87,11 @@ function graphsCacheParams(): string {
 }
 
 function processRowBudget(): number {
-  let overlayRows = 0;
-  if (state.inputMode === 'signal') overlayRows = 6;
-  else if (state.inputMode === 'filter' || state.inputMode === 'kill' || state.inputMode === 'p2p') overlayRows = 3;
-
   if (state.activePanel === 'process') {
-    return Math.max(10, state.termHeight - 12 - overlayRows);
+    return Math.max(8, state.termHeight - 8);
   }
-
-  const reserved = 16 + overlayRows;
-  return Math.max(4, state.termHeight - reserved);
+  return Math.max(6, state.termHeight - 12);
 }
-
 
 function p2pPanelLines(): { title: string; body: string[] } {
   const events = state.p2pServer ? state.p2pServer.peerEventHistory : state.p2pEvents;
@@ -116,180 +116,140 @@ function p2pPanelLines(): { title: string; body: string[] } {
     body.push(`${chalk.dim(time)} ${typeColor(evt.type)(evt.type.padEnd(14))} ${evt.detail}`);
   }
 
-  const title = `P2P · ${state.p2pServerRunning ? 'ON' : 'OFF'} · ${events.length} events`;
+  const title = `R p2p · ${state.p2pServerRunning ? 'ON' : 'OFF'} · ${events.length} events`;
   return { title, body };
 }
 
 function renderCustomizerOverlay(scrollOffset: number, maxVisibleItems: number): string {
-    const themesList = Object.keys(THEMES) as ThemeName[];
-    const headerLine = chalk.bgCyan.black.bold(' UI CUSTOMIZER (Use ↑/↓ or J/K to navigate, Enter/Space to toggle, Esc to exit) ');
-    const totalItems = state.CUSTOMIZER_OPTIONS.length;
-    const end = Math.min(scrollOffset + maxVisibleItems, totalItems);
+  const themesList = Object.keys(THEMES) as ThemeName[];
+  const totalItems = state.CUSTOMIZER_OPTIONS.length;
+  const end = Math.min(scrollOffset + maxVisibleItems, totalItems);
+  const lines: string[] = [
+    chalk.hex('#94a3b8')('↑/↓ or J/K navigate · Enter/Space toggle · Esc close'),
+    '',
+  ];
 
-    const lines = [headerLine];
+  for (let i = scrollOffset; i < end; i++) {
+    const opt = state.CUSTOMIZER_OPTIONS[i];
+    const isSelected = i === state.customizerIndex;
+    const prefix = isSelected ? chalk.hex('#ff6b35').bold('❯ ') : '  ';
+    const labelStr = (isSelected ? chalk.bold.hex('#f8fafc') : chalk.hex('#cbd5e1'))(opt.padEnd(20));
 
-    for (let i = scrollOffset; i < end; i++) {
-      const opt = state.CUSTOMIZER_OPTIONS[i];
-      const isSelected = i === state.customizerIndex;
-      const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
-
-       if (opt === 'Theme') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.currentTheme)} [${themesList.join(', ')}]`);
-       } else if (opt === 'Graph Mode') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.graphMode)} [spark, bar]`);
-       } else if (opt === 'Splash Screen') {
-         const status = state.splashEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
-         lines.push(`${prefix}${opt}: ${status}`);
-       } else if (opt === 'Splash Color') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashColorScheme)} [fire, ocean, forest, purple, monochrome]`);
-       } else if (opt === 'Splash Animation') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.splashAnimation)} [classic, wave, sparks]`);
-       } else if (opt === 'Notifications') {
-         const status = state.notificationsEnabled ? chalk.green('[ON]') : chalk.red('[OFF]');
-         lines.push(`${prefix}${opt}: ${status}`);
-       } else if (opt === 'Temperature Unit') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.tempUnit.toUpperCase())} [C, F]`);
-       } else if (opt === 'AI Model') {
-         const curModel = AVAILABLE_AI_MODELS.find(m => m.id === state.aiModel) || AVAILABLE_AI_MODELS[0];
-         lines.push(`${prefix}${opt}: ${chalk.bold.cyan(curModel.name)} ${chalk.dim(`[${curModel.badge}]`)}`);
-       } else if (opt === 'Grid Panel Order') {
-         lines.push(`${prefix}${opt}: ${chalk.bold.green(state.panelLayout.join(' → '))}`);
-       } else {
-         const toggleKey = getToggleKey(opt);
-         const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
-         const status = isVisible ? chalk.green('[VISIBLE]') : chalk.red('[HIDDEN]');
-         lines.push(`${prefix}${opt}: ${status}`);
-       }
+    let valStr = '';
+    if (opt === 'Theme') {
+      valStr = `${chalk.bold.hex('#10b981')(state.currentTheme)} ${chalk.dim(`[${themesList.join(', ')}]`)}`;
+    } else if (opt === '3D Sprite') {
+      valStr = `${chalk.bold.hex('#38bdf8')(state.sprite3dMode.toUpperCase())} ${chalk.dim(`[${SPRITE_3D_MODES.join(', ')}]`)}`;
+    } else if (opt === 'Graph Mode') {
+      valStr = `${chalk.bold.hex('#10b981')(state.graphMode)} ${chalk.dim('[spark, bar]')}`;
+    } else if (opt === 'Splash Screen') {
+      valStr = state.splashEnabled ? chalk.hex('#10b981').bold('● ON') : chalk.hex('#64748b')('○ OFF');
+    } else if (opt === 'Splash Color') {
+      valStr = `${chalk.bold.hex('#10b981')(state.splashColorScheme)} ${chalk.dim('[fire, ocean, forest, purple]')}`;
+    } else if (opt === 'Splash Animation') {
+      valStr = `${chalk.bold.hex('#10b981')(state.splashAnimation)} ${chalk.dim('[classic, wave, sparks]')}`;
+    } else if (opt === 'Notifications') {
+      valStr = state.notificationsEnabled ? chalk.hex('#10b981').bold('● ON') : chalk.hex('#64748b')('○ OFF');
+    } else if (opt === 'Temperature Unit') {
+      valStr = `${chalk.bold.hex('#10b981')(state.tempUnit.toUpperCase())} ${chalk.dim('[C, F]')}`;
+    } else if (opt === 'AI Model') {
+      const curModel = AVAILABLE_AI_MODELS.find(m => m.id === state.aiModel) || AVAILABLE_AI_MODELS[0];
+      valStr = `${chalk.bold.hex('#06b6d4')(curModel.name)} ${chalk.dim(`[${curModel.badge}]`)}`;
+    } else if (opt === 'Grid Panel Order') {
+      valStr = chalk.bold.hex('#10b981')(state.panelLayout.join(' → '));
+    } else {
+      const toggleKey = getToggleKey(opt);
+      const isVisible = toggleKey ? (toggleKey === 'tree' ? state.treeView : state.visiblePanels[toggleKey] !== false) : true;
+      valStr = isVisible ? chalk.hex('#10b981').bold('● VISIBLE') : chalk.hex('#64748b')('○ HIDDEN');
     }
 
-   return lines.map(l => `  ${l}`).join('\n');
+    lines.push(`${prefix}${labelStr} ${valStr}`);
   }
 
-function renderQuickRefOverlay(): string {
-  const headerLine = chalk.bgGreen.black.bold(' ⚡ PYRE KEYBOARD SHORTCUTS (Press ? or Esc to close) ');
+  return lines.join('\n');
+}
 
-  const categories: Record<string, [string, string][]> = {
-    'Navigation': [
-      ['1-9, 0', 'Switch to CPU/MEM/GPU/PWR/BAT/THM/NET/CONNS/TASKS/DISK panel'],
-      ['P', 'Process panel'],
-      ['C', 'Containers panel'],
-      ['R', 'P2P panel'],
-      ['A', 'Anomalies panel'],
-      ['B', 'Blender renders panel'],
-      ['←/→ or Tab', 'Cycle panels'],
-      ['Esc', 'Back to grid / menu'],
-    ],
-    'View Controls': [
-      ['g', 'Toggle graphs on/off'],
-      ['b', 'Cycle graph mode: spark ↔ bar'],
-      ['p', 'Pause / Resume live updates'],
-      ['d', 'Toggle detailed sensor mode'],
-      ['t', 'Toggle tree / flat process view'],
-      ['T', 'Toggle temperature unit: C ↔ F'],
-      ['c', 'Open UI Customizer'],
-    ],
-    'Process Actions': [
-      ['/ or f', 'Filter processes (type to search)'],
-      ['s', 'Cycle sort: cpu → mem → pid → user → command → state → threads → runtime'],
-      ['k', 'Kill process by PID'],
-      ['S', 'Send signal to process'],
-      ['Space', 'Follow / unfollow selected process'],
-      ['↑/↓', 'Navigate process list'],
-      ['Enter', 'Inspect selected process'],
-    ],
-    'Data & Export': [
-      ['e', 'Export current snapshot'],
-      ['l', 'Start / stop CSV logging'],
-      ['f', 'Cycle export format: json → csv → tsv → html → md'],
-      ['+/-', 'Increase / decrease refresh interval'],
-    ],
-    'Graph Controls': [
-      ['[', 'Zoom in history graph (more resolution)'],
-      [']', 'Zoom out history graph (wider window)'],
-    ],
-    'Bookmarks': [
-      ['Shift+M', 'Save current view as named bookmark'],
-      ['M', 'Recall next bookmark (cycles through saved)'],
-    ],
-    'Settings & Help': [
-      ['m', 'Change AI anomaly model'],
-      ['r', 'Start/stop P2P server'],
-      ['?', 'Show this quick reference'],
-      [':', 'Command palette (type to run any command)'],
-      ['q', 'Quit pyre'],
-    ],
-  };
+function buildModalBox(title: string, rawLines: string[], modalW: number, accent: (s: string) => string): string[] {
+  const innerW = Math.max(10, modalW - 4);
+  const bgLines = rawLines.map(l => styleSelectedRow(l, innerW, '15;23;42'));
+  const box = panel(title, bgLines, modalW, accent, chalk.hex('#38bdf8'), bgLines.length, 'Esc close');
+  return box.map(l => styleSelectedRow(l, modalW, '15;23;42'));
+}
 
-  const lines: string[] = [headerLine, ''];
+function renderQuickRefLines(): string[] {
+  const categories: [string, [string, string][]][] = [
+    ['Navigation', [
+      ['1-9, 0', 'CPU / Mem / GPU / Pwr / Bat / Thm / Net / Conns / Tasks / Disk'],
+      ['L / P / C', 'Listening Ports (L) · Processes (P) · Containers (C)'],
+      ['A / B / R', 'Anomalies (A) · Blender (B) · P2P Server (R)'],
+      ['Tab / Esc', 'Cycle tabs forward/back · Return to main btop grid'],
+    ]],
+    ['Process Controls', [
+      ['↑/↓, PgUp/Dn', 'Select process row (Home / End for top / bottom)'],
+      ['s / v (or I)', 'Cycle sort column (s) · Invert sort direction ▲/▼ (v)'],
+      ['/ (or f)', 'Filter processes by substring'],
+      ['Space / Enter', 'Follow selected PID (live sparkline) · Inspect PID'],
+      ['k / S / n', 'Kill PID (k) · Send signal (S) · Renice priority -20..19 (n)'],
+    ]],
+    ['View & System', [
+      ['t / g / b', 'Toggle process tree (t) · Graphs (g) · Spark/Bar mode (b)'],
+      ['c / m / T', 'UI Customizer (c) · AI Engine (m) · Temp unit C/F (T)'],
+      ['e / l / p', 'Export snapshot (e) · CSV logging (l) · Pause/Resume (p)'],
+      [': / o / q', 'Command Palette (:) · Main Menu (o) · Quit (q)'],
+    ]],
+  ];
 
-  for (const [category, items] of Object.entries(categories)) {
-    lines.push(chalk.bold.cyan(`  ${category}`));
+  const lines: string[] = [];
+  for (const [category, items] of categories) {
+    lines.push(chalk.bold.hex('#38bdf8')(`◆ ${category}`));
     for (const [key, desc] of items) {
-      lines.push(`    ${chalk.hex('#50fa7b').bold(key.padEnd(14))} ${chalk.dim(desc)}`);
+      lines.push(`  ${chalk.hex('#ffaa40').bold(key.padEnd(14))} ${chalk.hex('#cbd5e1')(desc)}`);
     }
     lines.push('');
   }
-
-  return lines.join('\n');
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+  return lines;
 }
 
-function renderCommandPalette(): string {
-  const headerLine = chalk.bgMagenta.black.bold(' COMMAND PALETTE (Type to search · ↑/↓ navigate · Enter run · Esc close) ');
+function renderCommandPaletteLines(maxRows: number): string[] {
   const cmds = state.paletteFilteredCommands;
-  const totalItems = cmds.length;
-  const maxVisible = Math.min(12, state.termHeight - 8);
-  const start = Math.max(0, state.paletteIndex - Math.floor(maxVisible / 2));
-  const end = Math.min(totalItems, start + maxVisible);
-
-  const lines: string[] = [headerLine, ''];
+  const filterLine = `${chalk.bgHex('#9333ea').white.bold(' ⌕ ')} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#c084fc')('█')} ${chalk.hex('#64748b')(`(${cmds.length} commands)`)}`;
+  const lines: string[] = [filterLine, ''];
 
   if (cmds.length === 0) {
-    lines.push(chalk.dim('  No matching commands found.'));
-  } else {
-    // Group by category
-    const byCategory = new Map<string, typeof cmds>();
-    for (const cmd of cmds.slice(start, end)) {
-      const cat = cmd.category;
-      if (!byCategory.has(cat)) byCategory.set(cat, []);
-      byCategory.get(cat)!.push(cmd);
-    }
-
-    let globalIdx = start;
-    for (const [cat, catCmds] of byCategory) {
-      lines.push(chalk.bold.dim(`  ${cat}`));
-      for (const cmd of catCmds) {
-        const isSelected = globalIdx === state.paletteIndex;
-        const prefix = isSelected ? chalk.yellow('▶ ') : '  ';
-        const keyHint = chalk.dim(`[${cmd.keys}]`);
-        const label = isSelected ? chalk.bold.white(cmd.label) : chalk.dim(cmd.label);
-        lines.push(`${prefix}${keyHint} ${label}`);
-        globalIdx++;
-      }
-      lines.push('');
-    }
+    lines.push(chalk.hex('#94a3b8')('  No matching commands found.'));
+    return lines;
   }
 
-  const filterLine = chalk.cyan(`  Filter: ${state.inputBuffer}${chalk.dim('_')}`);
-  lines.push(filterLine);
+  const listBudget = Math.max(4, maxRows - 3);
+  const start = Math.max(0, Math.min(state.paletteIndex - Math.floor(listBudget / 2), Math.max(0, cmds.length - listBudget)));
+  const end = Math.min(cmds.length, start + listBudget);
 
-  return lines.join('\n');
+  for (let i = start; i < end; i++) {
+    const cmd = cmds[i];
+    const isSelected = i === state.paletteIndex;
+    const prefix = isSelected ? chalk.hex('#ff6b35').bold('❯ ') : '  ';
+    const keyPill = chalk.hex('#ffaa40')(`[${cmd.keys}]`.padEnd(9));
+    const catPill = chalk.hex('#64748b')(`${cmd.category}`.padEnd(10));
+    const label = isSelected ? chalk.bold.hex('#f8fafc')(cmd.label) : chalk.hex('#cbd5e1')(cmd.label);
+    lines.push(`${prefix}${keyPill} ${catPill} ${label}`);
+  }
+  return lines;
 }
 
-function renderBookmarkSaveOverlay(): string {
-  const headerLine = chalk.bgYellow.black.bold(' SAVE BOOKMARK (Type a name and press Enter · Esc to cancel) ');
-  return [headerLine, '', chalk.cyan(`  Bookmark name: ${state.inputBuffer}${chalk.dim('_')}`)].join('\n');
+function renderBookmarkSaveLines(): string[] {
+  return [
+    chalk.hex('#cbd5e1')('Save current panel, sort mode, filter, and theme as a quick bookmark:'),
+    '',
+    `  ${chalk.hex('#f59e0b').bold('Name:')} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#fbbf24')('█')}`,
+    '',
+    chalk.hex('#64748b')('Press Enter to save · Esc to cancel'),
+  ];
 }
 
 // --- frame diffing -------------------------------------------------------
-// Instead of erasing the whole screen (`\x1b[2J`) and repainting everything
-// on every keypress/tick, we keep the previous frame's lines around and
-// only move the cursor + rewrite the lines that actually changed. A full
-// erase forces a scrollback/display invalidation in many terminals
-// (iTerm2, Windows Terminal, tmux, various SSH clients), which is what
-// made menu navigation and tab switches feel like they took a second or
-// two even though the underlying data was already cached.
 let _prevFrameLines: string[] = [];
-let _frameDirty = true; // force full paint on first render / resize
+let _frameDirty = true;
 
 function invalidateFrame() {
   _frameDirty = true;
@@ -303,9 +263,6 @@ function writeFrame(lines: string[]) {
     return;
   }
 
-  // Incremental repaint: move to each changed line and rewrite only
-  // that line, clearing to end-of-line first so shorter replacement
-  // text doesn't leave stale characters behind.
   let out = '';
   for (let i = 0; i < lines.length; i++) {
     if (lines[i] !== _prevFrameLines[i]) {
@@ -321,11 +278,11 @@ function render() {
   const rows = state.termHeight || 24;
   const cols = state.termWidth || 80;
   if (cols < 50 || rows < 15) {
-    const msg = chalk.yellow(`pyre ${rows}x${cols} too small. Resize terminal to >= 50x20.`);
+    const msg = chalk.yellow(`pyre ${rows}x${cols} too small. Resize terminal to >= 50x18.`);
     const centered = Math.max(0, Math.floor((rows - 2) / 2));
     const out: string[] = [];
     for (let i = 0; i < centered; i++) out.push('');
-    out.push(msg.padEnd(cols));
+    out.push(fitVisible(msg, cols));
     while (out.length < rows) out.push('');
     writeFrame(out);
     return;
@@ -351,140 +308,91 @@ function render() {
     writeFrame(renderAiModelSelector(cols, rows));
     return;
   }
-  const lines: string[] = [];
-  const theme = THEMES[state.currentTheme] || THEMES.default;
 
-   const params = tableCacheParams();
-   const anomalies = detectAnomalies(state.lastData, state.history);
-   if (anomalies.length > 0) {
-     for (const a of anomalies) {
-       const now = new Date();
-       const alertWithTime = { ...a, timestamp: now };
-       const exists = state.anomalyHistory.some(
-         h => h.metric === a.metric && Math.abs(h.zScore - a.zScore) < 0.1 && (now.getTime() - (h.timestamp?.getTime() || 0)) < 10000
-       );
-       if (!exists) {
-         state.anomalyHistory.unshift(alertWithTime);
-       }
-     }
-     if (state.anomalyHistory.length > 100) {
-       state.anomalyHistory.length = 100;
-     }
-   }
-   const anomalyCacheKey = anomalies.map(a => `${a.metric}:${a.zScore.toFixed(2)}`).join(',');
-   const cacheParams = params + '|' + anomalyCacheKey + '|' + state.anomalyHistory.length;
-    const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
-      ? (() => {
-          const out = formatTable(state.lastData, {
-            width: state.termWidth,
-            sortBy: state.sortMode,
-            filter: state.processFilter || undefined,
-            processLimit: processRowBudget(),
-            theme: state.currentTheme,
-            visible: state.visiblePanels,
-            treeView: state.treeView,
-            activePanel: state.activePanel,
-            anomalies: anomalies,
-            anomalyHistory: state.anomalyHistory,
-            tempUnit: state.tempUnit,
-            history: state.history,
-            graphMode: state.graphMode,
-            panelLayout: state.panelLayout,
-            selectedProcessIndex: state.processSelectionIndex,
-            trackedPid: state.trackedPid,
-            inspectProcess: state.inspectingProcess,
-            aiModel: state.aiModel,
-          });
-          _cachedTableData = state.lastData;
-          _cachedTableParams = cacheParams;
-          _cachedTable = applyTempUnit(out);
-          _tableDataDirty = false;
-          return _cachedTable;
-        })()
-      : _cachedTable;
+  const theme = THEMES[state.currentTheme] || THEMES.default;
+  const footerHeight = 2;
+  const targetBodyHeight = Math.max(12, rows - footerHeight);
+
+  const params = tableCacheParams();
+  const anomalies = detectAnomalies(state.lastData, state.history);
+  if (anomalies.length > 0) {
+    for (const a of anomalies) {
+      const now = new Date();
+      const alertWithTime = { ...a, timestamp: now };
+      const exists = state.anomalyHistory.some(
+        h => h.metric === a.metric && Math.abs(h.zScore - a.zScore) < 0.1 && (now.getTime() - (h.timestamp?.getTime() || 0)) < 10000
+      );
+      if (!exists) {
+        state.anomalyHistory.unshift(alertWithTime);
+      }
+    }
+    if (state.anomalyHistory.length > 100) {
+      state.anomalyHistory.length = 100;
+    }
+  }
+  const anomalyCacheKey = anomalies.map(a => `${a.metric}:${a.zScore.toFixed(2)}`).join(',');
+  const cacheParams = params + '|' + anomalyCacheKey + '|' + state.anomalyHistory.length;
+  const tableStr = _tableDataDirty || state.lastData !== _cachedTableData || cacheParams !== _cachedTableParams
+    ? (() => {
+        const out = formatTable(state.lastData, {
+          width: cols,
+          height: targetBodyHeight,
+          showGraphs: state.showGraphs,
+          sortBy: state.sortMode,
+          sortReverse: state.sortReverse,
+          filter: state.processFilter || undefined,
+          processLimit: processRowBudget(),
+          theme: state.currentTheme,
+          visible: state.visiblePanels,
+          treeView: state.treeView,
+          activePanel: state.activePanel,
+          anomalies: anomalies,
+          anomalyHistory: state.anomalyHistory,
+          tempUnit: state.tempUnit,
+          history: state.history,
+          graphMode: state.graphMode,
+          panelLayout: state.panelLayout,
+          selectedProcessIndex: state.processSelectionIndex,
+          trackedPid: state.trackedPid,
+          trackedPidHistory: state.trackedPid ? state.trackedPidHistory : undefined,
+          inspectProcess: state.inspectingProcess,
+          aiModel: state.aiModel,
+          animFrame: state.animFrame,
+          sprite3dMode: state.sprite3dMode,
+        });
+        _cachedTableData = state.lastData;
+        _cachedTableParams = cacheParams;
+        _cachedTable = applyTempUnit(out);
+        _tableDataDirty = false;
+        return _cachedTable;
+      })()
+    : _cachedTable;
 
   const bodyLines: string[] = [];
   if (state.activePanel === 'p2p') {
     const panelLines = p2pPanelLines();
-    bodyLines.push(...panel(panelLines.title, panelLines.body, state.termWidth, theme.process, theme.border));
+    bodyLines.push(...panel(panelLines.title, panelLines.body, cols, theme.process, theme.border, Math.max(6, targetBodyHeight - 2)));
   } else {
     bodyLines.push(...tableStr.split('\n'));
   }
 
-  const graphsParams = graphsCacheParams();
-  const graphsStr =
-    state.history.version !== _cachedGraphsVersion || graphsParams !== _cachedGraphsParams
-      ? (() => {
-          const out = formatGraphs(state.history, state.termWidth, state.currentTheme, state.graphMode);
-          _cachedGraphsVersion = state.history.version;
-          _cachedGraphsParams = graphsParams;
-          _cachedGraphs = applyTempUnit(out);
-          return _cachedGraphs;
-        })()
-      : _cachedGraphs;
-
-  if (state.showGraphs && state.activePanel !== 'p2p') {
-    bodyLines.push('');
-    bodyLines.push(...graphsStr.split('\n'));
-  }
-
-  const footerLine1 = footerLine()[0] || '';
-  const footerLine2 = footerLine()[1] || '';
-  const footerLine3 = footerLine()[2] || ' ';
-  const footerLines = [footerLine1, footerLine2, footerLine3];
-
-  const footerHeight = 3;
-  const targetBodyHeight = Math.max(1, state.termHeight - footerHeight);
-
-  if (state.inputMode === 'customizer') {
-    const totalItems = state.CUSTOMIZER_OPTIONS.length;
-    const headerLines = 1;  // the "UI CUSTOMIZER" header
-    const blankLines = 1;   // blank separator line
-    // Reserve a fixed height for the customizer: show all items if they fit,
-    // otherwise guarantee at least 10 visible items (or half the screen).
-    const idealOverlayHeight = totalItems + headerLines + blankLines;
-    const minOverlayHeight = Math.min(10 + headerLines + blankLines, Math.floor(targetBodyHeight / 2));
-    const overlayHeight = Math.min(idealOverlayHeight, Math.max(minOverlayHeight, Math.floor(targetBodyHeight * 0.6)));
-    // Truncate table body to make room for the customizer overlay
-    const maxBodyForTable = Math.max(3, targetBodyHeight - overlayHeight);
-    if (bodyLines.length > maxBodyForTable) {
-      bodyLines.length = maxBodyForTable;
+  // In single-panel detail views (non-grid), append standalone history graphs if toggled on and space permits
+  if (state.showGraphs && state.activePanel !== 'grid' && state.activePanel !== 'p2p' && state.activePanel !== 'process') {
+    const graphsParams = graphsCacheParams();
+    const graphsStr =
+      state.history.version !== _cachedGraphsVersion || graphsParams !== _cachedGraphsParams
+        ? (() => {
+            const out = formatGraphs(state.history, cols, state.currentTheme, state.graphMode);
+            _cachedGraphsVersion = state.history.version;
+            _cachedGraphsParams = graphsParams;
+            _cachedGraphs = applyTempUnit(out);
+            return _cachedGraphs;
+          })()
+        : _cachedGraphs;
+    const gLines = graphsStr.split('\n');
+    if (bodyLines.length + gLines.length <= targetBodyHeight) {
+      bodyLines.push(...gLines);
     }
-    const availableForOverlay = targetBodyHeight - bodyLines.length;
-    const maxVisibleItems = Math.max(1, availableForOverlay - headerLines - blankLines);
-    const scrollOffset = totalItems > maxVisibleItems
-      ? Math.max(0, Math.min(state.customizerIndex, totalItems - maxVisibleItems))
-      : 0;
-
-    bodyLines.push('');
-    bodyLines.push(...renderCustomizerOverlay(scrollOffset, maxVisibleItems).split('\n'));
-  } else if (state.inputMode === 'quick-ref') {
-    const refLines = renderQuickRefOverlay().split('\n');
-    const maxRefLines = Math.min(refLines.length, Math.max(10, targetBodyHeight - 2));
-    bodyLines.push('');
-    for (let i = 0; i < maxRefLines; i++) {
-      bodyLines.push(refLines[i] || '');
-    }
-  } else if (state.inputMode === 'command-palette') {
-    bodyLines.push('');
-    bodyLines.push(...renderCommandPalette().split('\n'));
-  } else if (state.inputMode === 'bookmark-save') {
-    bodyLines.push('');
-    bodyLines.push(...renderBookmarkSaveOverlay().split('\n'));
-  } else if (state.inputMode === 'filter') {
-    bodyLines.push(chalk.cyan(`  Filter processes: ${state.inputBuffer}_`));
-  } else if (state.inputMode === 'kill') {
-    bodyLines.push(chalk.cyan(`  Kill PID: ${state.inputBuffer}_  (enter to confirm, esc to cancel)`));
-  } else if (state.inputMode === 'signal') {
-    const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
-    const sigList = state.SIGNAL_OPTIONS.map((s, i) => i === sigIdx ? chalk.yellow(s) : chalk.dim(s)).join('  ');
-    bodyLines.push(chalk.cyan(`  Signal: ${state.inputBuffer}_`));
-    bodyLines.push(chalk.dim(`  ${sigList}`));
-    bodyLines.push(chalk.dim('  ↑/↓ to select, Enter to confirm, Esc to cancel'));
-  } else if (state.inputMode === 'p2p') {
-    bodyLines.push(chalk.cyan(`  P2P password (${state.p2pPort}): ${state.inputBuffer}_  (enter to start, esc to cancel)`));
-  } else if (state.statusMessage) {
-    bodyLines.push(`  ${state.statusMessage}`);
   }
 
   if (bodyLines.length > targetBodyHeight) {
@@ -494,64 +402,121 @@ function render() {
   while (frameLines.length < targetBodyHeight) {
     frameLines.push('');
   }
-  frameLines.push(...footerLines);
+
+  // Stamp centered framed modals over the dashboard body when active
+  if (state.inputMode === 'customizer') {
+    const modalW = Math.min(cols - 4, 68);
+    const maxItems = Math.max(6, Math.min(state.CUSTOMIZER_OPTIONS.length, targetBodyHeight - 6));
+    const scrollOffset = state.CUSTOMIZER_OPTIONS.length > maxItems
+      ? Math.max(0, Math.min(state.customizerIndex - Math.floor(maxItems / 2), state.CUSTOMIZER_OPTIONS.length - maxItems))
+      : 0;
+    const rawLines = renderCustomizerOverlay(scrollOffset, maxItems).split('\n');
+    const box = buildModalBox('⬢ UI CUSTOMIZER', rawLines, modalW, chalk.hex('#38bdf8'));
+    stampOverlay(frameLines, box, cols, targetBodyHeight);
+  } else if (state.inputMode === 'quick-ref') {
+    const modalW = Math.min(cols - 4, 76);
+    const rawLines = renderQuickRefLines().slice(0, Math.max(8, targetBodyHeight - 4));
+    const box = buildModalBox('? KEYBOARD SHORTCUTS', rawLines, modalW, chalk.hex('#10b981'));
+    stampOverlay(frameLines, box, cols, targetBodyHeight);
+  } else if (state.inputMode === 'command-palette') {
+    const modalW = Math.min(cols - 4, 72);
+    const rawLines = renderCommandPaletteLines(Math.max(6, targetBodyHeight - 4));
+    const box = buildModalBox('✦ COMMAND PALETTE', rawLines, modalW, chalk.hex('#c084fc'));
+    stampOverlay(frameLines, box, cols, targetBodyHeight);
+  } else if (state.inputMode === 'bookmark-save') {
+    const modalW = Math.min(cols - 4, 64);
+    const rawLines = renderBookmarkSaveLines();
+    const box = buildModalBox('★ SAVE BOOKMARK', rawLines, modalW, chalk.hex('#f59e0b'));
+    stampOverlay(frameLines, box, cols, targetBodyHeight);
+  }
+
+  const fLines = footerLine();
+  frameLines.push(fLines[0] || '');
+  frameLines.push(fLines[1] || '');
+
   const fittedLines = frameLines.map(l => fitVisible(l, cols));
   writeFrame(fittedLines);
 }
 
 function footerLine(): string[] {
-   const row1: [string, string][] = [
-      ['q', 'quit'],
-      ['o', 'tools menu'],
-      ['c', 'customize UI'],
-      ['←/→', 'tab'],
-      ['1-9', 'panels'],
-      ['g', state.showGraphs ? 'hide graphs' : 'show graphs'],
-      ['b', `graph:${state.graphMode}`],
-      ['t', state.treeView ? 'flat' : 'tree'],
-      ['d', state.detailed ? 'basic' : 'detailed'],
-      ['p', state.paused ? 'resume' : 'pause'],
+  const cols = state.termWidth || 80;
+
+  // --- Row 1: Interactive Input Prompt OR Status Message OR Clean Status Strip ---
+  let statusRow = '';
+  if (state.inputMode === 'filter') {
+    statusRow = `${chalk.bgHex('#0284c7').black.bold(' FILTER ')} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#38bdf8')('█')}  ${chalk.hex('#94a3b8')('(Type process name · Enter apply · Esc clear)')}`;
+  } else if (state.inputMode === 'kill') {
+    statusRow = `${chalk.bgHex('#e11d48').white.bold(' KILL PID ')} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#f43f5e')('█')}  ${chalk.hex('#94a3b8')('(Enter to send SIGTERM · Esc cancel)')}`;
+  } else if (state.inputMode === 'renice') {
+    statusRow = `${chalk.bgHex('#d97706').black.bold(` RENICE PID ${state.targetPid || '?'} `)} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#fbbf24')('█')}  ${chalk.hex('#94a3b8')('(Priority -20 to 19 · Enter apply · Esc cancel)')}`;
+  } else if (state.inputMode === 'signal') {
+    if (!state.targetPid) {
+      statusRow = `${chalk.bgHex('#9333ea').white.bold(' SIGNAL PID ')} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#c084fc')('█')}  ${chalk.hex('#94a3b8')('(Enter PID first · Esc cancel)')}`;
+    } else {
+      const sigIdx = state.SIGNAL_OPTIONS.indexOf(state.inputBuffer as typeof state.SIGNAL_OPTIONS[number]);
+      const sigPills = state.SIGNAL_OPTIONS.map((s, i) =>
+        i === sigIdx ? chalk.bgHex('#eab308').black.bold(` ${s} `) : chalk.hex('#94a3b8')(` ${s} `)
+      ).join(' ');
+      statusRow = `${chalk.bgHex('#9333ea').white.bold(` PID ${state.targetPid} `)} ${sigPills}  ${chalk.hex('#64748b')('(↑/↓ choose · Enter send · Esc cancel)')}`;
+    }
+  } else if (state.inputMode === 'p2p') {
+    statusRow = `${chalk.bgHex('#10b981').black.bold(` P2P (:${state.p2pPort}) `)} ${chalk.bold.hex('#f8fafc')(state.inputBuffer)}${chalk.hex('#34d399')('█')}  ${chalk.hex('#94a3b8')('(Enter password to start · Esc cancel)')}`;
+  } else if (state.statusMessage) {
+    statusRow = ` ${chalk.bgHex('#1e293b').hex('#38bdf8').bold(' STATUS ')} ${state.statusMessage}`;
+  } else {
+    const badges: string[] = [];
+    const viewLabel = state.activePanel === 'grid' ? 'GRID' : state.activePanel.toUpperCase();
+    badges.push(chalk.hex('#38bdf8').bold(`◆ ${viewLabel}`));
+    if (state.paused) badges.push(chalk.bgHex('#854d0e').hex('#fef08a').bold(' PAUSED '));
+    if (state.logging) badges.push(chalk.bgHex('#881337').hex('#fecdd3').bold(' ● REC '));
+    if (state.processFilter) badges.push(chalk.bgHex('#0369a1').hex('#e0f2fe').bold(` "${state.processFilter}" `));
+    if (state.trackedPid) badges.push(chalk.bgHex('#4c1d95').hex('#ede9fe').bold(` PID ${state.trackedPid} `));
+    if (state.p2pServerRunning) badges.push(chalk.bgHex('#14532d').hex('#bbf7d0').bold(` P2P :${state.p2pPort} `));
+
+    const metaRight: string[] = [
+      `${chalk.hex('#64748b')('sort:')} ${chalk.hex('#ffaa40').bold(state.sortMode + (state.sortReverse ? '▲' : '▼'))}`,
+      `${chalk.hex('#64748b')('poll:')} ${chalk.hex('#cbd5e1')(`${state.interval}s`)}`,
+      `${chalk.hex('#64748b')('theme:')} ${chalk.hex('#cbd5e1')(state.currentTheme)}`,
     ];
-   const row2: [string, string][] = [
-     ['s', `sort:${state.sortMode}`],
-     ['/', 'filter'],
-     ['k', 'kill'],
-     ['S', 'signal'],
-     ['e', 'export'],
-     ['l', state.logging ? 'stop log' : 'log'],
-     ['f', state.exportFormat],
-     ['+/-', `${state.interval}s`],
-     ['r', state.p2pServerRunning ? 'stop p2p' : 'start p2p'],
-     ['m', `ai:${state.aiModel.split('-')[0]}`],
-   ];
-   const fmt = (list: [string, string][]) => list.map(([k, label]) => `${chalk.hex('#50fa7b').bold(k)} ${chalk.dim(label)}`).join(chalk.dim('  |  '));
-   const str1 = fmt(row1);
-   const str2 = fmt(row2);
+    if (state.bookmarks.length > 0) metaRight.push(chalk.hex('#38bdf8')(`★${state.bookmarks.length}`));
 
-   const badges: string[] = [];
-   if (state.paused) badges.push(chalk.yellow.bold('⏸ PAUSED'));
-   if (state.logging) badges.push(chalk.red.bold('● REC'));
-   if (state.activePanel !== 'grid') badges.push(chalk.cyan.bold(`◉ ${state.activePanel.toUpperCase()}`));
-   if (state.p2pServerRunning) badges.push(chalk.green.bold(`P2P ${state.p2pBind || '0.0.0.0'}:${state.p2pPort}`));
-   badges.push(chalk.magenta.bold(`AI:${state.aiModel}`));
-   const badgeStr = badges.join('  ') || ' ';
-
-   // Power user footer extras
-   const powerExtras: string[] = [];
-   if (state.bookmarks.length > 0) {
-     powerExtras.push(chalk.cyan.bold(`★ ${state.bookmarks.length} bookmarks`));
-   }
-   if (state.graphZoomLevel > 1) {
-     powerExtras.push(chalk.yellow.bold(`🔍 ${state.graphZoomLevel}x zoom`));
-   }
-   if (state.panelHistory.length > 0) {
-     powerExtras.push(chalk.green.bold(`↩ ${state.panelHistory.length} panels in history`));
-   }
-
-   const extraStr = powerExtras.join('  ') || ' ';
-
-   return [str1, str2, badgeStr + '  ' + extraStr];
+    const leftStr = ' ' + badges.join('  ');
+    const rightStr = metaRight.join(chalk.hex('#334155')(' · ')) + ' ';
+    const gap = Math.max(1, cols - visLen(leftStr) - visLen(rightStr));
+    statusRow = leftStr + ' '.repeat(gap) + rightStr;
   }
+
+  // --- Row 2: Clean Minimal Keybinding Hint Bar ---
+  const keys: [string, string][] = [
+    ['q', 'quit'],
+    ['y', '3D'],
+    ['o', 'menu'],
+    ['1-0/L/P', 'panels'],
+    ['/', 'filter'],
+    ['s/v', 'sort'],
+    ['Space', 'follow'],
+    ['k', 'kill'],
+    ['t', state.treeView ? 'flat' : 'tree'],
+    ['c', 'style'],
+    [':', 'cmd'],
+    ['?', 'help'],
+  ];
+
+  const sep = chalk.hex('#334155')(' · ');
+  const sepW = 3;
+  let usedW = 1;
+  const keyItems: string[] = [];
+  for (const [k, label] of keys) {
+    const item = `${chalk.hex('#ffaa40').bold(k)} ${chalk.hex('#94a3b8')(label)}`;
+    const itemW = visLen(item) + (keyItems.length > 0 ? sepW : 0);
+    if (usedW + itemW > cols - 1 && keyItems.length > 0) break;
+    keyItems.push(item);
+    usedW += itemW;
+  }
+  const keyRow = styleSelectedRow(' ' + keyItems.join(sep), cols, '15;23;42');
+
+  return [fitVisible(statusRow, cols), keyRow];
+}
 
 function sendNotification(title: string, message: string) {
   if (!state.notificationsEnabled) return;
@@ -605,7 +570,7 @@ function checkAlerts(data: StatsData) {
      for (const a of anomalies) {
        reasons.push(`${a.metric} anomaly (σ=${a.zScore.toFixed(1)})`);
      }
-      setStatus(chalk.red(`⚠ Alert: ${reasons.join('; ')}`), 5000);
+      setStatus(chalk.red(`[ALERT] ${reasons.join('; ')}`), 5000);
       sendNotification('pyre Alert', reasons.join('; '));
       
       const alertMsg = reasons.join('; ');
@@ -651,41 +616,58 @@ function renderSplashMenu(cols: number, rows: number): string[] {
   const out: string[] = [];
   const contentLines: string[] = [];
   const logo = [
-    chalk.hex('#ff6004').bold('██████╗ ██╗   ██╗██████╗ ███████╗'),
-    chalk.hex('#ff8004').bold('██╔══██╗╚██╗ ██╔╝██╔══██╗██╔════╝'),
-    chalk.hex('#ffa004').bold('██████╔╝ ╚████╔╝ ██████╔╝█████╗  '),
-    chalk.hex('#ffc004').bold('██╔═══╝   ╚██╔╝  ██╔══██╗██╔══╝  '),
-    chalk.hex('#ffe004').bold('██║        ██║   ██║  ██║███████╗'),
-    chalk.hex('#ffff40').bold('╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝')
+    chalk.hex('#ff3b00').bold('██████╗ ██╗   ██╗██████╗ ███████╗'),
+    chalk.hex('#ff6b00').bold('██╔══██╗╚██╗ ██╔╝██╔══██╗██╔════╝'),
+    chalk.hex('#ff8800').bold('██████╔╝ ╚████╔╝ ██████╔╝█████╗  '),
+    chalk.hex('#ffaa00').bold('██╔═══╝   ╚██╔╝  ██╔══██╗██╔══╝  '),
+    chalk.hex('#ffc800').bold('██║        ██║   ██║  ██║███████╗'),
+    chalk.hex('#ffe040').bold('╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝')
   ];
 
-  const menuTop = Math.max(0, Math.floor(rows / 2) - 8);
-  for (let i = 0; i < menuTop; i++) out.push('');
+  const menuTop = Math.max(0, Math.floor((rows - (logo.length + MENU_OPTIONS.length + 7)) / 2));
+  for (let i = 0; i < menuTop; i++) out.push(' '.repeat(cols));
 
   for (const line of logo) contentLines.push(line);
   contentLines.push('');
-  contentLines.push(chalk.dim('system monitor v9.0.0'));
-  contentLines.push('');
+  contentLines.push(chalk.hex('#475569')('◢▓◤ ') + chalk.bold.hex('#ff8800')('3D SYSTEM MONITOR & HARDWARE FORGE') + chalk.hex('#475569')(' ◥▓◣'));
+  contentLines.push(chalk.hex('#64748b')('v10.9.0 · 3D Holo-Telemetry · Command Center'));
   contentLines.push('');
 
+  const leftSprite = render3DSprite('ignis', 18, MENU_OPTIONS.length, state.animFrame, {
+    cpuUsage: state.lastData?.cpu.usage ?? 25,
+    memUsage: state.lastData?.memory.usagePercent ?? 50,
+  });
+  const rightSprite = render3DSprite('torus', 18, MENU_OPTIONS.length, state.animFrame, {
+    cpuUsage: state.lastData?.cpu.usage ?? 25,
+    memUsage: state.lastData?.memory.usagePercent ?? 50,
+  });
+
+  const btnInnerW = Math.max(30, ...MENU_OPTIONS.map((o) => o.length + 4));
   for (let i = 0; i < MENU_OPTIONS.length; i++) {
     const isSelected = i === state.menuSelectionIndex;
     const opt = MENU_OPTIONS[i];
-    const prefix = isSelected ? chalk.cyan.bold('  ▶ ') : '    ';
-    const text = isSelected ? chalk.bgCyan.black(` ${opt} `) : chalk.dim(` ${opt} `);
-    contentLines.push(prefix + text);
+    const label = `  ${opt}`.padEnd(btnInnerW, ' ');
+    const prefix = isSelected ? chalk.hex('#ff6b35').bold('❯ ') : '  ';
+    const text = isSelected
+      ? chalk.bgHex('#ff5500').black.bold(label)
+      : chalk.bgHex('#1e293b').hex('#cbd5e1')(label);
+    const btnRow = prefix + text + '  ';
+    if (cols >= 76) {
+      contentLines.push(`${leftSprite[i] || ' '.repeat(18)}   ${btnRow}   ${rightSprite[i] || ' '.repeat(18)}`);
+    } else {
+      contentLines.push(btnRow);
+    }
   }
 
   contentLines.push('');
-  contentLines.push('');
-  contentLines.push(chalk.dim('Use ↑/↓ to navigate, Enter to select'));
+  contentLines.push(chalk.hex('#64748b')('[↑/↓] Navigate  ·  [Enter] Launch  ·  [y] Cycle 3D  ·  [q] Quit'));
 
-  while (contentLines.length + menuTop < rows) contentLines.push('');
-  const maxWidth = Math.max(...contentLines.map(visLen));
-  const padding = Math.max(0, Math.floor((cols - maxWidth) / 2));
-  const padStr = ' '.repeat(padding);
-  const fit = (l: string) => padStr + fitVisible(l, cols - padding);
-  for (const line of contentLines) out.push(fit(line));
+  for (const line of contentLines) {
+    const lineW = visLen(line);
+    const leftPad = Math.max(0, Math.floor((cols - lineW) / 2));
+    out.push(fitVisible(' '.repeat(leftPad) + line, cols));
+  }
+  while (out.length < rows) out.push(' '.repeat(cols));
   return out;
 }
 
@@ -737,53 +719,56 @@ function renderReadme(cols: number, rows: number): string[] {
 function renderCredits(cols: number, rows: number): string[] {
   const out: string[] = [];
   const content = [
-    chalk.bold.hex('#ff6004')('Pyre - The Terminal System Monitor'),
+    chalk.bold.hex('#ff6004')('Pyre — System Monitor & Hardware Forge'),
     '',
-    'Created with ❤️  using Node.js',
+    chalk.hex('#94a3b8')('Cross-platform high-performance telemetry dashboard'),
     '',
-    chalk.cyan('Libraries used:'),
-    '  - chalk       (Terminal styling)',
-    '  - systeminformation (System metrics)',
+    chalk.hex('#06b6d4').bold('Core Telemetry & Architecture:'),
+    '  • systeminformation   System metrics & hardware probe',
+    '  • chalk               Terminal styling & color engine',
+    '  • commander           CLI argument parsing & routing',
     '',
     chalk.dim('Press Esc or Enter to return to menu.')
   ];
 
-  out.push(...panel('CREDITS', content, cols, chalk.magenta, chalk.dim, rows - 2));
+  out.push(...panel('CREDITS', content, cols, chalk.hex('#ff6004'), chalk.dim, rows - 2));
   return out;
 }
 
 function renderDockerAlert(cols: number, rows: number): string[] {
   const out: string[] = [];
   const content = [
-    chalk.bold.red('Docker Container Detected'),
+    chalk.bold.hex('#f43f5e')('⬢ Docker Container Environment Detected'),
     '',
-    'Pyre is running inside a container. Some hardware sensors',
-    '(battery, thermal, power) may not be available or relevant.',
+    'Pyre is running inside an isolated container.',
+    'Host hardware sensors (battery, thermal, power) may be restricted.',
     '',
-    chalk.cyan('Do you wish to continue in Docker mode?'),
+    chalk.hex('#06b6d4')('Choose operating profile:'),
     ''
   ];
   
-  const options = ['Yes, use Docker mode (hide hardware sensors)', 'No, launch regular TUI with all features'];
+  const options = ['Docker Profile (optimized for containers)', 'Full TUI Profile (attempt all sensors)'];
   for (let i = 0; i < options.length; i++) {
     const isSelected = i === state.dockerSelectionIndex;
-    const prefix = isSelected ? chalk.cyan.bold('  ▶ ') : '    ';
-    const text = isSelected ? chalk.bgCyan.black(` ${options[i]} `) : chalk.dim(` ${options[i]} `);
+    const prefix = isSelected ? chalk.hex('#ff6b35').bold('  ❯ ') : '    ';
+    const text = isSelected
+      ? chalk.bgHex('#ff5500').black.bold(` ${options[i]} `)
+      : chalk.bgHex('#1e293b').hex('#94a3b8')(` ${options[i]} `);
     content.push(prefix + text);
   }
   
   content.push('');
-  content.push(chalk.dim('Press ↑/↓ to select, Enter to confirm, Esc to skip.'));
+  content.push(chalk.dim('Press ↑/↓ or J/K to select · Enter to confirm · Esc to skip'));
 
-  out.push(...panel('DOCKER DETECTED', content, cols, chalk.red, chalk.dim, rows - 2));
+  out.push(...panel('DOCKER ENVIRONMENT', content, cols, chalk.hex('#f43f5e'), chalk.dim, rows - 2));
   return out;
 }
 
 function renderAiModelSelector(cols: number, rows: number): string[] {
   const out: string[] = [];
   const content: string[] = [
-    chalk.bold.hex('#ff6004')('Choose AI Anomaly Explanation Model'),
-    chalk.dim('Select your preferred diagnosis engine. Offline models run entirely in-process.'),
+    chalk.bold.hex('#ff6004')('Choose AI Anomaly Explanation Engine'),
+    chalk.dim('Select your preferred diagnosis model. In-process models require zero external API calls.'),
     '',
   ];
 
@@ -791,11 +776,13 @@ function renderAiModelSelector(cols: number, rows: number): string[] {
     const m = AVAILABLE_AI_MODELS[i];
     const isSelected = i === state.modelSelectionIndex;
     const isCurrent = m.id === state.aiModel;
-    const prefix = isSelected ? chalk.cyan.bold(' ▶ ') : '   ';
-    const curBadge = isCurrent ? chalk.bgGreen.black.bold(' ACTIVE ') : '';
-    const badgeStr = m.offline ? chalk.green(`[${m.badge}]`) : chalk.yellow(`[${m.badge}]`);
+    const prefix = isSelected ? chalk.hex('#ff6b35').bold(' ❯ ') : '   ';
+    const curBadge = isCurrent ? chalk.bgHex('#14532d').hex('#86efac').bold(' ACTIVE ') : '';
+    const badgeStr = m.offline ? chalk.hex('#10b981')(`[${m.badge}]`) : chalk.hex('#f59e0b')(`[${m.badge}]`);
 
-    const nameStr = isSelected ? chalk.bgCyan.black.bold(` ${m.name} `) : chalk.bold.white(m.name);
+    const nameStr = isSelected
+      ? chalk.bgHex('#ff5500').black.bold(` ${m.name} `)
+      : chalk.bold.hex('#f1f5f9')(m.name);
     content.push(`${prefix}${nameStr} ${badgeStr} ${curBadge}`);
     content.push(chalk.dim(`     ${m.description}`));
     content.push('');
@@ -803,7 +790,7 @@ function renderAiModelSelector(cols: number, rows: number): string[] {
 
   content.push(chalk.dim('Use ↑/↓ or J/K to navigate · Enter/Space to select · Esc to cancel'));
 
-  out.push(...panel('AI MODEL SELECTOR', content, cols, chalk.cyan, chalk.dim, Math.max(1, rows - 2)));
+  out.push(...panel('AI MODEL SELECTOR', content, cols, chalk.hex('#06b6d4'), chalk.dim, Math.max(1, rows - 2)));
   return out;
 }
 

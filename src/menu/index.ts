@@ -92,7 +92,7 @@ export async function runMenu(opts?: MenuOptions): Promise<void> {
       tokens.shift();
     }
 
-    console.log(chalk.bold(`\n  🔥 Executing: ${chalk.hex('#ff6a39')(rawCommandLine)}\n`));
+    console.log(chalk.bold(`\n  Executing: ${chalk.hex('#ff6a39')(rawCommandLine)}\n`));
 
     try {
       // Execute through the current node binary and entry point

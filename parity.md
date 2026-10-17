@@ -529,6 +529,11 @@ pyre provides Mac-native security, diagnostics, and ecosystem capabilities that 
 * **P2P Live Data Streaming & Fleet** — Multi-Mac live streaming with password/TLS auth, HMAC signing, rate-limiting, and IP filtering.
 * **Power User TUI Tools** — Quick-reference overlay (?), fuzzy-search command palette (:), session bookmarks (Shift+M save / M recall), graph zoom ([/]), panel quick-stack (Tab/Shift+Tab), and a footer badge showing active bookmarks, zoom level, and panel history depth.
 * **Live Web Dashboard** — `pyre serve` now serves a Chart.js-based auto-refreshing dashboard at `/` with live CPU, memory, temperature, network, and power sparkline charts.
+* **Listening Port, Socket & Local Dev Server Manager (`pyre ports` & `L` TUI Tab)** — Maps listening TCP/UDP ports to PIDs, CPU%, MEM%, `LOCAL` vs `LAN` bind exposure badges, and auto-detected developer stacks (`Vite Dev`, `Next.js`, `Ollama (LLM)`, `PostgreSQL`, `Redis`, `Docker`), with instant `--kill-port <port>` termination.
+* **Deep GPU, Unified Memory & AI/LLM Quantization Fit Inspector (`pyre gpu`)** — Computes Apple Silicon's 75% Unified Memory wired ceiling, attributes active GPU/ML/AI/3D processes, and renders an **LLM Quantization Fit Matrix** (`3B`, `7B/8B`, `14B`, `32B`, `70B` at `Q4_K_M` / `Q8_0`) showing `FAST`, `TIGHT`, or `SWAP_RISK`.
+* **Real-Time Process Memory Leak & Monotonic Growth Detector (`pyre leaks`)** — Samples process RSS over time, computes ordinary least-squares slope (`MB/min`) and $R^2$ monotonicity score (`0..1`) to separate real memory leaks from GC sawtooth noise, and predicts OOM ETA.
+* **Zombie, Stuck I/O, Spinlock & Stale Dev Orphan Hunter (`pyre zombies`)** — Identifies defunct `Z` processes and their un-reaped parent PIDs, uninterruptible `U`/`D` kernel stalls, detached `PPID=1` dev/test orphans (`vitest`, `jest`, `playwright`, `webpack`), and runaway spinlocks, with `--clean` reaping.
+* **BTOP++ Interactive Process Controls** — Ascending/descending sort direction toggle (`v` / `I` / `--reverse`) with column header indicators (`▼`/`▲`), live interactive priority renicing (`n`), `PgUp`/`PgDn`/`Home`/`End` navigation, pre-filled selected PID for `k`/`S`, and live per-process CPU/MEM sparklines in the `FOLLOWING PID` banner.
 
 ---
 

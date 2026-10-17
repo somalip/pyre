@@ -1,4 +1,4 @@
-import { Worker, isMainThread, workerData } from 'node:worker_threads';
+import { Worker } from 'node:worker_threads';
 import os from 'node:os';
 import chalk from 'chalk';
 
@@ -7,8 +7,8 @@ export interface StressOptions {
   cores?: number;
 }
 
-if (!isMainThread) {
-  // Worker thread busywork loop
+const WORKER_CODE = `
+  const { workerData } = require('node:worker_threads');
   const endTime = workerData?.endTime;
   while (true) {
     if (endTime && Date.now() >= endTime) {
@@ -17,7 +17,7 @@ if (!isMainThread) {
     Math.hypot(Math.random(), Math.random());
   }
   process.exit(0);
-}
+`;
 
 export async function runStressCommand(opts: StressOptions = {}): Promise<void> {
   const durationSec = opts.durationSec ?? 30;
@@ -31,8 +31,15 @@ export async function runStressCommand(opts: StressOptions = {}): Promise<void> 
   const workers: Worker[] = [];
 
   for (let i = 0; i < numCores; i++) {
-    const worker = new Worker(new URL(import.meta.url), {
+    const worker = new Worker(WORKER_CODE, {
+      eval: true,
       workerData: { endTime },
+    });
+    worker.on('error', (err) => {
+      // Avoid unhandled rejection if a worker fails to spawn
+      if (process.env.DEBUG) {
+        console.error('Worker error:', err);
+      }
     });
     workers.push(worker);
   }

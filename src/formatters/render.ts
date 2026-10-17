@@ -16,13 +16,109 @@ import type { StatsData, VisibleItems, TableOptions, AnomalyAlert } from './type
 import type { BlenderRenderData } from '../monitors/types.js';
 import { THEMES, type ThemeName, type ThemeColors } from './themes.js';
 import { explainAnomaliesLocally } from '../ai/models.js';
+import { collectListeningPorts, formatPortsPanelLines } from '../portsCmd.js';
+import { render3DSprite, renderMiniCyberVisor, SPRITE_3D_MODES, type Sprite3DMode } from './sprites3d.js';
+
 
 
 // --- low-level box drawing ---------------------------------------------------
 
+function codePointWidth(cp: number): number {
+  if (cp <= 0x1f || (cp >= 0x7f && cp <= 0x9f)) return 0;
+  if (
+    cp === 0x26a1 || // ⚡
+    cp === 0x23f8 || // ⏸
+    cp === 0x231b ||
+    cp === 0x231a ||
+    (cp >= 0x1100 &&
+      (cp <= 0x115f ||
+        cp === 0x2329 ||
+        cp === 0x232a ||
+        (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
+        (cp >= 0xac00 && cp <= 0xd7a3) ||
+        (cp >= 0xf900 && cp <= 0xfaff) ||
+        (cp >= 0xfe10 && cp <= 0xfe19) ||
+        (cp >= 0xfe30 && cp <= 0xfe6f) ||
+        (cp >= 0xff00 && cp <= 0xff60) ||
+        (cp >= 0xffe0 && cp <= 0xffe6) ||
+        (cp >= 0x1f300 && cp <= 0x1faff) ||
+        (cp >= 0x20000 && cp <= 0x3fffd)))
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
 export function visLen(s: string): number {
   // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, '').length;
+  const plain = s.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+  let w = 0;
+  for (const ch of plain) {
+    const cp = ch.codePointAt(0);
+    if (cp !== undefined) w += codePointWidth(cp);
+  }
+  return w;
+}
+
+/**
+ * Slice a string containing ANSI escape sequences by visible column indices [start, end).
+ */
+export function sliceVisible(s: string, start: number, end?: number): string {
+  const sCol = Math.max(0, start);
+  const eCol = end !== undefined ? Math.max(sCol, end) : Infinity;
+  let visibleCount = 0;
+  let out = '';
+  let activeAnsi = '';
+  let currentSeq = '';
+  let inAnsi = false;
+
+  for (let i = 0; i < s.length; ) {
+    const char = s[i];
+    if (char === '\x1b') {
+      inAnsi = true;
+      currentSeq = char;
+      i++;
+    } else if (inAnsi) {
+      currentSeq += char;
+      i++;
+      if ((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+        inAnsi = false;
+        if (visibleCount <= sCol) {
+          if (currentSeq === '\x1b[0m' || currentSeq === '\x1b[m') {
+            activeAnsi = '';
+          } else {
+            activeAnsi += currentSeq;
+          }
+        } else if (visibleCount < eCol) {
+          out += currentSeq;
+        }
+        currentSeq = '';
+      }
+    } else {
+      const cp = s.codePointAt(i) ?? 0;
+      const charStr = String.fromCodePoint(cp);
+      const cw = codePointWidth(cp);
+      i += charStr.length;
+
+      if (visibleCount >= sCol && visibleCount + cw <= eCol) {
+        if (out === '' && activeAnsi) {
+          out += activeAnsi;
+        }
+        out += charStr;
+      } else if (visibleCount < eCol && visibleCount + cw > eCol) {
+        // Wide char would straddle the right boundary; pad with a space
+        if (out === '' && activeAnsi) {
+          out += activeAnsi;
+        }
+        out += ' ';
+      }
+      visibleCount += cw;
+      if (visibleCount >= eCol && !inAnsi) {
+        break;
+      }
+    }
+  }
+  return out ? out + '\x1b[0m' : '';
 }
 
 export function fitVisible(s: string, width: number): string {
@@ -30,45 +126,151 @@ export function fitVisible(s: string, width: number): string {
   const len = visLen(s);
   if (len === w) return s;
   if (len < w) return s + ' '.repeat(w - len);
-
-  let visibleCount = 0;
-  let out = '';
-  let inAnsi = false;
-
-  for (let i = 0; i < s.length; i++) {
-    const char = s[i];
-    if (char === '\x1b') {
-      inAnsi = true;
-      out += char;
-    } else if (inAnsi) {
-      out += char;
-      if ((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
-        inAnsi = false;
-      }
-    } else {
-      if (visibleCount < w) {
-        out += char;
-        visibleCount++;
-      } else {
-        break;
-      }
-    }
-  }
-  out += '\x1b[0m';
-  const resLen = visLen(out);
-  if (resLen < w) {
-    out += ' '.repeat(w - resLen);
-  }
-  return out;
+  const sliced = sliceVisible(s, 0, w);
+  const resLen = visLen(sliced);
+  return resLen < w ? sliced + ' '.repeat(w - resLen) : sliced;
 }
 
 export function padVisible(s: string, width: number): string {
   return fitVisible(s, width);
 }
 
+/**
+ * Wrap a row in a continuous selection background color (#1e293b) without inner resets breaking the bar.
+ */
+export function styleSelectedRow(s: string, width: number, bgRgb = '30;41;59'): string {
+  const fitted = fitVisible(s, width);
+  const bgSeq = `\x1b[48;2;${bgRgb}m`;
+  // Re-assert background color after any full reset or bg-reset inside the line
+  // eslint-disable-next-line no-control-regex
+  const patched = fitted.replace(/\x1b\[(0|49|22)m/g, `\x1b[$1m${bgSeq}`);
+  return `${bgSeq}${patched}\x1b[0m`;
+}
+
+/**
+ * Stamp a framed modal box array in the center of the terminal screen lines safely across ANSI sequences.
+ */
+export function stampOverlay(screenLines: string[], box: string[], width: number, _height?: number): void {
+  const boxH = box.length;
+  const startRow = Math.max(0, Math.floor((screenLines.length - boxH) / 2));
+  const boxW = visLen(box[0] || '');
+  const startCol = Math.max(0, Math.floor((width - boxW) / 2));
+
+  for (let r = 0; r < boxH; r++) {
+    const targetRow = startRow + r;
+    if (targetRow < screenLines.length) {
+      const orig = screenLines[targetRow] || '';
+      const left = fitVisible(sliceVisible(orig, 0, startCol), startCol);
+      const rightW = Math.max(0, width - startCol - boxW);
+      const right = fitVisible(sliceVisible(orig, startCol + boxW, width), rightW);
+      screenLines[targetRow] = left + box[r] + right;
+    }
+  }
+}
+
 function truncatePlain(s: string, width: number): string {
   if (s.length <= width) return s;
   return width <= 1 ? s.slice(0, width) : s.slice(0, width - 1) + '…';
+}
+
+/**
+ * Extract a clean, readable application/binary name from long OS process paths
+ * (e.g., macOS .app bundles or /System/Library/... paths) for compact process tables.
+ */
+export function cleanCommandName(cmd: string): string {
+  const trimmed = (cmd || '').trim();
+  if (!trimmed) return '';
+  // macOS .app bundle executable: extract the binary inside Contents/MacOS/
+  const appMatch = trimmed.match(/\.app\/Contents\/MacOS\/([^/]+)$/);
+  if (appMatch) {
+    return appMatch[1].trim();
+  }
+  // If starts with an absolute path without spaces or up to first flag
+  if (trimmed.startsWith('/')) {
+    const flagIdx = trimmed.indexOf(' -');
+    const execPart = flagIdx > 0 ? trimmed.slice(0, flagIdx) : trimmed.split(/\s+/)[0];
+    const argsPart = flagIdx > 0 ? trimmed.slice(flagIdx) : trimmed.slice(execPart.length);
+    const base = execPart.split('/').pop() || execPart;
+    return (base + argsPart).trim();
+  }
+  return trimmed;
+}
+
+function ensureWaveSamples(values: number[], targetPoints: number, frame = 14, minBound = 0, maxBound = 100): number[] {
+  if (values.length >= targetPoints) {
+    return values.slice(-targetPoints);
+  }
+  const anchor = values.length > 0 ? values[0] : 28;
+  const missing = targetPoints - values.length;
+  const synth: number[] = [];
+  const base = Math.max(minBound + 8, anchor);
+  for (let i = 0; i < missing; i++) {
+    const phase = (i + frame) * 0.42;
+    const harmonic = Math.sin(phase) * 0.28 + Math.cos(phase * 1.7) * 0.16 + Math.sin(phase * 0.5) * 0.12;
+    const val = Math.min(maxBound, Math.max(minBound, base * (0.76 + harmonic)));
+    synth.push(val);
+  }
+  return [...synth, ...values];
+}
+
+/**
+ * Render a full-width multi-row Braille oscilloscope graph.
+ */
+function renderOscilloscopeChart(
+  values: number[],
+  width: number,
+  height: number,
+  accent: (s: string) => string,
+  bounds: { min?: number; max?: number } = { min: 0, max: 100 },
+  frame = 14
+): string[] {
+  const w = Math.max(4, width);
+  const h = Math.max(1, height);
+  const maxPoints = w * 2;
+  const recent = ensureWaveSamples(
+    values,
+    maxPoints,
+    frame,
+    bounds.min ?? 0,
+    bounds.max ?? Math.max(20, ...(values.length ? values : [40]))
+  );
+
+  const rawRows = multiRowBrailleGraph(recent, h, bounds);
+
+  const out: string[] = [];
+  for (let r = 0; r < h; r++) {
+    const isBottom = r === h - 1;
+    const rawLine = fitVisible(rawRows[r] || '', w);
+    const waveStr = isBottom ? rawLine.replace(/ /g, '⣀') : rawLine;
+    const rowColor = r === 0 && h > 2
+      ? chalk.hex('#fb923c')
+      : accent;
+    out.push(fitVisible(rowColor(waveStr), w));
+  }
+  return out;
+}
+
+/**
+ * Render a single-row full-width waveform with harmonic lead-in for unfilled columns.
+ */
+function renderInlineWave(
+  values: number[],
+  width: number,
+  colorFn: (s: string) => string,
+  mode: 'spark' | 'bar' = 'spark',
+  bounds: { min?: number; max?: number } = {},
+  frame = 14
+): string {
+  const w = Math.max(4, width);
+  const maxB = bounds.max ?? Math.max(50, ...(values.length ? values : [50]), 100);
+  if (mode === 'bar') {
+    const recent = ensureWaveSamples(values, w, frame, bounds.min ?? 0, maxB);
+    const wave = sparkline(recent, { min: bounds.min ?? 0, max: maxB }).replace(/ /g, '▁');
+    return fitVisible(colorFn(wave), w);
+  }
+  const recent = ensureWaveSamples(values, w * 2, frame, bounds.min ?? 0, maxB);
+  const wave = brailleGraph(recent, { min: bounds.min ?? 0, max: maxB }).replace(/\u2800/g, '⣀');
+  return fitVisible(colorFn(fitVisible(wave, w)), w);
 }
 
 /** Draw a rounded panel of exactly `width` columns wide and `height` content rows tall. */
@@ -83,16 +285,43 @@ export function panel(
 ): string[] {
   const h = height ?? lines.length;
   const contentWidth = Math.max(1, width - 4);
-  const leftLabel = title ? ` ${title} ` : '';
-  const rightLabel = rightTitle ? ` ${rightTitle} ` : '';
   const innerW = Math.max(0, width - 2);
-  let topInner = leftLabel + '─'.repeat(Math.max(0, innerW - visLen(leftLabel) - visLen(rightLabel))) + rightLabel;
+
+  let leftLabel = '';
+  if (title) {
+    const keyMatch = title.match(/^([0-9A-Z])\s+(.+)$/);
+    if (keyMatch) {
+      leftLabel = borderAccent('─[ ') + chalk.bold.hex('#ffaa40')(keyMatch[1]) + ' ' + accent(chalk.bold(keyMatch[2])) + borderAccent(' ]─');
+    } else {
+      leftLabel = borderAccent('─[ ') + accent(chalk.bold(title)) + borderAccent(' ]─');
+    }
+  }
+
+  let rightLabel = '';
+  if (rightTitle) {
+    const maxRightText = Math.max(0, innerW - visLen(leftLabel) - 6);
+    if (maxRightText >= 4) {
+      const clippedRight = visLen(rightTitle) > maxRightText
+        ? sliceVisible(rightTitle, 0, Math.max(1, maxRightText - 1)) + '…'
+        : rightTitle;
+      rightLabel = borderAccent('─┫ ') + chalk.hex('#cbd5e1')(clippedRight) + borderAccent(' ┣─');
+    }
+  }
+
+  const labelLen = visLen(leftLabel) + visLen(rightLabel);
+  let filler = '';
+  if (innerW > labelLen) {
+    filler = borderAccent('─'.repeat(innerW - labelLen));
+  }
+
+  let topInner = leftLabel + filler + rightLabel;
   if (visLen(topInner) > innerW) {
     topInner = fitVisible(topInner, innerW);
   } else if (visLen(topInner) < innerW) {
-    topInner = topInner + '─'.repeat(innerW - visLen(topInner));
+    topInner = topInner + borderAccent('─'.repeat(innerW - visLen(topInner)));
   }
-  const top = borderAccent('╭' + topInner + '╮');
+
+  const top = borderAccent('╭') + topInner + borderAccent('╮');
   const bottom = borderAccent('╰' + '─'.repeat(innerW) + '╯');
   const body: string[] = [];
   for (let i = 0; i < h; i++) {
@@ -116,8 +345,9 @@ export function gaugeBar(percent: number, width = 12): string {
   }
   const empty = Math.max(0, w - visLen(str));
   
-  const color = pct > 85 ? chalk.red : pct > 65 ? chalk.yellow : chalk.cyan;
-  return color(str) + chalk.dim('─'.repeat(empty));
+  const color = pct > 88 ? chalk.hex('#f43f5e').bold : pct > 75 ? chalk.hex('#ff6b35').bold : pct > 50 ? chalk.hex('#f59e0b') : chalk.hex('#06b6d4');
+  const track = chalk.hex('#1e293b')('━'.repeat(empty));
+  return color(str) + track;
 }
 
 /** Join equal-or-uneven-height panel blocks side by side with a gap. */
@@ -146,54 +376,29 @@ function hstack(blocks: string[][], gap = 2, targetWidth?: number): string[] {
 
 function statRow(label: string, value: string, width = 9): string {
   const w = Math.max(width, label.length + 1);
-  return `${chalk.dim(label.padEnd(w))}${value}`;
+  return `${chalk.hex('#64748b')(label.padEnd(w))}${chalk.bold.hex('#e2e8f0')(value)}`;
 }
 
 function bar(percent: number, width = 20): string {
-  const w = Math.max(1, width);
-  const pct = Math.min(100, Math.max(0, percent));
-  const totalEighths = Math.round((pct / 100) * w * 8);
-  const fullBlocks = Math.floor(totalEighths / 8);
-  const remainder = totalEighths % 8;
-  const blocks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
-  
-  let str = '█'.repeat(fullBlocks);
-  if (fullBlocks < w && remainder > 0) {
-    str += blocks[remainder];
-  }
-  const empty = Math.max(0, w - visLen(str));
-  const color = percent > 90 ? chalk.red : percent > 70 ? chalk.yellow : chalk.green;
-  return color(str) + chalk.dim('─'.repeat(empty));
+  return gaugeBar(percent, width);
 }
 
 function gaugeRow(label: string, percent: number, contentWidth: number): string {
   const labelW = 9;
-  const pctText = `${Math.round(percent)}%`;
-  const barW = Math.max(6, contentWidth - labelW - pctText.length - 1);
-  const pct = Math.min(100, Math.max(0, percent));
-  
-  const totalEighths = Math.round((pct / 100) * barW * 8);
-  const fullBlocks = Math.floor(totalEighths / 8);
-  const remainder = totalEighths % 8;
-  const blocks = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
-  
-  let str = '█'.repeat(fullBlocks);
-  if (fullBlocks < barW && remainder > 0) {
-    str += blocks[remainder];
-  }
-  const empty = Math.max(0, barW - visLen(str));
-  const color = pct > 90 ? chalk.red : pct > 70 ? chalk.yellow : chalk.green;
-  return `${chalk.dim(label.padEnd(labelW))}${color(str)}${chalk.dim('─'.repeat(empty))} ${pctText}`;
+  const pctText = `${Math.round(percent)}%`.padStart(4);
+  const barW = Math.max(6, contentWidth - labelW - pctText.length - 2);
+  const meter = gaugeBar(percent, barW);
+  return `${chalk.hex('#64748b')(label.padEnd(labelW))}${meter} ${chalk.bold.hex('#f8fafc')(pctText)}`;
 }
 
 export function statusSymbol(level: 'ok' | 'warn' | 'crit'): string {
   if (level === 'crit') return '✕ ';
-  if (level === 'warn') return '⚠ ';
+  if (level === 'warn') return '! ';
   return '✓ ';
 }
 
 export function thermalColor(pressureLevel: number) {
-  const symbol = pressureLevel >= 3 ? '✕ ' : pressureLevel >= 1 ? '⚠ ' : '✓ ';
+  const symbol = pressureLevel >= 3 ? '✕ ' : pressureLevel >= 1 ? '! ' : '✓ ';
   if (pressureLevel >= 3) return (s: string) => chalk.red(symbol + s);
   if (pressureLevel === 2) return (s: string) => chalk.yellow(symbol + s);
   if (pressureLevel === 1) return (s: string) => chalk.yellowBright(symbol + s);
@@ -201,7 +406,7 @@ export function thermalColor(pressureLevel: number) {
 }
 
 export function capacityColor(percent: number) {
-  const symbol = percent < 80 ? '✕ ' : percent < 90 ? '⚠ ' : '✓ ';
+  const symbol = percent < 80 ? '✕ ' : percent < 90 ? '! ' : '✓ ';
   if (percent < 80) return (s: string) => chalk.red(symbol + s);
   if (percent < 90) return (s: string) => chalk.yellow(symbol + s);
   return (s: string) => chalk.green(symbol + s);
@@ -399,8 +604,7 @@ function networkDetailCard(data: StatsData, width: number, theme: ThemeColors): 
   
   if (data.packets && data.packets.allProcesses && data.packets.allProcesses.length > 0) {
     lines.push('');
-    lines.push(chalk.bold('PROCESSES & BANDWIDTH USAGE:'));
-    lines.push(chalk.dim('─'.repeat(contentWidth)));
+    lines.push(chalk.bold.hex('#ffaa40')('◆ PROCESSES & BANDWIDTH USAGE'));
     
     const pWidth = 8;
     const rxWidth = 12;
@@ -409,11 +613,13 @@ function networkDetailCard(data: StatsData, width: number, theme: ThemeColors): 
     const cmdWidth = Math.max(15, contentWidth - (pWidth + rxWidth + txWidth + totalWidth + 4 * 2));
     
     lines.push(
-      chalk.bold('PID'.padEnd(pWidth)) + '  ' +
-      chalk.bold('COMMAND'.padEnd(cmdWidth)) + '  ' +
-      chalk.bold('RX'.padStart(rxWidth)) + '  ' +
-      chalk.bold('TX'.padStart(txWidth)) + '  ' +
-      chalk.bold('TOTAL'.padStart(totalWidth))
+      chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(
+        ' PID'.padEnd(pWidth) + '  ' +
+        'COMMAND'.padEnd(cmdWidth) + '  ' +
+        'RX'.padStart(rxWidth) + '  ' +
+        'TX'.padStart(txWidth) + '  ' +
+        'TOTAL'.padStart(totalWidth) + ' '
+      )
     );
     
     const sorted = [...data.packets.allProcesses]
@@ -427,11 +633,11 @@ function networkDetailCard(data: StatsData, width: number, theme: ThemeColors): 
       const cmdStr = truncatePlain(proc.command, cmdWidth).padEnd(cmdWidth);
       
       lines.push(
-        chalk.cyan(proc.pid.toString().padEnd(pWidth)) + '  ' +
-        cmdStr + '  ' +
-        chalk.yellow(rxStr) + '  ' +
-        chalk.yellow(txStr) + '  ' +
-        chalk.bold(totalStr)
+        chalk.hex('#06b6d4')(proc.pid.toString().padEnd(pWidth)) + '  ' +
+        chalk.hex('#e2e8f0')(cmdStr) + '  ' +
+        chalk.hex('#10b981')(rxStr) + '  ' +
+        chalk.hex('#f59e0b')(txStr) + '  ' +
+        chalk.bold.hex('#f8fafc')(totalStr)
       );
     }
   } else {
@@ -484,13 +690,21 @@ function tasksCard(data: StatsData, contentWidth: number): string[] | null {
 
 // --- header / tabs -----------------------------------------------------------
 
-function header(data: StatsData, width: number, badges: string[] = [], borderAccent = THEMES.default.border): string[] {
-  const now = new Date().toLocaleTimeString();
-  const left = `${chalk.hex('#ff5500').bold(' PYRE ')} ${chalk.bold(data.header.hostname)}  ${chalk.dim(data.header.os)}  ${chalk.dim('up ' + data.header.uptime)}`;
-  const right = `${chalk.dim(now)}  ${badges.join('  ')}`;
+function header(data: StatsData, width: number, badges: string[] = [], opts: TableOptions = {}): string[] {
+  const spriteMode = opts.sprite3dMode || 'ignis';
+  const now = new Date().toLocaleTimeString([], { hour12: false });
+  const cleanHost = (data.header.hostname || 'localhost').replace(/\.(local|lan|home|internal)$/i, '');
+  const cleanUptime = (data.header.uptime || '').replace(/\s+/g, ' ').trim();
+  const brand = chalk.bgHex('#ff5500').black.bold(' PYRE ');
+  const sep = chalk.hex('#334155')(' · ');
+  const host = `${chalk.bold.hex('#f8fafc')(cleanHost)}${sep}${chalk.hex('#94a3b8')(data.header.os)}${sep}${chalk.hex('#64748b')('up ')}${chalk.hex('#cbd5e1')(cleanUptime)}`;
+  const spriteTag = chalk.hex('#38bdf8')(`3D:${spriteMode}`);
+  const right = `${badges.length ? badges.join(' ') + sep : ''}${spriteTag}${sep}${chalk.bold.hex('#e2e8f0')(now)} `;
+  const maxLeftW = Math.max(12, width - visLen(right) - 2);
+  const left = sliceVisible(`${brand}  ${host}`, 0, maxLeftW);
   const gap = Math.max(1, width - visLen(left) - visLen(right));
   const line = fitVisible(left + ' '.repeat(gap) + right, width);
-  return [line, borderAccent('─'.repeat(width))];
+  return [line];
 }
 
 /**
@@ -510,6 +724,7 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
   { id: 'tasks', label: 'Tasks', key: '9' },
   { id: 'disk', label: 'Disk', key: '0' },
   { id: 'process', label: 'Process', key: 'P' },
+  { id: 'ports', label: 'Ports', key: 'L' },
   { id: 'p2p', label: 'P2P', key: 'R' },
   { id: 'anomalies', label: 'Anomalies', key: 'A' },
   { id: 'containers', label: 'Containers', key: 'C' },
@@ -517,24 +732,21 @@ export const TAB_DEFS: { id: string; label: string; key: string }[] = [
 ];
 
 /** The number of leading columns of indent before the tab bar's first character (see `tabBar`). */
-const TAB_BAR_INDENT = 2;
-/** Visible width of the ' │ ' separator drawn between tabs. */
-const TAB_SEPARATOR_WIDTH = 3;
+const TAB_BAR_INDENT = 1;
+/** Visible width of the '·' separator drawn between tabs. */
+const TAB_SEPARATOR_WIDTH = 1;
 
 /**
  * Compute the column range (inclusive start, exclusive end) each tab
  * occupies when rendered by `tabBar`, so a click at a given column can be
- * mapped back to a panel id. Row is always the same line the tab bar is
- * printed on (see `formatTable`: header takes 2 lines, then a blank line,
- * then the tab bar — i.e. row 4 in a 1-indexed terminal, row index 3 if
- * 0-indexed from the top of the dashboard).
+ * mapped back to a panel id.
  */
 export function getTabHitboxes(visible?: VisibleItems): { id: string; start: number; end: number }[] {
   const tabs = visible ? TAB_DEFS.filter(t => visible[t.id as keyof VisibleItems] !== false) : TAB_DEFS;
   const boxes: { id: string; start: number; end: number }[] = [];
   let col = TAB_BAR_INDENT;
   tabs.forEach((t, i) => {
-    const text = `[${t.key}]${t.label}`;
+    const text = ` ${t.key}:${t.label} `;
     const start = col;
     const end = col + text.length;
     boxes.push({ id: t.id, start, end });
@@ -545,102 +757,129 @@ export function getTabHitboxes(visible?: VisibleItems): { id: string; start: num
 }
 
 /** Row (1-indexed, matching terminal mouse-report coordinates) the tab bar renders on. */
-export const TAB_BAR_ROW = 4;
+export const TAB_BAR_ROW = 2;
 
-function tabBar(activePanel: string, width: number, theme: ThemeColors, visible?: VisibleItems): string {
+function tabBar(activePanel: string, width: number, _theme: ThemeColors, visible?: VisibleItems): string {
   const visibleTabs = visible ? TAB_DEFS.filter(t => visible[t.id as keyof VisibleItems] !== false) : TAB_DEFS;
   const rendered = visibleTabs.map(t => {
     const isActive = activePanel === t.id;
-    const label = isActive ? chalk.bold(t.label) : chalk.dim(t.label);
-    const keyHint = chalk.dim(`[${t.key}]`);
-    return `${keyHint}${label}`;
+    const text = ` ${t.key}:${t.label} `;
+    if (isActive) {
+      return chalk.bgHex('#ff5500').black.bold(text);
+    }
+    return ` ${chalk.hex('#ffaa40').bold(t.key)}${chalk.hex('#475569')(':')}${chalk.hex('#94a3b8')(t.label)} `;
   });
 
-  const separator = chalk.dim(' │ ');
+  const separator = chalk.hex('#334155')('·');
+  const indent = ' ';
+  const available = Math.max(10, width - visLen(indent));
   const joined = rendered.join(separator);
-  const indent = '  ';
-  const available = width - visLen(indent);
+
   let result = joined;
   if (visLen(joined) > available) {
+    const activeIdx = Math.max(0, visibleTabs.findIndex(t => t.id === activePanel));
+    let startIdx = 0;
+    // Ensure activeIdx is inside the visible window
+    while (startIdx < activeIdx) {
+      const sliceAttempt = rendered.slice(startIdx, activeIdx + 1).join(separator);
+      if (visLen(sliceAttempt) <= available - 2) break;
+      startIdx++;
+    }
     let used = 0;
     const kept: string[] = [];
-    for (let i = 0; i < rendered.length; i++) {
+    for (let i = startIdx; i < rendered.length; i++) {
       const tabW = visLen(rendered[i]) + (kept.length > 0 ? visLen(separator) : 0);
-      if (used + tabW > available && kept.length > 0) break;
+      if (used + tabW > available - 2 && kept.length > 0) break;
       kept.push(rendered[i]);
       used += tabW;
     }
-    if (kept.length < rendered.length) {
-      result = kept.join(separator) + chalk.dim('⋯');
-    }
+    const prefixEllipsis = startIdx > 0 ? chalk.hex('#64748b')('‹') : '';
+    const suffixEllipsis = startIdx + kept.length < rendered.length ? chalk.hex('#64748b')('›') : '';
+    result = prefixEllipsis + kept.join(separator) + suffixEllipsis;
   }
 
-  const pad = Math.max(0, available - visLen(result));
-  return fitVisible(chalk.dim(indent) + result + ' '.repeat(pad), width);
+  return styleSelectedRow(indent + result, width, '15;23;42');
 }
 
 // --- process / disk tables ---------------------------------------------------
 
-function sortProcesses(
-   processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[],
-   sortBy: 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime'
- ) {
+export function sortProcesses<T extends { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }>(
+   processes: T[],
+   sortBy: 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime' = 'cpu',
+   reverse: boolean = false
+ ): T[] {
    const copy = [...processes];
+   const dir = reverse ? -1 : 1;
    switch (sortBy) {
-     case 'pid': return copy.sort((a, b) => a.pid - b.pid);
-     case 'mem': return copy.sort((a, b) => b.mem - a.mem);
-     case 'user': return copy.sort((a, b) => a.user.localeCompare(b.user));
-     case 'command': return copy.sort((a, b) => a.command.localeCompare(b.command));
-     case 'state': return copy.sort((a, b) => a.state.localeCompare(b.state));
-     case 'threads': return copy.sort((a, b) => b.threads - a.threads);
-     case 'runtime': return copy.sort((a, b) => b.runtime - a.runtime);
-     default: return copy.sort((a, b) => b.cpu - a.cpu);
+     case 'pid': return copy.sort((a, b) => (a.pid - b.pid) * dir);
+     case 'mem': return copy.sort((a, b) => (b.mem - a.mem) * dir);
+     case 'user': return copy.sort((a, b) => a.user.localeCompare(b.user) * dir);
+     case 'command': return copy.sort((a, b) => cleanCommandName(a.command).localeCompare(cleanCommandName(b.command)) * dir);
+     case 'state': return copy.sort((a, b) => a.state.localeCompare(b.state) * dir);
+     case 'threads': return copy.sort((a, b) => (b.threads - a.threads) * dir);
+     case 'runtime': return copy.sort((a, b) => (b.runtime - a.runtime) * dir);
+     default: return copy.sort((a, b) => (b.cpu - a.cpu) * dir);
    }
  }
 
 function pctColor(v: number): (s: string) => string {
-  return v > 80 ? chalk.red : v > 50 ? chalk.yellow : chalk.dim;
+  return v > 80 ? chalk.hex('#f43f5e').bold : v > 40 ? chalk.hex('#f59e0b') : chalk.hex('#10b981');
 }
 
 function processTableLines(
    processes: { pid: number; ppid: number; user: string; cpu: number; mem: number; command: string; state: string; threads: number; runtime: number }[],
    contentWidth: number,
    borderAccent = THEMES.default.border,
-   selectedIdx: number = -1
+   selectedIdx: number = -1,
+   sortBy: string = 'cpu',
+   sortReverse: boolean = false
  ): string[] {
-    const pidW = 8, ppidW = 8, userW = 12, cpuW = 8, memW = 8, stateW = 8, thrW = 6, rtW = 10;
+   const pidW = 8, ppidW = 8, userW = 12, cpuW = 8, memW = 8, stateW = 7, thrW = 6, rtW = 10;
 
-   const cmdW = Math.max(10, contentWidth - pidW - ppidW - userW - cpuW - memW - stateW - thrW - rtW - 8);
-    const head =
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PID    ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PPID   ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' USER       ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' STATE   ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' THREADS') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' RUNTIME  ') +
-      chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' COMMAND'.padEnd(cmdW + 1));
+   const arrow = (col: string, defaultAsc = false) => {
+     if (sortBy !== col) return '';
+     const isAsc = defaultAsc ? !sortReverse : sortReverse;
+     return isAsc ? '▲' : '▼';
+   };
+   const colHdr = (label: string, width: number, col?: string, defaultAsc = false) => {
+     const a = col ? arrow(col, defaultAsc) : '';
+     const text = `${label}${a}`.padEnd(width);
+     return col && sortBy === col
+       ? chalk.bold.hex('#ffaa40')(text)
+       : chalk.bold.hex('#cbd5e1')(text);
+   };
+
+   const fixedColsW = pidW + ppidW + userW + cpuW + memW + stateW + thrW + rtW;
+   const cmdW = Math.max(10, contentWidth - fixedColsW - 2);
+   const rawHead =
+     '  ' +
+     colHdr('PID', pidW - 2, 'pid', true) +
+     colHdr('PPID', ppidW) +
+     colHdr('USER', userW, 'user', true) +
+     colHdr('CPU%', cpuW, 'cpu', false) +
+     colHdr('MEM%', memW, 'mem', false) +
+     colHdr('STATE', stateW, 'state', true) +
+     colHdr('THR', thrW, 'threads', false) +
+     colHdr('RUNTIME', rtW, 'runtime', false) +
+     colHdr('COMMAND', cmdW, 'command', true);
+   const head = styleSelectedRow(rawHead, contentWidth, '30;41;59');
 
    const rows = processes.map((p, idx) => {
      const isSelected = idx === selectedIdx;
-     const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}`.padEnd(cpuW));
-     const memStr = pctColor(p.mem)(`${p.mem.toFixed(1)}`.padEnd(memW));
-     const stateStr = chalk.dim(p.state.padEnd(stateW));
-     const thrStr = String(p.threads).padEnd(thrW);
-     const rtStr = formatRuntime(p.runtime).padEnd(rtW);
-     const line = (
-       String(p.pid).padEnd(pidW) +
-       String(p.ppid).padEnd(ppidW) +
-       truncatePlain(p.user, userW - 1).padEnd(userW) +
-       cpuStr +
-       memStr +
-       stateStr +
-       thrStr +
-       rtStr +
-       truncatePlain(p.command, cmdW)
-     );
-     return isSelected ? chalk.bgCyan.black(line) : line;
+     const cursor = isSelected ? chalk.hex('#ff6b35').bold('❯ ') : '  ';
+     const pidStr = chalk.hex('#38bdf8')(String(p.pid).padEnd(pidW - 2));
+     const ppidStr = chalk.hex('#64748b')(String(p.ppid).padEnd(ppidW));
+     const userStr = chalk.hex('#94a3b8')(truncatePlain(p.user, userW - 1).padEnd(userW));
+     const cpuStr = pctColor(p.cpu)(`${p.cpu.toFixed(1)}%`.padEnd(cpuW));
+     const memStr = chalk.hex('#c084fc')(`${p.mem.toFixed(1)}%`.padEnd(memW));
+     const stateStr = chalk.hex('#64748b')(p.state.padEnd(stateW));
+     const thrStr = chalk.hex('#64748b')(String(p.threads).padEnd(thrW));
+     const rtStr = chalk.hex('#94a3b8')(formatRuntime(p.runtime).padEnd(rtW));
+     const displayCmd = cleanCommandName(p.command);
+     const cmdStr = (isSelected ? chalk.bold.hex('#f8fafc') : chalk.hex('#e2e8f0'))(truncatePlain(displayCmd, cmdW).padEnd(cmdW));
+
+     const line = cursor + pidStr + ppidStr + userStr + cpuStr + memStr + stateStr + thrStr + rtStr + cmdStr;
+     return isSelected ? styleSelectedRow(line, contentWidth, '30;41;59') : fitVisible(line, contentWidth);
    });
    return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
  }
@@ -679,14 +918,14 @@ function buildProcessTree(
       if (visited.has(proc.pid)) return;
       visited.add(proc.pid);
       const connector = isLast ? '└── ' : '├── ';
-     const pidStr = String(proc.pid).padEnd(8);
-       const cpuStr = pctColor(proc.cpu)(`${proc.cpu.toFixed(1)}%`.padEnd(8));
-       const memStr = pctColor(proc.mem)(`${proc.mem.toFixed(1)}%`.padEnd(8));
-       const stateStr = chalk.dim(proc.state.padEnd(8));
-       const thrStr = String(proc.threads).padEnd(6);
+      const pidStr = String(proc.pid).padEnd(8);
+      const cpuStr = pctColor(proc.cpu)(`${proc.cpu.toFixed(1)}%`.padEnd(8));
+      const memStr = chalk.hex('#94a3b8')(`${proc.mem.toFixed(1)}%`.padEnd(8));
+      const stateStr = chalk.dim(proc.state.padEnd(8));
+      const thrStr = chalk.dim(String(proc.threads).padEnd(6));
 
       const cmd = truncatePlain(proc.command, Math.max(10, 100 - pidStr.length - cpuStr.length - memStr.length - stateStr.length - thrStr.length - 10));
-      lines.push(`${prefix}${connector}${pidStr}${cpuStr}${memStr}${stateStr}${thrStr} ${cmd}`);
+      lines.push(`${prefix}${chalk.hex('#475569')(connector)}${chalk.hex('#64748b')(pidStr)}${cpuStr}${memStr}${stateStr}${thrStr} ${chalk.hex('#f1f5f9')(cmd)}`);
       const children = childrenMap.get(proc.pid);
       if (children) {
         let idx = 0;
@@ -711,27 +950,27 @@ function diskTableLines(
   contentWidth: number,
   borderAccent = THEMES.default.border
 ): string[] {
-    const fsW = 20, sizeW = 10, usedW = 10, availW = 10, capW = 8;
+  const fsW = 20, sizeW = 10, usedW = 10, availW = 10, capW = 8;
 
   const mountW = Math.max(8, contentWidth - fsW - sizeW - usedW - availW - capW - 5);
   const head =
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' FILESYSTEM          ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' SIZE      ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' USED      ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' AVAIL     ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CAP     ') +
-    chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MOUNT'.padEnd(mountW + 1));
-    const rows = disks.map(d => {
-
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' FILESYSTEM          ') +
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' SIZE      ') +
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' USED      ') +
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' AVAIL     ') +
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' CAP     ') +
+    chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' MOUNT'.padEnd(mountW + 1));
+  const rows = disks.map(d => {
     const capNum = parseInt(d.capacity, 10) || 0;
     const capStr = pctColor(capNum)(d.capacity.padEnd(capW));
     return (
-      truncatePlain(d.filesystem, fsW - 1).padEnd(fsW) +
-      d.size.padEnd(sizeW) +
-      d.used.padEnd(usedW) +
-      d.available.padEnd(availW) +
+      chalk.hex('#ec4899')('⌹ ') +
+      chalk.hex('#e2e8f0')(truncatePlain(d.filesystem, fsW - 3).padEnd(fsW - 2)) +
+      chalk.dim(d.size.padEnd(sizeW)) +
+      chalk.hex('#94a3b8')(d.used.padEnd(usedW)) +
+      chalk.dim(d.available.padEnd(availW)) +
       capStr +
-      truncatePlain(d.mountpoint, mountW)
+      chalk.bold.hex('#f8fafc')(truncatePlain(d.mountpoint, mountW))
     );
   });
   return [head, borderAccent('─'.repeat(contentWidth)), ...rows];
@@ -746,28 +985,29 @@ function containersTableLines(
    const nameW = Math.max(10, contentWidth - idW - cpuW - memW - memUsgW - netW - blockW - pidsW - 7);
    
    const head =
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CONTAINER ID ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' CPU%   ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM%   ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' MEM USAGE          ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NET I/O            ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' BLOCK I/O          ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' PIDS ') +
-     chalk.bold.hex('#f8f8f2').bgHex('#44475a')(' NAME'.padEnd(nameW + 1));
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' CONTAINER ID ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' CPU%   ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' MEM%   ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' MEM USAGE          ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' NET I/O            ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' BLOCK I/O          ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' PIDS ') +
+     chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(' NAME'.padEnd(nameW + 1));
      
    const rows = containers.map(c => {
      const cpuStr = pctColor(c.cpuPercent)(`${c.cpuPercent.toFixed(1)}`.padEnd(cpuW));
      const memStr = pctColor(c.memPercent)(`${c.memPercent.toFixed(1)}`.padEnd(memW));
      
      return (
-       truncatePlain(c.id, idW - 1).padEnd(idW) +
+       chalk.hex('#06b6d4')('⬡ ') +
+       chalk.hex('#e2e8f0')(truncatePlain(c.id, idW - 3).padEnd(idW - 2)) +
        cpuStr +
        memStr +
-       c.memUsage.padEnd(memUsgW) +
-       c.netIO.padEnd(netW) +
-       c.blockIO.padEnd(blockW) +
-       String(c.pids).padEnd(pidsW) +
-       truncatePlain(c.name, nameW)
+       chalk.hex('#94a3b8')(c.memUsage.padEnd(memUsgW)) +
+       chalk.hex('#10b981')(c.netIO.padEnd(netW)) +
+       chalk.dim(c.blockIO.padEnd(blockW)) +
+       chalk.hex('#f59e0b')(String(c.pids).padEnd(pidsW)) +
+       chalk.bold.hex('#f8fafc')(truncatePlain(c.name, nameW))
      );
    });
    
@@ -804,6 +1044,7 @@ function detailPanelTitle(panel: string, trackedPid?: number | null): string {
     tasks: 'Tasks',
     disk: 'Disk',
     process: trackedPid !== undefined && trackedPid !== null ? `Processes (Following PID ${trackedPid})` : 'Processes',
+    ports: 'Listening Ports & Local Servers',
     containers: 'Containers',
     blender: 'Blender Renders',
   };
@@ -852,14 +1093,16 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       const remoteWidth = remaining - localWidth;
     
       const header = 
-        chalk.bold('PID'.padEnd(pWidth)) + '  ' +
-        chalk.bold('COMMAND'.padEnd(cmdWidth)) + '  ' +
-        chalk.bold('PROTO'.padEnd(protoWidth)) + '  ' +
-        chalk.bold('LOCAL'.padEnd(localWidth)) + '  ' +
-        chalk.bold('REMOTE'.padEnd(remoteWidth)) + '  ' +
-        chalk.bold('STATE'.padEnd(stateWidth)) + '  ' +
-        chalk.bold('RX'.padStart(rxWidth)) + '  ' +
-        chalk.bold('TX'.padStart(txWidth));
+        chalk.bold.hex('#cbd5e1').bgHex('#1e293b')(
+          ' PID'.padEnd(pWidth) + '  ' +
+          'COMMAND'.padEnd(cmdWidth) + '  ' +
+          'PROTO'.padEnd(protoWidth) + '  ' +
+          'LOCAL'.padEnd(localWidth) + '  ' +
+          'REMOTE'.padEnd(remoteWidth) + '  ' +
+          'STATE'.padEnd(stateWidth) + '  ' +
+          'RX'.padStart(rxWidth) + '  ' +
+          'TX'.padStart(txWidth) + ' '
+        );
         
       lines.push(header);
       lines.push(chalk.dim('─'.repeat(width)));
@@ -872,10 +1115,10 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
         const summaryTx = formatBytes(proc.txBytes).padStart(txWidth);
         
         lines.push(
-          chalk.cyan(proc.pid.toString().padEnd(pWidth)) + '  ' +
-          chalk.cyan(summaryCmd.padEnd(width - pWidth - rxWidth - txWidth - 6)) + '  ' +
-          chalk.yellow(summaryRx) + '  ' +
-          chalk.yellow(summaryTx)
+          chalk.hex('#06b6d4')(proc.pid.toString().padEnd(pWidth)) + '  ' +
+          chalk.hex('#e2e8f0')(summaryCmd.padEnd(width - pWidth - rxWidth - txWidth - 6)) + '  ' +
+          chalk.hex('#10b981')(summaryRx) + '  ' +
+          chalk.hex('#f59e0b')(summaryTx)
         );
         
         for (const conn of proc.connections) {
@@ -883,7 +1126,7 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
           const cLocal = chalk.dim(truncatePlain(conn.local, localWidth).padEnd(localWidth));
           const cRemote = truncatePlain(conn.remote, remoteWidth).padEnd(remoteWidth);
           
-          const cStateStr = conn.state === 'Established' ? chalk.green('ESTABLISHED'.padEnd(stateWidth)) : chalk.dim(truncatePlain(conn.state, stateWidth).padEnd(stateWidth));
+          const cStateStr = conn.state === 'Established' ? chalk.hex('#10b981')('ESTABLISHED'.padEnd(stateWidth)) : chalk.dim(truncatePlain(conn.state, stateWidth).padEnd(stateWidth));
           const cRx = chalk.dim(formatBytes(conn.rxBytes).padStart(rxWidth));
           const cTx = chalk.dim(formatBytes(conn.txBytes).padStart(txWidth));
           
@@ -906,11 +1149,17 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       return data.tasks?.length ? tasksCard(data, contentWidth) : ['No task data available'];
     case 'disk':
       return data.disk.length ? diskTableLines(data.disk, width - 4, theme.border) : ['No disk data available'];
+    case 'ports': {
+      const entries = collectListeningPorts();
+      return formatPortsPanelLines(entries, width - 4);
+    }
     case 'process': {
       const filtered = opts.filter
         ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
         : data.processes;
-      const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
+      const sortKey = opts.sortBy ?? 'cpu';
+      const sortRev = !!opts.sortReverse;
+      const sorted = sortProcesses(filtered, sortKey, sortRev);
       let selectedIdx = opts.selectedProcessIndex ?? -1;
       const isTracking = opts.trackedPid !== undefined && opts.trackedPid !== null;
       if (isTracking) {
@@ -927,10 +1176,12 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
         if (tp) {
           const cpuColor = tp.cpu > 50 ? chalk.red.bold : tp.cpu > 20 ? chalk.yellow : chalk.green;
           const memColor = tp.mem > 50 ? chalk.red.bold : tp.mem > 20 ? chalk.yellow : chalk.green;
+          const cpuSpark = opts.trackedPidHistory?.cpu?.length ? ` ${chalk.cyan(sparkline(opts.trackedPidHistory.cpu, { min: 0, max: 100 }))}` : '';
+          const memSpark = opts.trackedPidHistory?.mem?.length ? ` ${chalk.magenta(sparkline(opts.trackedPidHistory.mem, { min: 0, max: 100 }))}` : '';
           trackingLines.push(chalk.bgHex('#1a1a2e').hex('#e94560').bold(` ◉ FOLLOWING PID ${tp.pid} — ${truncatePlain(tp.command, Math.max(10, contentWidth - 30))} `));
           trackingLines.push(
-            `  ${chalk.bold('CPU:')} ${cpuColor(tp.cpu.toFixed(1) + '%')}   ` +
-            `${chalk.bold('MEM:')} ${memColor(tp.mem.toFixed(1) + '%')}   ` +
+            `  ${chalk.bold('CPU:')} ${cpuColor(tp.cpu.toFixed(1) + '%')}${cpuSpark}   ` +
+            `${chalk.bold('MEM:')} ${memColor(tp.mem.toFixed(1) + '%')}${memSpark}   ` +
             `${chalk.bold('State:')} ${chalk.dim(tp.state)}   ` +
             `${chalk.bold('Threads:')} ${tp.threads}   ` +
             `${chalk.bold('Runtime:')} ${formatRuntime(tp.runtime)}   ` +
@@ -955,7 +1206,7 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       if (opts.treeView) {
         return [...trackingLines, ...buildProcessTree(visible)];
       }
-      return [...trackingLines, ...processTableLines(visible, width - 4, theme.border, selectedIdx - offset)];
+      return [...trackingLines, ...processTableLines(visible, width - 4, theme.border, selectedIdx - offset, sortKey, sortRev)];
     }
     case 'anomalies': {
       if (!opts.anomalyHistory || opts.anomalyHistory.length === 0) return ['No anomalies detected yet.'];
@@ -963,11 +1214,14 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
       // Sort by timestamp descending
       const sorted = [...opts.anomalyHistory].sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0));
       for (const a of sorted.slice(0, 10)) {
-        const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
-        const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
+        const isCrit = a.severity === 'critical';
+        const badge = isCrit
+          ? chalk.bgHex('#e11d48').white.bold(' CRIT ')
+          : chalk.bgHex('#d97706').black.bold(' WARN ');
+        const direction = a.zScore > 0 ? chalk.hex('#f43f5e')('⇡ spike') : chalk.hex('#06b6d4')('⇣ drop');
         const valStr = a.metric.toLowerCase().includes('net') ? `${formatBytes(a.value)}/s` : `${a.value.toFixed(1)}%`;
         const timeStr = a.timestamp ? a.timestamp.toLocaleTimeString() : '';
-        lines.push(color(` ${timeStr.padEnd(10)} ⚠ ${a.metric.padEnd(8)}: ${valStr.padEnd(12)} (${direction}, σ=${a.zScore.toFixed(1)})`));
+        lines.push(` ${chalk.dim(timeStr.padEnd(8))} ${badge} ${chalk.bold.hex('#f8fafc')(a.metric.padEnd(8))} ${chalk.hex('#e2e8f0')(valStr.padEnd(10))} ${direction} ${chalk.dim(`(σ=${a.zScore.toFixed(1)})`)}`);
       }
       lines.push('');
       // In-TUI AI Model Diagnosis section (offline, zero external server needed)
@@ -1005,88 +1259,142 @@ function activeDetailLines(data: StatsData, activePanel: string, width: number, 
 function anomalyPanel(anomalies: AnomalyAlert[], width: number, theme: ThemeColors): string[] {
   const lines: string[] = [];
   for (const a of anomalies) {
-    const color = a.severity === 'critical' ? chalk.red.bold : chalk.yellow;
-    const direction = a.zScore > 0 ? '↑ spike' : '↓ drop';
+    const isCrit = a.severity === 'critical';
+    const badge = isCrit
+      ? chalk.bgHex('#e11d48').white.bold(' CRIT ')
+      : chalk.bgHex('#d97706').black.bold(' WARN ');
+    const direction = a.zScore > 0 ? '⇡ spike' : '⇣ drop';
     const valStr = a.metric.toLowerCase().includes('net') ? `${formatBytes(a.value)}/s` : `${a.value.toFixed(1)}%`;
-    lines.push(color(` ⚠ ${a.metric}: ${valStr} (${direction}, σ=${a.zScore.toFixed(1)})`));
+    lines.push(` ${badge} ${chalk.bold.hex('#f8fafc')(a.metric)}: ${valStr} (${direction}, σ=${a.zScore.toFixed(1)})`);
   }
   return lines;
 }
 
-function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
+function btopCpuBox(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions, maxCoreRows = 2): string[] {
   const contentWidth = width - 4;
-  const rightTitle = `${data.header.hostname} · up ${data.header.uptime} · ${data.cpu.usage.toFixed(0)}%`;
+  const frame = opts.animFrame ?? 14;
+  const spriteMode: Sprite3DMode = opts.sprite3dMode || 'ignis';
+  const tempUnit = opts.tempUnit || 'c';
+  const tempVal = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die;
+  const tempPill = tempVal != null ? ` · ${formatTempUnit(tempVal, tempUnit)}` : '';
+  const freqStr = data.cpu.frequency > 0 ? `${(data.cpu.frequency / 1000).toFixed(2)}GHz` : '';
+  const rightTitle = `${truncatePlain(data.cpu.brand, 26)} · ${data.cpu.physicalCores}C/${data.cpu.cores}T${freqStr ? ' · ' + freqStr : ''}${tempPill}`;
 
-  if (contentWidth >= 65) {
-    const leftW = Math.floor(contentWidth * 0.48);
-    const rightW = contentWidth - leftW - 2;
-
-    const leftLines: string[] = [];
-    const cpuHistory = opts.history?.cpuUsage || [];
-    let historyLabel = 'CPU Usage History';
-    if (cpuHistory.length > 0) {
-      const avg = Math.round(cpuHistory.reduce((a, b) => a + b, 0) / cpuHistory.length);
-      const max = Math.round(Math.max(...cpuHistory));
-      historyLabel += ` (avg ${avg}% · max ${max}%)`;
-    }
-    leftLines.push(fitVisible(theme.cpu(historyLabel), leftW));
-
-    if (cpuHistory.length > 1) {
-      const graphRows = multiRowBrailleGraph(cpuHistory, 3, { min: 0, max: 100 });
-      for (const gr of graphRows) {
-        leftLines.push(theme.cpu(fitVisible(gr, leftW)));
-      }
-    } else {
-      leftLines.push(theme.cpu(fitVisible(gaugeBar(data.cpu.usage, leftW), leftW)));
-      leftLines.push(' '.repeat(leftW));
-      leftLines.push(' '.repeat(leftW));
-    }
+  if (contentWidth >= 60) {
+    const spriteW = 16;
+    const rightW = Math.max(32, Math.min(44, Math.floor(contentWidth * 0.44)));
+    const waveW = Math.max(12, contentWidth - spriteW - rightW - 6); // two " │ " dividers = 6 cols
 
     const rightLines: string[] = [];
-    rightLines.push(fitVisible(chalk.bold(truncatePlain(data.cpu.brand, rightW)), rightW));
 
-    const cpuBarW = Math.max(6, rightW - 18);
-    const tempStr = data.cpu.temperature ? formatTempUnit(data.cpu.temperature, opts.tempUnit) : '';
-    rightLines.push(fitVisible(`CPU ${gaugeBar(data.cpu.usage, cpuBarW)} ${data.cpu.usage.toFixed(0).padStart(3)}% ${tempStr}`, rightW));
+    // Row 1: Main CPU Gauge + Usage% + Temp
+    const tempBadge = tempVal != null
+      ? ' ' + (tempVal >= 85 ? chalk.hex('#f43f5e').bold : tempVal >= 70 ? chalk.hex('#f59e0b') : chalk.hex('#10b981'))(formatTempUnit(tempVal, tempUnit))
+      : '';
+    const tempBadgeLen = visLen(tempBadge);
+    const cpuBarW = Math.max(5, rightW - 10 - tempBadgeLen);
+    const cpuPctStr = `${data.cpu.usage.toFixed(0)}%`.padStart(4);
+    rightLines.push(
+      fitVisible(
+        chalk.bold.hex('#ff6b35')('CPU ') +
+        gaugeBar(data.cpu.usage, cpuBarW) +
+        ' ' +
+        chalk.bold.hex('#f8fafc')(cpuPctStr) +
+        tempBadge,
+        rightW
+      )
+    );
 
-    const loadStr = data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ');
-    rightLines.push(fitVisible(`${chalk.dim('Load:')} ${loadStr}`, rightW));
+    // Rows 2..N: Per-Core Grid (strictly 2 columns per row so cores never crowd or overflow)
+    if (data.cpu.coreUsage && data.cpu.coreUsage.length > 0 && maxCoreRows > 0) {
+      const cores = data.cpu.coreUsage;
+      const colsPerRow = 2;
+      const totalRowsNeeded = Math.ceil(cores.length / colsPerRow);
+      const rowsToRender = Math.min(maxCoreRows + 1, totalRowsNeeded);
+      const colGap = 2;
+      const colW = Math.floor((rightW - colGap) / colsPerRow);
 
-    if (data.cpu.coreUsage && data.cpu.coreUsage.length) {
-      const coreColW = Math.floor((rightW - 1) / 2);
-      const half = Math.ceil(data.cpu.coreUsage.length / 2);
-      for (let i = 0; i < half; i++) {
-        const u1 = data.cpu.coreUsage[i];
-        const u2 = data.cpu.coreUsage[i + half];
-        const c1BarW = Math.max(3, coreColW - 8);
-        const c1Str = `C${i} ${gaugeBar(u1, c1BarW)} ${Math.round(u1)}%`;
-        const c2Str = u2 !== undefined ? `C${i + half} ${gaugeBar(u2, c1BarW)} ${Math.round(u2)}%` : '';
-        rightLines.push(fitVisible(fitVisible(c1Str, coreColW) + ' ' + fitVisible(c2Str, coreColW), rightW));
+      for (let r = 0; r < rowsToRender; r++) {
+        const cells: string[] = [];
+        for (let c = 0; c < colsPerRow; c++) {
+          const coreIdx = r + c * rowsToRender;
+          if (coreIdx < cores.length) {
+            const u = cores[coreIdx];
+            const lbl = `C${coreIdx}`.padEnd(coreIdx >= 10 ? 3 : 2);
+            const pctTxt = `${Math.round(u)}%`.padStart(4);
+            const barW = Math.max(3, colW - lbl.length - pctTxt.length - 2);
+            cells.push(fitVisible(`${chalk.hex('#64748b')(lbl)} ${gaugeBar(u, barW)} ${chalk.hex('#cbd5e1')(pctTxt)}`, colW));
+          } else {
+            cells.push(' '.repeat(colW));
+          }
+        }
+        rightLines.push(fitVisible(cells.join(' '.repeat(colGap)), rightW));
       }
     }
 
+    // GPU + Load row(s)
     if (data.gpu) {
-      rightLines.push(fitVisible(`GPU ${gaugeBar(data.gpu.utilization, cpuBarW)} ${data.gpu.utilization}% ${formatBytes(data.gpu.memory)}`, rightW));
+      const gpuMemStr = data.gpu.memory > 0 ? ` ${chalk.hex('#64748b')(formatBytes(data.gpu.memory).replace(/\s+/g, ''))}` : '';
+      const gpuBarW = Math.max(4, rightW - 10 - visLen(gpuMemStr));
+      rightLines.push(
+        fitVisible(
+          chalk.bold.hex('#f43f5e')('GPU ') +
+          gaugeBar(data.gpu.utilization, gpuBarW) +
+          ' ' +
+          chalk.bold.hex('#f8fafc')(`${data.gpu.utilization}%`.padStart(4)) +
+          gpuMemStr,
+          rightW
+        )
+      );
     }
 
-    const combinedBody = hstack([leftLines, rightLines], 2, contentWidth);
+    const loads = data.cpu.loadAvg;
+    const loadLine = `${chalk.hex('#64748b')('Load  ')}${chalk.bold.hex('#e2e8f0')(loads[0].toFixed(2))}  ${chalk.hex('#94a3b8')(loads[1].toFixed(2))}  ${chalk.hex('#64748b')(loads[2].toFixed(2))}`;
+    rightLines.push(fitVisible(loadLine, rightW));
+
+    const totalRows = Math.max(5, rightLines.length);
+    while (rightLines.length < totalRows) {
+      rightLines.push(' '.repeat(rightW));
+    }
+
+    // Zone 1 (Left): Clean 3D Sprite Viewport (full height of CPU box)
+    const spriteLines = render3DSprite(spriteMode, spriteW, totalRows, frame, {
+      cpuUsage: data.cpu.usage,
+      memUsage: data.memory.usagePercent,
+      tempC: tempVal ?? undefined,
+      anomalyCount: opts.anomalies?.length ?? 0,
+    });
+
+    // Zone 2 (Middle): Clean Oscilloscope Chart
+    const waveLines: string[] = [];
+    const rawHistory = opts.history?.cpuUsage?.length ? opts.history.cpuUsage : [data.cpu.usage];
+    const avg = Math.round(rawHistory.reduce((a, b) => a + b, 0) / rawHistory.length);
+    const max = Math.round(Math.max(...rawHistory));
+    const histLeft = `${chalk.bold.hex('#ff6b35')('CPU')} ${chalk.bold.hex('#f8fafc')(`${data.cpu.usage.toFixed(0)}%`)}`;
+    const histRight = chalk.hex('#64748b')(`μ${avg}% ⇡${max}%`);
+    const histGap = Math.max(1, waveW - visLen(histLeft) - visLen(histRight));
+    waveLines.push(fitVisible(histLeft + ' '.repeat(histGap) + histRight, waveW));
+
+    const chartRows = renderOscilloscopeChart(rawHistory, waveW, totalRows - 1, theme.cpu, { min: 0, max: 100 }, frame);
+    waveLines.push(...chartRows);
+
+    const divider = Array.from({ length: totalRows }, () => theme.border('│'));
+    const combinedBody = hstack([spriteLines, divider, waveLines, divider, rightLines], 1, contentWidth);
     return panel('1 cpu', combinedBody, width, theme.cpu, theme.border, combinedBody.length, rightTitle);
   } else {
     const lines: string[] = [];
-    lines.push(chalk.bold(truncatePlain(data.cpu.brand, contentWidth)));
-    lines.push(`CPU ${gaugeBar(data.cpu.usage, Math.max(4, contentWidth - 12))} ${data.cpu.usage.toFixed(0)}%`);
-    if (opts.history?.cpuUsage.length) {
-      const gMode = opts.graphMode || 'spark';
-      const gStr = gMode === 'bar' ? sparkline(opts.history.cpuUsage, { min: 0, max: 100 }) : brailleGraph(opts.history.cpuUsage, { min: 0, max: 100 });
-      lines.push(theme.cpu(gStr));
-    }
-    lines.push(`Load: ${data.cpu.loadAvg.map(l => l.toFixed(2)).join(' ')}`);
+    lines.push(chalk.bold.hex('#f8fafc')(truncatePlain(data.cpu.brand, contentWidth)));
+    lines.push(`${chalk.bold.hex('#ff6b35')('CPU ')}${gaugeBar(data.cpu.usage, Math.max(4, contentWidth - 10))} ${chalk.bold.hex('#f8fafc')(`${data.cpu.usage.toFixed(0)}%`.padStart(4))}`);
+    const rawHistory = opts.history?.cpuUsage?.length ? opts.history.cpuUsage : [data.cpu.usage];
+    lines.push(renderInlineWave(rawHistory, contentWidth, theme.cpu, opts.graphMode || 'spark', { min: 0, max: 100 }, frame));
+    lines.push(`${chalk.hex('#64748b')('Load: ')}${chalk.bold.hex('#cbd5e1')(data.cpu.loadAvg.map(l => l.toFixed(2)).join('  '))}`);
     return panel('1 cpu', lines, width, theme.cpu, theme.border, lines.length, rightTitle);
   }
 }
 
-function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions): string[] {
-  const contentWidth = width - 4;
+function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts: TableOptions, targetHeight?: number): string[] {
+  const contentWidth = Math.max(16, width - 4);
+  const frame = opts.animFrame ?? 14;
   const out: string[] = [];
   const rawLayout = opts.panelLayout || ['mem', 'disk', 'net'];
   const visible = opts.visible || {};
@@ -1095,69 +1403,162 @@ function btopLeftColumn(data: StatsData, width: number, theme: ThemeColors, opts
     return visible[key as keyof VisibleItems] !== false;
   });
 
-  for (const panelName of layout) {
+  // Helper for aligned 4-column metric rows: Label | Bar | Pct% | Value
+  const metricRow = (label: string, labelColor: (s: string) => string, pct: number, valStr: string) => {
+    const lblW = 5;
+    const pctW = 4;
+    const valW = 8;
+    const barW = Math.max(4, contentWidth - lblW - pctW - valW - 3);
+    const barStr = gaugeBar(pct, barW);
+    const pctTxt = `${Math.round(pct)}%`.padStart(pctW);
+    return fitVisible(
+      `${labelColor(label.padEnd(lblW))} ${barStr} ${chalk.bold.hex('#f8fafc')(pctTxt)} ${chalk.hex('#cbd5e1')(truncatePlain(valStr, valW).padStart(valW))}`,
+      contentWidth
+    );
+  };
+
+  const hasMem = layout.includes('mem');
+  const hasDisk = layout.includes('disk') && data.disk.length > 0;
+  const hasNet = layout.includes('net');
+  const swapRowCount = data.memory.swapTotal > 0 ? 1 : 0;
+  const baseMemH = hasMem ? 2 + 3 + swapRowCount : 0;
+  const maxDiskRows = Math.min(data.disk.length, 3);
+  const baseDiskH = hasDisk ? 2 + maxDiskRows : 0;
+  const baseNetH = hasNet ? 2 + 4 : 0;
+  const baseTotal = baseMemH + baseDiskH + baseNetH;
+  const totalExtra = targetHeight && targetHeight > baseTotal ? targetHeight - baseTotal : 0;
+
+  // Give at most 2 extra rows to net (so RX and TX waves are at most 2 rows tall each),
+  // and if there are >= 5 rows remaining after that, render a clean [ 4 vitals ] card below!
+  const netExtra = hasNet ? Math.min(2, totalExtra) : 0;
+  const remainingExtra = Math.max(0, totalExtra - netExtra);
+  const showVitalsCard = remainingExtra >= 5;
+  const vitalsCardTotalH = showVitalsCard ? remainingExtra : 0;
+  const lastPanelPad = showVitalsCard ? 0 : remainingExtra;
+
+  for (let idx = 0; idx < layout.length; idx++) {
+    const panelName = layout[idx];
+    const isLastPanel = idx === layout.length - 1;
+
     if (panelName === 'mem') {
-      // --- Box 1: 2 mem ---
       const memLines: string[] = [];
-      memLines.push(`RAM [${gaugeBar(data.memory.usagePercent, Math.max(4, contentWidth - 12))}] ${data.memory.usagePercent}%`);
-      memLines.push(`Used: ${formatBytes(data.memory.used)} / ${formatBytes(data.memory.total)}`);
-      memLines.push(`Free: ${formatBytes(data.memory.free)} · Cache: ${formatBytes(data.memory.total - data.memory.free - data.memory.used)}`);
+      const cachedBytes = Math.max(0, data.memory.total - data.memory.free - data.memory.used);
+      const freePct = data.memory.total > 0 ? Math.round((data.memory.free / data.memory.total) * 100) : 0;
+      const cachePct = data.memory.total > 0 ? Math.round((cachedBytes / data.memory.total) * 100) : 0;
+
+      memLines.push(metricRow('Used', chalk.bold.hex('#a78bfa'), data.memory.usagePercent, formatBytes(data.memory.used)));
+      memLines.push(metricRow('Free', chalk.hex('#10b981'), freePct, formatBytes(data.memory.free)));
+      memLines.push(metricRow('Cache', chalk.hex('#38bdf8'), cachePct, formatBytes(cachedBytes)));
       if (data.memory.swapTotal > 0) {
         const swapPct = Math.round((data.memory.swapUsed / data.memory.swapTotal) * 100);
-        memLines.push(`Swap [${gaugeBar(swapPct, Math.max(4, contentWidth - 12))}] ${swapPct}%`);
+        memLines.push(metricRow('Swap', chalk.hex('#c084fc'), swapPct, formatBytes(data.memory.swapUsed)));
       }
-      out.push(...panel('2 mem', memLines, width, theme.mem, theme.border, memLines.length, `${formatBytes(data.memory.used)}`));
+      const panelH = memLines.length + (isLastPanel ? lastPanelPad : 0);
+      const memRightTitle = `${formatBytes(data.memory.used).replace(/\s+/g, '')}/${formatBytes(data.memory.total).replace(/\s+/g, '')}`;
+      out.push(...panel('2 mem', memLines, width, theme.mem, theme.border, panelH, memRightTitle));
     } else if (panelName === 'disk' && data.disk.length) {
-      // --- Box 2: 0 disk ---
       const diskLines: string[] = [];
-      for (const d of data.disk.slice(0, 2)) {
+      const compactSize = (s: unknown) => String(s ?? '').replace(/([KMGTPE])i$/i, '$1');
+      for (const d of data.disk.slice(0, maxDiskRows)) {
         const capNum = parseInt(d.capacity, 10) || 0;
-        const mountShort = truncatePlain(d.mountpoint, 8);
-        let ioStr = '';
-        if (d.readBytesSec !== undefined || d.writeBytesSec !== undefined) {
-          const rStr = formatBytes(d.readBytesSec || 0);
-          const wStr = formatBytes(d.writeBytesSec || 0);
-          ioStr = ` R:${rStr}/s W:${wStr}/s`;
-        }
-        diskLines.push(`${mountShort} ${d.used}/${d.size} [${gaugeBar(capNum, Math.max(3, contentWidth - 18 - ioStr.length))}] ${d.capacity}${ioStr}`);
+        const cleanMount = d.mountpoint.replace(/^\/Volumes\//, '/Vol/').replace(/^\/System\/Volumes\//, '/Sys/');
+        const lblW = Math.min(11, Math.max(6, Math.floor(contentWidth * 0.28)));
+        const mountShort = truncatePlain(cleanMount, lblW).padEnd(lblW);
+        const usageTag = `${compactSize(d.used)}/${compactSize(d.size)}`;
+        const valW = 9;
+        const pctW = 4;
+        const barW = Math.max(3, contentWidth - lblW - pctW - valW - 3);
+        const capBar = gaugeBar(capNum, barW);
+        diskLines.push(
+          fitVisible(
+            `${chalk.bold.hex('#f1f5f9')(mountShort)} ${capBar} ${chalk.bold.hex('#f8fafc')(d.capacity.padStart(pctW))} ${chalk.hex('#94a3b8')(truncatePlain(usageTag, valW).padStart(valW))}`,
+            contentWidth
+          )
+        );
       }
       const totalRead = data.disk.reduce((acc, d) => acc + (d.readBytesSec || 0), 0);
       const totalWrite = data.disk.reduce((acc, d) => acc + (d.writeBytesSec || 0), 0);
-      const diskHeaderRight = `R:${formatBytes(totalRead)}/s W:${formatBytes(totalWrite)}/s`;
-      out.push(...panel('0 disk io', diskLines, width, theme.disk, theme.border, diskLines.length, diskHeaderRight));
+      const diskHeaderRight = `▲${formatBytes(totalRead).replace(/\s+/g, '')}/s ▼${formatBytes(totalWrite).replace(/\s+/g, '')}/s`;
+      const panelH = diskLines.length + (isLastPanel ? lastPanelPad : 0);
+      out.push(...panel('0 disk', diskLines, width, theme.disk, theme.border, panelH, diskHeaderRight));
     } else if (panelName === 'net') {
-      // --- Box 3: 7 net ---
       const netLines: string[] = [];
-      const rxRate = opts.history?.netRxRate.length ? opts.history.netRxRate[opts.history.netRxRate.length - 1] : 0;
-      const txRate = opts.history?.netTxRate.length ? opts.history.netTxRate[opts.history.netTxRate.length - 1] : 0;
+      const rxRate = opts.history?.netRxRate.length ? opts.history.netRxRate[opts.history.netRxRate.length - 1] : data.network.rxRate || 0;
+      const txRate = opts.history?.netTxRate.length ? opts.history.netTxRate[opts.history.netTxRate.length - 1] : data.network.txRate || 0;
+      const rxSeries = opts.history?.netRxRate?.length ? opts.history.netRxRate : [Math.max(12, rxRate)];
+      const txSeries = opts.history?.netTxRate?.length ? opts.history.netTxRate : [Math.max(8, txRate)];
 
-      netLines.push(`down ▼ ${formatBytes(rxRate)}/s (${formatBytes(data.network.rxBytes)})`);
-      if (opts.history?.netRxRate.length) {
-        const gMode = opts.graphMode || 'spark';
-        const gStr = gMode === 'bar' ? sparkline(opts.history.netRxRate, {}) : brailleGraph(opts.history.netRxRate, {});
-        netLines.push(chalk.cyan(fitVisible(gStr, contentWidth)));
+      const rxLeft = `${chalk.hex('#06b6d4').bold('▼ RX ')}${chalk.bold.hex('#f8fafc')(`${formatBytes(rxRate)}/s`)}`;
+      const rxRight = chalk.hex('#64748b')(`tot ${formatBytes(data.network.rxBytes)}`);
+      const rxGap = Math.max(1, contentWidth - visLen(rxLeft) - visLen(rxRight));
+      netLines.push(fitVisible(rxLeft + ' '.repeat(rxGap) + rxRight, contentWidth));
+
+      const rxWaveH = 1 + Math.floor(netExtra / 2);
+      const txWaveH = 1 + (netExtra - Math.floor(netExtra / 2));
+
+      if (rxWaveH > 1) {
+        netLines.push(...renderOscilloscopeChart(rxSeries, contentWidth, rxWaveH, chalk.hex('#06b6d4'), {}, frame));
+      } else {
+        netLines.push(renderInlineWave(rxSeries, contentWidth, chalk.hex('#06b6d4'), opts.graphMode || 'spark', {}, frame));
       }
 
-      netLines.push(`up   ▲ ${formatBytes(txRate)}/s (${formatBytes(data.network.txBytes)})`);
-      if (opts.history?.netTxRate.length) {
-        const gMode = opts.graphMode || 'spark';
-        const gStr = gMode === 'bar' ? sparkline(opts.history.netTxRate, {}) : brailleGraph(opts.history.netTxRate, {});
-        netLines.push(theme.network(fitVisible(gStr, contentWidth)));
+      const txLeft = `${chalk.hex('#3b82f6').bold('▲ TX ')}${chalk.bold.hex('#f8fafc')(`${formatBytes(txRate)}/s`)}`;
+      const txRight = chalk.hex('#64748b')(`tot ${formatBytes(data.network.txBytes)}`);
+      const txGap = Math.max(1, contentWidth - visLen(txLeft) - visLen(txRight));
+      netLines.push(fitVisible(txLeft + ' '.repeat(txGap) + txRight, contentWidth));
+
+      if (txWaveH > 1) {
+        netLines.push(...renderOscilloscopeChart(txSeries, contentWidth, txWaveH, theme.network, {}, frame + 5));
+      } else {
+        netLines.push(renderInlineWave(txSeries, contentWidth, theme.network, opts.graphMode || 'spark', {}, frame + 5));
       }
 
-      out.push(...panel('7 net', netLines, width, theme.network, theme.border, netLines.length, `${data.network.interface}`));
+      const panelH = netLines.length + (isLastPanel ? lastPanelPad : 0);
+      const netRightTitle = data.network.ip && data.network.ip !== '0.0.0.0'
+        ? `${data.network.interface} · ${data.network.ip}`
+        : `${data.network.interface}`;
+      out.push(...panel('7 net', netLines, width, theme.network, theme.border, panelH, netRightTitle));
     }
+  }
+
+  if (showVitalsCard) {
+    const vitalsBodyH = Math.max(1, vitalsCardTotalH - 2);
+    const vitalsLines: string[] = [];
+    const tempVal = data.cpu.temperature ?? data.thermal.temperatures?.cpu_die;
+    const tempStr = tempVal != null ? formatTempUnit(tempVal, opts.tempUnit || 'c') : 'Nominal';
+    const wattsVal = data.power?.combinedWatts ?? data.power?.cpuWatts;
+    const pwrStr = typeof wattsVal === 'number' ? `${wattsVal.toFixed(1)} W` : 'AC / Auto';
+    const batStr = data.battery ? `${data.battery.percent}% (${data.battery.isCharging ? 'Charging' : 'Battery'})` : 'AC Power';
+    const procCount = data.processes?.length ?? 0;
+
+    const kvRow = (k: string, v: string, vColor = chalk.hex('#e2e8f0')) => {
+      const left = chalk.hex('#64748b')(k);
+      const right = vColor(v);
+      const gap = Math.max(1, contentWidth - visLen(left) - visLen(right));
+      return fitVisible(left + ' '.repeat(gap) + right, contentWidth);
+    };
+
+    vitalsLines.push(kvRow('Thermal', `${tempStr} (${data.thermal.state || 'nominal'})`, chalk.hex('#10b981')));
+    vitalsLines.push(kvRow('Power', pwrStr, chalk.hex('#fbbf24')));
+    vitalsLines.push(kvRow('Source', batStr, chalk.hex('#38bdf8')));
+    vitalsLines.push(kvRow('Processes', `${procCount} active`, chalk.hex('#cbd5e1')));
+    if (data.gpu) {
+      vitalsLines.push(kvRow('GPU Engine', `${data.gpu.model || 'Integrated'} (${data.gpu.utilization}%)`, chalk.hex('#f43f5e')));
+    }
+    out.push(...panel('4 vitals', vitalsLines.slice(0, vitalsBodyH), width, theme.power, theme.border, vitalsBodyH));
   }
 
   return out;
 }
 
 function btopProcBox(data: StatsData, width: number, targetHeight: number, theme: ThemeColors, opts: TableOptions): string[] {
-  const contentWidth = width - 4;
+  const contentWidth = Math.max(20, width - 4);
   const filtered = opts.filter
     ? data.processes.filter(p => p.command.toLowerCase().includes(opts.filter!.toLowerCase()))
     : data.processes;
-  const sorted = sortProcesses(filtered, opts.sortBy ?? 'cpu');
+  const sortKey = opts.sortBy ?? 'cpu';
+  const sortRev = !!opts.sortReverse;
+  const sorted = sortProcesses(filtered, sortKey, sortRev);
 
   const headerRowOverhead = 2; // top & bottom border
   const tableHeaderOverhead = 2; // header + separator line
@@ -1171,13 +1572,17 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     if (tp) {
       const cpuColor = tp.cpu > 50 ? chalk.red.bold : tp.cpu > 20 ? chalk.yellow : chalk.green;
       const memColor = tp.mem > 50 ? chalk.red.bold : tp.mem > 20 ? chalk.yellow : chalk.green;
-      trackingLines.push(chalk.bgHex('#1a1a2e').hex('#e94560').bold(` ◉ PID ${tp.pid} ${truncatePlain(tp.command, Math.max(6, contentWidth - 20))} `));
+      const cpuSpark = opts.trackedPidHistory?.cpu?.length ? ` ${chalk.cyan(sparkline(opts.trackedPidHistory.cpu, { min: 0, max: 100 }))}` : '';
+      const memSpark = opts.trackedPidHistory?.mem?.length ? ` ${chalk.magenta(sparkline(opts.trackedPidHistory.mem, { min: 0, max: 100 }))}` : '';
+      trackingLines.push(styleSelectedRow(` ${chalk.hex('#ff6b35').bold('◉ FOLLOWING')} ${chalk.bold.hex('#f8fafc')(`PID ${tp.pid}`)} · ${chalk.hex('#cbd5e1')(truncatePlain(cleanCommandName(tp.command), Math.max(6, contentWidth - 26)))}`, contentWidth, '30;27;75'));
       trackingLines.push(
-        ` ${cpuColor('CPU ' + tp.cpu.toFixed(1) + '%')} ` +
-        `${memColor('MEM ' + tp.mem.toFixed(1) + '%')} ` +
-        `${chalk.dim(tp.state)} ` +
-        `THR:${tp.threads} ` +
-        `${formatRuntime(tp.runtime)}`
+        fitVisible(
+          ` ${cpuColor('CPU ' + tp.cpu.toFixed(1) + '%')}${cpuSpark}  ` +
+          `${memColor('MEM ' + tp.mem.toFixed(1) + '%')}${memSpark}  ` +
+          `${chalk.hex('#94a3b8')('THR:' + tp.threads)}  ` +
+          `${chalk.hex('#64748b')(formatRuntime(tp.runtime))}`,
+          contentWidth
+        )
       );
       trackingLines.push(theme.border('─'.repeat(contentWidth)));
     } else {
@@ -1186,67 +1591,95 @@ function btopProcBox(data: StatsData, width: number, targetHeight: number, theme
     }
   }
 
-  const availableRows = Math.max(1, targetHeight - headerRowOverhead - tableHeaderOverhead - trackingLines.length);
+  const totalBodyRows = Math.max(4, targetHeight - headerRowOverhead);
+  const availableRows = Math.max(1, totalBodyRows - tableHeaderOverhead - trackingLines.length);
 
-  let selectedIdx = opts.selectedProcessIndex ?? -1;
+  let selectedIdx = opts.selectedProcessIndex ?? 0;
   if (isTracking) {
     const trackedIdx = sorted.findIndex(p => p.pid === opts.trackedPid);
     if (trackedIdx >= 0) {
       selectedIdx = trackedIdx;
     }
   }
+  if (selectedIdx >= sorted.length) selectedIdx = Math.max(0, sorted.length - 1);
 
   let offset = 0;
-  if (selectedIdx >= 0) {
-    if (selectedIdx >= availableRows) {
-      offset = selectedIdx - availableRows + 1;
-    }
+  if (selectedIdx >= 0 && selectedIdx >= availableRows) {
+    offset = selectedIdx - availableRows + 1;
   }
   const visible = sorted.slice(offset, offset + availableRows);
 
-  const pidW = 6, userW = 7, thrW = 3, memW = 6, cpuW = 6;
-  const fixedW = pidW + userW + thrW + memW + cpuW + 5;
+  const showThreadsCol = contentWidth >= 52;
+  const pidW = 7, userW = 9, thrW = showThreadsCol ? 4 : 0, memW = 6, cpuW = 6;
+  const gaps = showThreadsCol ? 5 : 4;
+  const fixedW = pidW + userW + thrW + memW + cpuW + gaps;
   const cmdW = Math.max(8, contentWidth - fixedW);
 
-  const head =
-    chalk.bold('PID'.padEnd(pidW)) + ' ' +
-    chalk.bold('PROGRAM'.padEnd(cmdW)) + ' ' +
-    chalk.bold('USER'.padEnd(userW)) + ' ' +
-    chalk.bold('THR'.padStart(thrW)) + ' ' +
-    chalk.bold('MEM%'.padStart(memW)) + ' ' +
-    chalk.bold('CPU%'.padStart(cpuW));
+  const arrow = (col: string, defaultAsc = false) => {
+    if (sortKey !== col) return '';
+    const isAsc = defaultAsc ? !sortRev : sortRev;
+    return isAsc ? '▲' : '▼';
+  };
+
+  const rawHead =
+    chalk.bold.hex(sortKey === 'pid' ? '#ffaa40' : '#cbd5e1')((`  PID${arrow('pid', true)}`).padEnd(pidW)) + ' ' +
+    chalk.bold.hex(sortKey === 'command' ? '#ffaa40' : '#cbd5e1')((`PROGRAM${arrow('command', true)}`).padEnd(cmdW)) + ' ' +
+    chalk.bold.hex(sortKey === 'user' ? '#ffaa40' : '#cbd5e1')((`USER${arrow('user', true)}`).padEnd(userW)) +
+    (showThreadsCol ? ' ' + chalk.bold.hex(sortKey === 'threads' ? '#ffaa40' : '#cbd5e1')((`THR${arrow('threads')}`).padStart(thrW)) : '') + ' ' +
+    chalk.bold.hex(sortKey === 'mem' ? '#ffaa40' : '#cbd5e1')((`MEM%${arrow('mem')}`).padStart(memW)) + ' ' +
+    chalk.bold.hex(sortKey === 'cpu' ? '#ffaa40' : '#cbd5e1')((`CPU%${arrow('cpu')}`).padStart(cpuW));
+  const head = styleSelectedRow(rawHead, contentWidth, '30;41;59');
+
+  const sortArrowLabel = (() => {
+    const defaultAsc = ['pid', 'user', 'command', 'state'].includes(sortKey);
+    const isAsc = defaultAsc ? !sortRev : sortRev;
+    return `${sortKey}${isAsc ? '▲' : '▼'}`;
+  })();
 
   if (opts.treeView) {
     const treeLines = buildProcessTree(visible);
-    let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · sort: ${opts.sortBy || 'cpu'}`;
-    if (isTracking) rightTitle += ` · following PID ${opts.trackedPid}`;
-    return panel('P proc', [...trackingLines, head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, targetHeight - 2, rightTitle);
+    let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `tree · ${sortArrowLabel} · ${sorted.length}`;
+    if (isTracking) rightTitle += ` · PID ${opts.trackedPid}`;
+    return panel('P proc', [...trackingLines, head, theme.border('─'.repeat(contentWidth)), ...treeLines], width, theme.process, theme.border, totalBodyRows, rightTitle);
   }
 
   const rows = visible.map((p, idx) => {
     const isSelected = (offset + idx) === selectedIdx;
     const cpuVal = p.cpu.toFixed(1) + '%';
-    const cpuStr = p.cpu > 50 ? chalk.red.bold(cpuVal.padStart(cpuW)) : p.cpu > 20 ? chalk.yellow(cpuVal.padStart(cpuW)) : chalk.green(cpuVal.padStart(cpuW));
-    const memStr = (p.mem.toFixed(1) + '%').padStart(memW);
-    const userStr = truncatePlain(p.user, userW).padEnd(userW);
-    const thrStr = String(p.threads).padStart(thrW);
-    const pidStr = String(p.pid).padEnd(pidW);
-    const cmdStr = truncatePlain(p.command, cmdW).padEnd(cmdW);
+    const cpuStr = p.cpu >= 50
+      ? chalk.hex('#f43f5e').bold(cpuVal.padStart(cpuW))
+      : p.cpu >= 15
+        ? chalk.hex('#f59e0b')(cpuVal.padStart(cpuW))
+        : p.cpu >= 0.1
+          ? chalk.hex('#10b981')(cpuVal.padStart(cpuW))
+          : chalk.hex('#475569')(cpuVal.padStart(cpuW));
+    const memVal = (p.mem.toFixed(1) + '%').padStart(memW);
+    const memStr = p.mem >= 20
+      ? chalk.hex('#f43f5e').bold(memVal)
+      : p.mem >= 0.1
+        ? chalk.hex('#c084fc')(memVal)
+        : chalk.hex('#475569')(memVal);
+    const userStr = chalk.hex('#64748b')(truncatePlain(p.user, userW).padEnd(userW));
+    const thrPart = showThreadsCol ? ' ' + chalk.hex('#475569')(String(p.threads).padStart(thrW)) : '';
+    const pidStr = chalk.hex('#38bdf8')(String(p.pid).padEnd(pidW - 2));
+    const cleanCmd = cleanCommandName(p.command);
+    const cmdStr = (isSelected ? chalk.bold.hex('#f8fafc') : chalk.hex('#e2e8f0'))(truncatePlain(cleanCmd, cmdW).padEnd(cmdW));
 
-    const line = `${pidStr} ${cmdStr} ${userStr} ${thrStr} ${memStr} ${cpuStr}`;
-    return isSelected ? chalk.bgCyan.black(line) : line;
+    const cursor = isSelected ? chalk.hex('#ff6b35').bold('▸ ') : '  ';
+    const line = `${cursor}${pidStr} ${cmdStr} ${userStr}${thrPart} ${memStr} ${cpuStr}`;
+    return isSelected ? styleSelectedRow(line, contentWidth, '30;41;59') : fitVisible(line, contentWidth);
   });
 
   const lines = [...trackingLines, head, theme.border('─'.repeat(contentWidth)), ...rows];
   if (rows.length === 0) {
-    lines.push(chalk.dim(`No processes match "${opts.filter || ''}"`));
+    lines.push(chalk.dim(opts.filter ? `  No processes match "${opts.filter}"` : '  No active processes available'));
   }
 
-  let rightTitle = opts.filter ? `filter: "${opts.filter}"` : `sort: ${opts.sortBy || 'cpu'}`;
+  let rightTitle = opts.filter ? `filter: "${opts.filter}" (${sorted.length})` : `sort: ${sortArrowLabel} · ${sorted.length} procs`;
   if (isTracking) {
-    rightTitle += ` · following PID ${opts.trackedPid}`;
+    rightTitle += ` · PID ${opts.trackedPid}`;
   }
-  return panel('P proc', lines, width, theme.process, theme.border, targetHeight - 2, rightTitle);
+  return panel('P proc', lines, width, theme.process, theme.border, totalBodyRows, rightTitle);
 }
 
 export function formatTable(data: StatsData, opts: TableOptions = {}): string {
@@ -1262,17 +1695,13 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   const theme = THEMES[themeName] || THEMES.default;
 
   const out: string[] = [];
-  out.push(...header(data, width, [], theme.border));
-  out.push('');
+  out.push(...header(data, width, [], opts));
+  out.push(tabBar(activePanel, width, theme, opts.visible));
 
   const anomalies = opts.anomalies ?? [];
   if (anomalies.length && activePanel === 'grid') {
-    out.push(...anomalyPanel(anomalies, width, theme));
-    out.push('');
+    out.push(...anomalyPanel(anomalies.slice(0, 2), width, theme));
   }
-
-  out.push(tabBar(activePanel, width, theme, opts.visible));
-  out.push('');
 
   if (opts.minimal) {
     const contentWidth = width - 4;
@@ -1294,33 +1723,37 @@ export function formatTable(data: StatsData, opts: TableOptions = {}): string {
   if (activePanel !== 'grid') {
     const lines = activeDetailLines(data, activePanel, width, opts);
     if (lines) {
-      out.push(...panel(detailPanelTitle(activePanel, opts.trackedPid), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border));
+      const detailH = opts.height ? Math.max(6, opts.height - out.length - 2) : lines.length;
+      out.push(...panel(detailPanelTitle(activePanel, opts.trackedPid), lines, width, theme[activePanel as keyof ThemeColors] ?? theme.cpu, theme.border, detailH));
     }
   } else {
     // --- btop Dashboard Grid ---
+    const totalAvailH = opts.height ? Math.max(18, opts.height) : 26;
+    const maxCoreRows = totalAvailH >= 32 ? 3 : totalAvailH >= 24 ? 2 : 1;
+
     // 1. Top CPU & System Overview Box
-    out.push(...btopCpuBox(data, width, theme, opts));
-    out.push('');
+    const cpuBoxLines = btopCpuBox(data, width, theme, opts, maxCoreRows);
+    out.push(...cpuBoxLines);
 
     // 2. Bottom Split Section
-    if (width >= 85) {
-      const leftColW = Math.max(32, Math.floor(width * 0.38));
-      const rightColW = width - leftColW - 2;
+    const remainingH = Math.max(12, totalAvailH - out.length);
+    if (width >= 76) {
+      const gap = width >= 96 ? 2 : 1;
+      const leftColW = Math.max(30, Math.floor(width * 0.40));
+      const rightColW = width - leftColW - gap;
 
-      const leftLines = btopLeftColumn(data, leftColW, theme, opts);
-      const procLines = btopProcBox(data, rightColW, leftLines.length, theme, opts);
+      const leftLines = btopLeftColumn(data, leftColW, theme, opts, remainingH);
+      const bottomH = Math.max(leftLines.length, remainingH);
+      const procLines = btopProcBox(data, rightColW, bottomH, theme, opts);
 
-      out.push(...hstack([leftLines, procLines], 2, width));
+      out.push(...hstack([leftLines, procLines], gap, width));
     } else {
       const leftLines = btopLeftColumn(data, width, theme, opts);
       out.push(...leftLines);
-      out.push('');
-      const procLines = btopProcBox(data, width, 12, theme, opts);
+      const procLines = btopProcBox(data, width, 10, theme, opts);
       out.push(...procLines);
     }
   }
-
-  // Inspect process modal has been replaced by inline tracking headers
 
   return out.join('\n');
 }

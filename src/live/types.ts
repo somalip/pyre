@@ -20,13 +20,13 @@ export interface LiveOptions {
 
 export type ExportFormat = 'json' | 'csv' | 'tsv' | 'html' | 'md';
 
-type InputMode = null | 'filter' | 'kill' | 'signal' | 'customizer' | 'p2p' | 'menu' | 'readme' | 'credits' | 'docker-alert' | 'ai-model' | 'quick-ref' | 'bookmark-save' | 'command-palette';
+type InputMode = null | 'filter' | 'kill' | 'signal' | 'renice' | 'customizer' | 'p2p' | 'menu' | 'readme' | 'credits' | 'docker-alert' | 'ai-model' | 'quick-ref' | 'bookmark-save' | 'command-palette';
 
 type SortMode = 'cpu' | 'mem' | 'pid' | 'user' | 'command' | 'state' | 'threads' | 'runtime';
 
 type GraphMode = 'spark' | 'bar';
 
-type ActivePanel = 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'tasks' | 'disk' | 'process' | 'p2p' | 'containers' | 'anomalies' | 'blender';
+type ActivePanel = 'grid' | 'cpu' | 'mem' | 'gpu' | 'power' | 'battery' | 'thermal' | 'network' | 'packets' | 'ports' | 'tasks' | 'disk' | 'process' | 'p2p' | 'containers' | 'anomalies' | 'blender';
 
 export type { InputMode, SortMode, GraphMode, ActivePanel, ThemeName };
 

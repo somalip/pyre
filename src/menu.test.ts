@@ -84,6 +84,7 @@ describe('TUI Command Center & Tool Navigator', () => {
     assert.ok(rendered.includes('Command Center'));
     assert.ok(rendered.includes('Search:'));
     assert.ok(rendered.includes('pyre live'));
+    assert.strictEqual(/[\u{1F300}-\u{1FAFF}]/u.test(rendered), false, 'Menu rendered screen should not contain emojis');
   });
 
   it('should render argument prompt modal when inputMode is prompt-args', () => {
